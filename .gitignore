@@ -1,0 +1,27 @@
+# Node modules
+node_modules/
+
+# Environment files (CRÍTICO - no subir credenciales)
+.env
+.env.local
+.env.production
+
+# WhatsApp session (contiene credenciales de sesión)
+.wwebjs_session/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cursor specific
+.cursor/
