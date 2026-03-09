@@ -9,7 +9,8 @@ const DEFAULT_ADMIN_TOKEN =
 
 type WhatsappStatus = {
   ready: boolean;
-  qrDataUrl?: string | null;
+  phone_number_id?: string | null;
+  configured?: boolean;
 };
 
 type Appointment = {
@@ -36,6 +37,7 @@ export default function DashboardPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [storeId, setStoreId] = useState<string>('');
   const [authError, setAuthError] = useState<string | null>(null);
 
   const buildHeaders = () => {
@@ -47,16 +49,23 @@ export default function DashboardPage() {
   };
 
   const loadData = async () => {
+    if (!storeId?.trim()) {
+      setAppointments([]);
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setAuthError(null);
 
       const headers = buildHeaders();
+      const sid = encodeURIComponent(storeId.trim());
 
       const [statusRes, appRes, msgRes] = await Promise.all([
-        fetch(`${API_BASE}/api/whatsapp/status`, { headers }),
-        fetch(`${API_BASE}/api/appointments`, { headers }),
-        fetch(`${API_BASE}/api/messages?limit=50`, { headers })
+        fetch(`${API_BASE}/api/whatsapp/status?store_id=${sid}`, { headers }),
+        fetch(`${API_BASE}/api/appointments?store_id=${sid}`, { headers }),
+        fetch(`${API_BASE}/api/messages?store_id=${sid}&limit=50`, { headers })
       ]);
 
       if (!statusRes.ok || !appRes.ok || !msgRes.ok) {
@@ -95,11 +104,18 @@ export default function DashboardPage() {
     } else if (DEFAULT_ADMIN_TOKEN) {
       setAdminToken(DEFAULT_ADMIN_TOKEN);
     }
+    const storedStoreId = typeof window !== 'undefined'
+      ? window.localStorage.getItem('storeId')
+      : null;
+    if (storedStoreId) setStoreId(storedStoreId);
+  }, []);
 
+  useEffect(() => {
     loadData();
+    if (!storeId?.trim()) return;
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [storeId]);
 
   return (
     <main className="min-h-screen px-6 py-8 md:px-10">
@@ -113,7 +129,24 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              placeholder="Store ID (UUID)"
+              value={storeId}
+              onChange={(e) => {
+                const value = e.target.value || '';
+                setStoreId(value);
+                if (typeof window !== 'undefined') {
+                  if (value) {
+                    window.localStorage.setItem('storeId', value);
+                  } else {
+                    window.localStorage.removeItem('storeId');
+                  }
+                }
+              }}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none w-64"
+            />
             <input
               type="password"
               placeholder="Token administrador"
@@ -144,44 +177,40 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {loading && (
+      {!storeId?.trim() && (
+        <p className="mb-4 text-sm text-amber-400">
+          Introduce un Store ID (UUID) para cargar citas y mensajes.
+        </p>
+      )}
+      {loading && storeId?.trim() && (
         <p className="mb-4 text-sm text-slate-300">Cargando datos...</p>
       )}
 
       <section className="grid gap-6 md:grid-cols-3 mb-8">
         <div className="col-span-1 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
           <h2 className="mb-2 text-sm font-semibold text-slate-200">
-            Estado de WhatsApp
+            Estado de WhatsApp (Cloud API)
           </h2>
           <p className="text-sm text-slate-300">
             Estado:{' '}
             <span
               className={
-                status?.ready
+                status?.configured
                   ? 'font-semibold text-emerald-400'
                   : 'font-semibold text-amber-400'
               }
             >
-              {status?.ready ? 'Conectado' : 'No conectado'}
+              {status === null ? '—' : status?.configured ? 'Configurado' : 'No configurado'}
             </span>
           </p>
-          {!status?.ready && status?.qrDataUrl && !authError && (
-            <div className="mt-3">
-              <p className="mb-2 text-xs text-slate-400">
-                Escanea este QR con WhatsApp para iniciar sesión:
-              </p>
-              <div className="overflow-hidden rounded-lg border border-slate-800 bg-white p-2">
-                <img
-                  src={status.qrDataUrl}
-                  alt="QR WhatsApp"
-                  className="mx-auto h-40 w-40"
-                />
-              </div>
-            </div>
-          )}
-          {!status?.ready && !status?.qrDataUrl && (
+          {status?.phone_number_id && (
             <p className="mt-2 text-xs text-slate-400">
-              Iniciando cliente de WhatsApp o esperando QR...
+              phone_number_id: {status.phone_number_id}
+            </p>
+          )}
+          {!status?.configured && status !== null && (
+            <p className="mt-2 text-xs text-slate-400">
+              Configura whatsapp_accounts con store_id, phone_number_id y access_token.
             </p>
           )}
         </div>
