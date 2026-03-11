@@ -47,17 +47,23 @@ function verifySignature({ appSecret, signatureHeader, payload }) {
   }
 }
 
+function normalizeToken(token) {
+  return (token || '').replace(/\s+/g, '');
+}
+
 function summarizeToken(token) {
-  const t = (token == null ? '' : String(token)).replace(/\s+/g, '');
+  if (!token || typeof token !== 'string') {
+    return { prefix: null, suffix: null, length: 0 };
+  }
   return {
-    prefix: t.slice(0, 20),
-    suffix: t.slice(-10),
-    length: t.length
+    prefix: token.slice(0, 20),
+    suffix: token.slice(-10),
+    length: token.length
   };
 }
 
 async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
-  const normalizedAccessToken = (accessToken == null ? '' : String(accessToken)).replace(/\s+/g, '');
+  const normalizedAccessToken = normalizeToken(accessToken);
 
   if (!phoneNumberId || !normalizedAccessToken) {
     throw new Error('sendTextMessage requiere phoneNumberId y accessToken');
@@ -107,13 +113,20 @@ async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
         statusText: res.statusText,
         phoneNumberId,
         to,
-        payload
+        payload: JSON.stringify(payload)
       });
       const err = new Error('Error enviando mensaje a WhatsApp Cloud API');
       err.status = res.status;
       err.payload = payload;
       throw err;
     }
+
+    const metaMessageId = payload?.messages?.[0]?.id ?? null;
+    console.log('[WhatsAppCloud] Mensaje enviado correctamente', {
+      phoneNumberId,
+      to,
+      metaMessageId
+    });
 
     return payload;
   } catch (err) {
@@ -122,7 +135,7 @@ async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
       to,
       errorMessage: err?.message,
       status: err?.status,
-      payload: err?.payload
+      payload: err?.payload ? JSON.stringify(err.payload) : undefined
     });
     throw err;
   }

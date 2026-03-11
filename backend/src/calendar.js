@@ -4,6 +4,11 @@ const config = require('./config');
 const { getCalendarConnectionByStoreId } = require('./db');
 
 function getCalendarClient() {
+  console.log('[Calendar] Cliente Google', {
+    hasClientEmail: !!config.googleClientEmail,
+    hasPrivateKey: !!config.googlePrivateKey,
+    privateKeyLength: config.googlePrivateKey ? config.googlePrivateKey.length : 0
+  });
   if (!config.googleClientEmail || !config.googlePrivateKey) {
     console.warn('[Calendar] Variables de entorno de Google no configuradas.');
   }
