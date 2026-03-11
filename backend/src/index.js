@@ -71,6 +71,10 @@ function authMiddleware(req, res, next) {
   return next();
 }
 
+app.get('/', (req, res) => {
+  res.status(200).send('Backend WhatsApp OK');
+});
+
 app.get('/health', async (req, res) => {
   try {
     const dbOk = req.query.db === '1' || req.query.db === 'true';
