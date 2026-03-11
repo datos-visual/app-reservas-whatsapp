@@ -47,8 +47,19 @@ function verifySignature({ appSecret, signatureHeader, payload }) {
   }
 }
 
+function summarizeToken(token) {
+  const t = (token == null ? '' : String(token)).replace(/\s+/g, '');
+  return {
+    prefix: t.slice(0, 20),
+    suffix: t.slice(-10),
+    length: t.length
+  };
+}
+
 async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
-  if (!phoneNumberId || !accessToken) {
+  const normalizedAccessToken = (accessToken == null ? '' : String(accessToken)).replace(/\s+/g, '');
+
+  if (!phoneNumberId || !normalizedAccessToken) {
     throw new Error('sendTextMessage requiere phoneNumberId y accessToken');
   }
   if (!to || !text) {
@@ -58,11 +69,20 @@ async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
   const version = config.metaGraphApiVersion || 'v22.0';
   const url = `https://graph.facebook.com/${version}/${phoneNumberId}/messages`;
 
+  const tokenInfo = summarizeToken(normalizedAccessToken);
+  console.log('[WhatsAppCloud] Enviando mensaje', {
+    phoneNumberId,
+    to,
+    tokenLength: tokenInfo.length,
+    tokenPrefix: tokenInfo.prefix,
+    tokenSuffix: tokenInfo.suffix
+  });
+
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${normalizedAccessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -73,10 +93,18 @@ async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
       })
     });
 
-    const payload = await res.json().catch(() => null);
+    const rawText = await res.text();
+    let payload = null;
+    try {
+      payload = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      payload = { _raw: rawText };
+    }
+
     if (!res.ok) {
       console.error('[WhatsAppCloud] Error enviando mensaje', {
         status: res.status,
+        statusText: res.statusText,
         phoneNumberId,
         to,
         payload
@@ -92,7 +120,9 @@ async function sendTextMessage({ phoneNumberId, accessToken, to, text }) {
     console.error('[WhatsAppCloud] Excepción enviando mensaje', {
       phoneNumberId,
       to,
-      error: err
+      errorMessage: err?.message,
+      status: err?.status,
+      payload: err?.payload
     });
     throw err;
   }

@@ -70,7 +70,7 @@ async function createAppointment({ storeId, customerId, start, end, googleEventI
         start_at: start,
         end_at: end,
         google_event_id: googleEventId,
-        source: source || 'whatsapp_cloud'
+        source: source || 'whatsapp'
       })
       .select('*')
       .single();

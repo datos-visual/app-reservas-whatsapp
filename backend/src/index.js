@@ -165,7 +165,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           start: startIso,
           end: endIso,
           googleEventId: calendarEvent.id,
-          source: 'whatsapp_cloud'
+          source: 'whatsapp'
         });
 
         await sendAndLog({
