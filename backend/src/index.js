@@ -7,6 +7,7 @@ const {
   logMessage,
   createOrGetCustomer,
   createAppointment,
+  getConfirmedAppointmentByStart,
   getAppointmentsByDate,
   getRecentMessages,
   getMessagesSentToday,
@@ -153,6 +154,18 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
+    const existingConfirmed = await getConfirmedAppointmentByStart(storeId, startIso);
+    if (existingConfirmed) {
+      await sendAndLog({
+        storeId,
+        phoneNumberId,
+        accessToken,
+        to: from,
+        text: 'Ese hueco acaba de reservarse y ya no está disponible.'
+      });
+      return;
+    }
+
     try {
       const customer = await createOrGetCustomer(storeId, from);
       const calendarEvent = await createCalendarEvent(storeId, {
@@ -181,7 +194,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         });
       } catch (err) {
         console.error('[WhatsAppCloud] Error creando cita en BD', err);
-        if (err && err.code === '23505') {
+        const isDuplicate = err?.code === '23505';
+        if (isDuplicate) {
           await deleteCalendarEvent(storeId, calendarEvent.id);
           await sendAndLog({
             storeId,

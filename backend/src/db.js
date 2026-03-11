@@ -87,6 +87,29 @@ async function createAppointment({ storeId, customerId, start, end, googleEventI
   }
 }
 
+async function getConfirmedAppointmentByStart(storeId, startIso) {
+  try {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('start_at', startIso)
+      .eq('status', 'confirmed')
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[DB] Error buscando cita confirmada', { storeId, startIso, error });
+      throw error;
+    }
+
+    return data || null;
+  } catch (err) {
+    console.error('[DB] Excepción en getConfirmedAppointmentByStart', { storeId, startIso, err });
+    throw err;
+  }
+}
+
 async function getAppointmentsByDate(storeId, dateIso) {
   const start = new Date(dateIso);
   start.setHours(0, 0, 0, 0);
@@ -358,6 +381,7 @@ module.exports = {
   logMessage,
   createOrGetCustomer,
   createAppointment,
+  getConfirmedAppointmentByStart,
   getAppointmentsByDate,
   getRecentMessages,
   getMessagesSentToday,
