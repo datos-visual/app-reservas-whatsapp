@@ -136,9 +136,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const events = await listEventsForDay(storeId, startIso);
     const slots = generate30MinSlots(startIso, events);
     const startDt = DateTime.fromISO(startIso, { zone });
-    const match = slots.find(
-      (s) => s.start.getHours() === startDt.hour && s.start.getMinutes() === startDt.minute
-    );
+    const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
 
     if (!match) {
       await sendAndLog({
@@ -276,11 +274,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     const top = slots.slice(0, 8);
-    const lines = top.map((s) => {
-      const hh = String(s.start.getHours()).padStart(2, '0');
-      const mm = String(s.start.getMinutes()).padStart(2, '0');
-      return `${hh}:${mm}`;
-    });
+    const lines = top.map((s) => s.label);
 
     await sendAndLog({
       storeId,
@@ -327,12 +321,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
-    const start = dateTime;
-    const end = start.plus({ minutes: 30 });
-
-    const events = await listEventsForDay(storeId, start.toISO());
-    const slots = generate30MinSlots(start.toISO(), events);
-    const match = slots.find((s) => s.start.getHours() === start.hour && s.start.getMinutes() === start.minute);
+    const events = await listEventsForDay(storeId, dateTime.toISO());
+    const slots = generate30MinSlots(dateTime.toISO(), events);
+    const match = slots.find((s) => s.label === normalizedTime);
 
     if (!match) {
       await sendAndLog({
@@ -344,6 +335,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       });
       return;
     }
+
+    const start = DateTime.fromISO(match.startIso, { zone });
+    const end = DateTime.fromISO(match.endIso, { zone });
 
     const expiresAt = Date.now() + 10 * 60 * 1000;
     await setConversationState(storeId, from, {

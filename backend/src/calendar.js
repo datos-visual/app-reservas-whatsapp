@@ -123,8 +123,9 @@ function generate30MinSlots(dateIso, events, workDay = { startHour: 9, endHour: 
 
     if (!overlaps && slotEnd <= end) {
       slots.push({
-        start: cursor.toJSDate(),
-        end: slotEnd.toJSDate()
+        startIso: cursor.toISO(),
+        endIso: slotEnd.toISO(),
+        label: cursor.toFormat('HH:mm')
       });
     }
 
