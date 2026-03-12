@@ -49,6 +49,16 @@ async function createOrGetCustomer(storeId, phone) {
       .single();
 
     if (insertError) {
+      if (insertError.code === '23505') {
+        const { data: existing } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('store_id', storeId)
+          .eq('phone', phone)
+          .limit(1)
+          .maybeSingle();
+        if (existing) return existing;
+      }
       console.error('[DB] Error creando customer', { storeId, phone, insertError });
       throw insertError;
     }
