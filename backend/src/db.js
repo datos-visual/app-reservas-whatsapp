@@ -228,6 +228,67 @@ async function getWhatsappAccountByStoreId(storeId) {
   }
 }
 
+async function getStoreConfig(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('stores')
+      .select('timezone, appointment_duration_minutes')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[DB] Error buscando store config', { storeId, error });
+      throw error;
+    }
+
+    if (!data) return null;
+
+    return {
+      timezone: data.timezone || 'Europe/Madrid',
+      appointment_duration_minutes: data.appointment_duration_minutes ?? 30
+    };
+  } catch (err) {
+    console.error('[DB] Excepción en getStoreConfig', { storeId, err });
+    throw err;
+  }
+}
+
+async function getStoreBusinessHours(storeId, weekday) {
+  try {
+    const { data, error } = await supabase
+      .from('store_business_hours')
+      .select('is_closed, open_time, close_time')
+      .eq('store_id', storeId)
+      .eq('weekday', weekday)
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[DB] Error buscando business hours', { storeId, weekday, error });
+      throw error;
+    }
+
+    if (!data) return null;
+
+    if (data.is_closed) {
+      return { isClosed: true };
+    }
+
+    const openStr = data.open_time ? String(data.open_time).slice(0, 5) : null;
+    const closeStr = data.close_time ? String(data.close_time).slice(0, 5) : null;
+
+    return {
+      isClosed: false,
+      openTime: openStr,
+      closeTime: closeStr
+    };
+  } catch (err) {
+    console.error('[DB] Excepción en getStoreBusinessHours', { storeId, weekday, err });
+    throw err;
+  }
+}
+
 async function getCalendarConnectionByStoreId(storeId) {
   try {
     const { data, error } = await supabase
@@ -383,6 +444,8 @@ module.exports = {
   createAppointment,
   getConfirmedAppointmentByStart,
   getAppointmentsByDate,
+  getStoreConfig,
+  getStoreBusinessHours,
   getRecentMessages,
   getMessagesSentToday,
   getWhatsappAccountByPhoneNumberId,

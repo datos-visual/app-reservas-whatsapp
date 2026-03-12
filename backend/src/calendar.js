@@ -35,12 +35,12 @@ async function resolveCalendarIdForStore(storeId) {
   return calendarId;
 }
 
-async function listEventsForDay(storeId, dateIso) {
+async function listEventsForDay(storeId, dateIso, zone) {
   const { calendar, jwtClient } = getCalendarClient();
   await jwtClient.authorize();
 
-  const zone = config.timezone || 'Europe/Madrid';
-  const base = DateTime.fromISO(dateIso, { zone }).startOf('day');
+  const tz = zone || config.timezone || 'Europe/Madrid';
+  const base = DateTime.fromISO(dateIso, { zone: tz }).startOf('day');
   const start = base.toUTC().toISO();
   const end = base.plus({ days: 1 }).toUTC().toISO();
 
@@ -56,20 +56,19 @@ async function listEventsForDay(storeId, dateIso) {
   return res.data.items || [];
 }
 
-async function createCalendarEvent(storeId, { summary, description, start, end }) {
+async function createCalendarEvent(storeId, { summary, description, start, end }, zone) {
   const { calendar, jwtClient } = getCalendarClient();
   await jwtClient.authorize();
 
-  const zone = config.timezone || 'Europe/Madrid';
-  const startDt = DateTime.fromISO(start, { zone });
-  const endDt = DateTime.fromISO(end, { zone });
+  const tz = zone || config.timezone || 'Europe/Madrid';
+  const startDt = DateTime.fromISO(start, { zone: tz });
+  const endDt = DateTime.fromISO(end, { zone: tz });
 
-  // RFC3339 con timeZone: usar hora local (no convertir a UTC) para que coincida con Europe/Madrid
   const event = {
     summary,
     description,
-    start: { dateTime: startDt.toISO(), timeZone: zone },
-    end: { dateTime: endDt.toISO(), timeZone: zone }
+    start: { dateTime: startDt.toISO(), timeZone: tz },
+    end: { dateTime: endDt.toISO(), timeZone: tz }
   };
 
   const calendarId = await resolveCalendarIdForStore(storeId);
@@ -97,17 +96,23 @@ async function deleteCalendarEvent(storeId, eventId) {
   }
 }
 
-function generate30MinSlots(dateIso, events, workDay = { startHour: 8, endHour: 17 }) {
-  const zone = config.timezone || 'Europe/Madrid';
-  const day = DateTime.fromISO(dateIso, { zone }).startOf('day');
-  const start = day.set({ hour: workDay.startHour, minute: 0, second: 0, millisecond: 0 });
-  const end = day.set({ hour: workDay.endHour, minute: 0, second: 0, millisecond: 0 });
+function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes }) {
+  const tz = zone || config.timezone || 'Europe/Madrid';
+  const slotMins = slotDurationMinutes ?? 30;
+
+  // Fallback para tiendas sin store_business_hours configurado
+  const [openH, openM] = (openTime || '08:00').split(':').map(Number);
+  const [closeH, closeM] = (closeTime || '17:00').split(':').map(Number);
+
+  const day = DateTime.fromISO(dateIso, { zone: tz }).startOf('day');
+  const start = day.set({ hour: openH, minute: openM || 0, second: 0, millisecond: 0 });
+  const end = day.set({ hour: closeH, minute: closeM || 0, second: 0, millisecond: 0 });
 
   const busyRanges = events.map((e) => {
     const startIso = e.start.dateTime || e.start.date;
     const endIso = e.end.dateTime || e.end.date;
-    const s = DateTime.fromISO(startIso, { setZone: true }).setZone(zone);
-    const t = DateTime.fromISO(endIso, { setZone: true }).setZone(zone);
+    const s = DateTime.fromISO(startIso, { setZone: true }).setZone(tz);
+    const t = DateTime.fromISO(endIso, { setZone: true }).setZone(tz);
     return { start: s, end: t };
   });
 
@@ -115,7 +120,7 @@ function generate30MinSlots(dateIso, events, workDay = { startHour: 8, endHour: 
   let cursor = start;
 
   while (cursor < end) {
-    const slotEnd = cursor.plus({ minutes: 30 });
+    const slotEnd = cursor.plus({ minutes: slotMins });
 
     const overlaps = busyRanges.some(
       (r) => cursor < r.end && slotEnd > r.start
@@ -135,10 +140,15 @@ function generate30MinSlots(dateIso, events, workDay = { startHour: 8, endHour: 
   return slots;
 }
 
+function generate30MinSlots(dateIso, events, options = {}) {
+  return generateSlots(dateIso, events, { ...options, slotDurationMinutes: options.slotDurationMinutes ?? 30 });
+}
+
 module.exports = {
   listEventsForDay,
   createCalendarEvent,
   deleteCalendarEvent,
+  generateSlots,
   generate30MinSlots
 };
 

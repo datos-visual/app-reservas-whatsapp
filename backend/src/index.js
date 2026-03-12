@@ -16,7 +16,9 @@ const {
   getConversationState,
   setConversationState,
   deleteConversationState,
-  getWhatsappAccountByStoreId
+  getWhatsappAccountByStoreId,
+  getStoreConfig,
+  getStoreBusinessHours
 } = require('./db');
 const {
   listEventsForDay,
@@ -121,7 +123,10 @@ async function sendAndLog({ storeId, phoneNumberId, accessToken, to, text }) {
 
 async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body }) {
   const lower = (body || '').trim().toLowerCase();
-  const zone = config.timezone || 'Europe/Madrid';
+
+  const storeConfig = await getStoreConfig(storeId);
+  // TODO: quitar fallback cuando todas las tiendas tengan timezone en stores
+  const zone = storeConfig?.timezone || config.timezone || 'Europe/Madrid';
 
   let pending = await getConversationState(storeId, from);
   const current = pending?.state?.pendingAppointment || null;
@@ -133,8 +138,30 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const startIso = current.startIso;
     const endIso = current.endIso;
 
-    const events = await listEventsForDay(storeId, startIso);
-    const slots = generate30MinSlots(startIso, events);
+    const dayDt = DateTime.fromISO(startIso, { zone });
+    const weekday = dayDt.weekday === 7 ? 0 : dayDt.weekday;
+    const businessHours = await getStoreBusinessHours(storeId, weekday);
+
+    if (businessHours?.isClosed) {
+      await sendAndLog({
+        storeId,
+        phoneNumberId,
+        accessToken,
+        to: from,
+        text: 'La tienda está cerrada ese día.'
+      });
+      return;
+    }
+
+    const slotOptions = {
+      zone,
+      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      openTime: businessHours?.openTime || '08:00',
+      closeTime: businessHours?.closeTime || '17:00'
+    };
+
+    const events = await listEventsForDay(storeId, startIso, zone);
+    const slots = generate30MinSlots(startIso, events, slotOptions);
     const startDt = DateTime.fromISO(startIso, { zone });
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
 
@@ -171,7 +198,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         description: `Cita creada desde bot de WhatsApp para ${from}`,
         start: startIso,
         end: endIso
-      });
+      }, zone);
 
       try {
         const appointment = await createAppointment({
@@ -260,8 +287,30 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     const iso = date.toISODate();
-    const events = await listEventsForDay(storeId, iso);
-    const slots = generate30MinSlots(iso, events);
+    const weekday = date.weekday === 7 ? 0 : date.weekday;
+    const businessHours = await getStoreBusinessHours(storeId, weekday);
+
+    if (businessHours?.isClosed) {
+      await sendAndLog({
+        storeId,
+        phoneNumberId,
+        accessToken,
+        to: from,
+        text: 'La tienda está cerrada ese día.'
+      });
+      return;
+    }
+
+    // TODO: quitar fallback 08:00/17:00 cuando todas las tiendas tengan store_business_hours
+    const slotOptions = {
+      zone,
+      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      openTime: businessHours?.openTime || '08:00',
+      closeTime: businessHours?.closeTime || '17:00'
+    };
+
+    const events = await listEventsForDay(storeId, iso, zone);
+    const slots = generate30MinSlots(iso, events, slotOptions);
     if (!slots.length) {
       await sendAndLog({
         storeId,
@@ -321,8 +370,30 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
-    const events = await listEventsForDay(storeId, dateTime.toISO());
-    const slots = generate30MinSlots(dateTime.toISO(), events);
+    const weekday = dateTime.weekday === 7 ? 0 : dateTime.weekday;
+    const businessHours = await getStoreBusinessHours(storeId, weekday);
+
+    if (businessHours?.isClosed) {
+      await sendAndLog({
+        storeId,
+        phoneNumberId,
+        accessToken,
+        to: from,
+        text: 'La tienda está cerrada ese día.'
+      });
+      return;
+    }
+
+    // TODO: quitar fallback 08:00/17:00 cuando todas las tiendas tengan store_business_hours
+    const slotOptions = {
+      zone,
+      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      openTime: businessHours?.openTime || '08:00',
+      closeTime: businessHours?.closeTime || '17:00'
+    };
+
+    const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
+    const slots = generate30MinSlots(dateTime.toISO(), events, slotOptions);
     const match = slots.find((s) => s.label === normalizedTime);
 
     if (!match) {
