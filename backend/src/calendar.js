@@ -97,7 +97,7 @@ async function deleteCalendarEvent(storeId, eventId) {
   }
 }
 
-function generate30MinSlots(dateIso, events, workDay = { startHour: 9, endHour: 17 }) {
+function generate30MinSlots(dateIso, events, workDay = { startHour: 8, endHour: 17 }) {
   const zone = config.timezone || 'Europe/Madrid';
   const day = DateTime.fromISO(dateIso, { zone }).startOf('day');
   const start = day.set({ hour: workDay.startHour, minute: 0, second: 0, millisecond: 0 });
