@@ -131,10 +131,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   let pending = await getConversationState(storeId, from);
   const current = pending?.state?.pendingAppointment || null;
 
-  // Confirmación SI
+  // Confirmación SI (el estado NO se borra al entrar: solo tras éxito o cuando el pendiente deja de ser válido)
   if (current && (lower === 'si' || lower === 'sí')) {
-    await deleteConversationState(storeId, from);
-
     const startIso = current.startIso;
     const endIso = current.endIso;
 
@@ -143,6 +141,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const businessHours = await getStoreBusinessHours(storeId, weekday);
 
     if (businessHours?.isClosed) {
+      await deleteConversationState(storeId, from);
       await sendAndLog({
         storeId,
         phoneNumberId,
@@ -166,6 +165,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
 
     if (!match) {
+      await deleteConversationState(storeId, from);
       await sendAndLog({
         storeId,
         phoneNumberId,
@@ -181,6 +181,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const existingConfirmed = await getConfirmedAppointmentByStart(storeId, startIso);
     if (existingConfirmed) {
+      await deleteConversationState(storeId, from);
       await sendAndLog({
         storeId,
         phoneNumberId,
@@ -210,6 +211,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           source: 'whatsapp'
         });
 
+        await deleteConversationState(storeId, from);
+
         await sendAndLog({
           storeId,
           phoneNumberId,
@@ -222,6 +225,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         const isDuplicate = err?.code === '23505';
         if (isDuplicate) {
           await deleteCalendarEvent(storeId, calendarEvent.id);
+          await deleteConversationState(storeId, from);
           await sendAndLog({
             storeId,
             phoneNumberId,
@@ -245,7 +249,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         });
       }
     } catch (err) {
-      console.error('[WhatsAppCloud] Error finalizando cita', err);
+      console.error('[WhatsAppCloud] Error finalizando cita (customer o Google Calendar)', err);
       await sendAndLog({
         storeId,
         phoneNumberId,
@@ -463,11 +467,16 @@ async function processWebhookBody(body, { requestId }) {
     try {
       const storeContext = await resolveStoreContextByPhoneNumberId(phoneNumberId);
       if (!storeContext) {
-        console.warn('[Webhook] phone_number_id no mapeado o inactivo', {
-          requestId,
-          phoneNumberId,
-          messageId
-        });
+        console.warn(
+          '[Webhook] phone_number_id no mapeado o inactivo — revisa public.whatsapp_accounts ' +
+            '(phone_number_id exacto del payload Meta, is_active=true, access_token no vacío)',
+          {
+            requestId,
+            phoneNumberId,
+            messageId,
+            from
+          }
+        );
         continue;
       }
 

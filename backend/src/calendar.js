@@ -72,12 +72,21 @@ async function createCalendarEvent(storeId, { summary, description, start, end }
   };
 
   const calendarId = await resolveCalendarIdForStore(storeId);
-  const res = await calendar.events.insert({
-    calendarId,
-    requestBody: event
-  });
-
-  return res.data;
+  try {
+    const res = await calendar.events.insert({
+      calendarId,
+      requestBody: event
+    });
+    return res.data;
+  } catch (err) {
+    const detail = err?.response?.data || err?.errors || err?.message;
+    console.error('[Calendar] events.insert falló', {
+      storeId,
+      calendarId,
+      detail: typeof detail === 'string' ? detail : JSON.stringify(detail)
+    });
+    throw err;
+  }
 }
 
 async function deleteCalendarEvent(storeId, eventId) {
