@@ -1,0 +1,14 @@
+runtime: node
+Plan pro details: https://render.com/docs/deploy-nextjs#nodejs-version
+
+# Install dependencies
+pre-build: npm install --legacy-peer-deps
+
+# Build script
+build: npm run build
+
+# Start the server
+start: npm start
+
+# Environment
+NODE_ENV: production
