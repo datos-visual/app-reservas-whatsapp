@@ -25,3 +25,10 @@ npm-debug.log*
 
 # Cursor specific
 .cursor/
+
+# Defensivo: backups y credenciales (nunca versionar)
+*.zip
+JSON/
+*.pem
+*service*account*.json
+*credentials*.json

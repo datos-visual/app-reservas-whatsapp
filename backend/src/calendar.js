@@ -125,6 +125,10 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
     return { start: s, end: t };
   });
 
+  // [F] No ofrecer huecos ya pasados: si el día solicitado es hoy (en la
+  // timezone de la tienda), solo se ofrecen slots que empiecen después de ahora.
+  const now = DateTime.now().setZone(tz);
+
   const slots = [];
   let cursor = start;
 
@@ -135,7 +139,7 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
       (r) => cursor < r.end && slotEnd > r.start
     );
 
-    if (!overlaps && slotEnd <= end) {
+    if (!overlaps && slotEnd <= end && cursor > now) {
       slots.push({
         startIso: cursor.toISO(),
         endIso: slotEnd.toISO(),

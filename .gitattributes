@@ -1,0 +1,19 @@
+# Normalización de line endings.
+# Evita que todo el repo aparezca como modificado al cambiar de máquina (CRLF/LF)
+# y que los diffs sean ilegibles.
+* text=auto eol=lf
+
+# Windows scripts mantienen CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binarios: nunca tocar
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.woff binary
+*.woff2 binary
