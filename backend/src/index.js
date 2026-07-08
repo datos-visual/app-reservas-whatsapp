@@ -27,6 +27,14 @@ const {
   generate30MinSlots
 } = require('./calendar');
 const { sendTextMessage, verifyWebhook, extractIncomingMessages, verifySignature } = require('./whatsappCloud');
+const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
+const {
+  getStorePhoneNumberByDid,
+  getMissedCallSettings,
+  registerMissedCall,
+  processMissedCallSend,
+  dispatchPendingMissedCalls
+} = require('./missedCall');
 
 const app = express();
 
@@ -570,6 +578,131 @@ app.post('/webhook', (req, res) => {
       console.error('[Webhook] Error procesando payload', { requestId, err });
     });
   });
+});
+
+// ============================================================
+// Módulo missed-call — webhook de voz (Twilio envía form-encoded,
+// por eso el parser urlencoded se aplica SOLO a esta ruta)
+// ============================================================
+app.use('/webhook/voice', express.urlencoded({ extended: false }));
+
+app.post('/webhook/voice/twilio', async (req, res) => {
+  const requestId =
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  try {
+    // 1) Firma de Twilio (HMAC-SHA1 sobre URL pública exacta + params ordenados)
+    if (config.twilioAuthToken) {
+      const baseUrl =
+        config.publicBaseUrl || `${req.protocol}://${req.get('host')}`;
+      if (!config.publicBaseUrl) {
+        console.warn(
+          '[VozTwilio] PUBLIC_BASE_URL no configurada: la URL se reconstruye del request y la firma puede fallar tras el proxy',
+          { requestId }
+        );
+      }
+      const ok = verifyTwilioSignature({
+        authToken: config.twilioAuthToken,
+        url: baseUrl + req.originalUrl,
+        params: req.body || {},
+        signatureHeader: req.get('X-Twilio-Signature')
+      });
+      if (!ok) {
+        console.warn('[VozTwilio] Firma inválida, request rechazado', { requestId });
+        return res.sendStatus(403);
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      console.error('[VozTwilio] TWILIO_AUTH_TOKEN no configurado en producción');
+      return res.sendStatus(500);
+    }
+
+    const call = parseIncomingCall(req.body);
+    if (!call.to) {
+      console.warn('[VozTwilio] Webhook sin campo To, ignorado', { requestId });
+      return res.type('text/xml').send(buildVoiceTwiml({}));
+    }
+
+    // 2) Resolver tienda por DID (una query indexada; el TwiML depende de esto)
+    const didRow = await getStorePhoneNumberByDid(call.to);
+    if (!didRow) {
+      console.warn('[VozTwilio] DID no mapeado o inactivo — revisa store_phone_numbers', {
+        requestId,
+        did: call.to,
+        callSid: call.callSid
+      });
+      return res.type('text/xml').send(buildVoiceTwiml({})); // colgar sin locución
+    }
+
+    const settings = await getMissedCallSettings(didRow.store_id);
+    const activo = !!(settings && settings.enabled);
+
+    // 3) Responder TwiML ya (locución <10 s + colgar) y procesar en background
+    res.type('text/xml').send(
+      buildVoiceTwiml(
+        activo
+          ? { say: 'Hola. Ahora mismo no podemos atenderte. Te escribimos por WhatsApp ahora mismo.' }
+          : {}
+      )
+    );
+
+    setImmediate(async () => {
+      try {
+        const result = await registerMissedCall(
+          {
+            storeId: didRow.store_id,
+            didE164: call.to,
+            provider: 'twilio',
+            callSid: call.callSid,
+            from: call.from,
+            settings
+          },
+          { requestId }
+        );
+
+        // Intento de envío inmediato; si cae en horario silencioso queda
+        // pending y la retomará el despachador (cron externo).
+        if (!result.alreadyExists && result.row && result.row.status === 'pending') {
+          await processMissedCallSend(result.row, { requestId });
+        }
+      } catch (err) {
+        console.error('[VozTwilio] Error procesando llamada en background', { requestId, err });
+      }
+    });
+  } catch (err) {
+    console.error('[VozTwilio] Error en webhook de voz', { requestId, err });
+    if (!res.headersSent) {
+      res.type('text/xml').send(buildVoiceTwiml({}));
+    }
+  }
+});
+
+// Despachador del módulo missed-call: lo invoca un cron EXTERNO gratuito
+// (p. ej. cron-job.org cada 15 min) — regla de costes: sin workers de pago.
+app.post('/internal/missed-calls/dispatch', async (req, res) => {
+  const requestId =
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  if (!config.internalCronToken) {
+    console.error('[MissedCall] INTERNAL_CRON_TOKEN no configurado');
+    return res.status(500).json({ error: 'Configuración incompleta' });
+  }
+  const provided = req.header('x-internal-token');
+  if (!provided || provided !== config.internalCronToken) {
+    console.warn('[MissedCall] Token interno inválido en /internal/missed-calls/dispatch', { requestId });
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+
+  try {
+    const resumen = await dispatchPendingMissedCalls({ requestId });
+    res.json(resumen);
+  } catch (err) {
+    console.error('[MissedCall] Error en despacho', { requestId, err });
+    res.status(500).json({ error: 'Error despachando pendientes' });
+  }
 });
 
 app.use('/api', authMiddleware);

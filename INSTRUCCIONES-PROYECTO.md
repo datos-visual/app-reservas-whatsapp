@@ -81,6 +81,11 @@ APP-RESERVAS-WHASTAPP/            (ojo al nombre: WHAS-TAPP)
 4. Respetar las decisiones cerradas de Fase 1: service_role, sin Redis,
    stateless, service account compartida, onboarding semimanual.
 5. No duplicar las auditorías existentes; partir de ellas.
+6. **Regla de costes:** no introducir servicios que se coman el margen. Preferir
+   siempre el free tier o la opción de céntimos (cron externo gratuito antes que
+   workers de pago, Telnyx frente a Twilio a escala, Supabase/Render en planes
+   mínimos). Todo coste variable por tienda debe estar acotado por diseño
+   (cupos, dedupe, locuciones cortas) y calculado antes de construir.
 
 ## 6. Definition of Done (por cada cambio)
 

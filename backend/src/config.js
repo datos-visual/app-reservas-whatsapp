@@ -14,7 +14,15 @@ const config = {
   globalWebhookVerifyToken:
     process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || process.env.GLOBAL_WEBHOOK_VERIFY_TOKEN,
   appSecret: process.env.META_APP_SECRET || process.env.WHATSAPP_APP_SECRET || process.env.APP_SECRET || null,
-  timezone: process.env.TZ || 'Europe/Madrid'
+  timezone: process.env.TZ || 'Europe/Madrid',
+  // Módulo missed-call (voz). Solo backend, nunca en frontend.
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || null,
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || null,
+  // URL pública exacta del backend (https://...onrender.com), necesaria para
+  // validar la firma de Twilio detrás del proxy de Render.
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || null,
+  // Token del cron externo que invoca /internal/missed-calls/dispatch
+  internalCronToken: process.env.INTERNAL_CRON_TOKEN || null
 };
 
 module.exports = config;

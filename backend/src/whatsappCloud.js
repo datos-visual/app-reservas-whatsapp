@@ -185,10 +185,118 @@ function extractIncomingMessages(body) {
   return out;
 }
 
+/**
+ * Envía un mensaje de PLANTILLA (necesario fuera de la ventana de 24 h,
+ * p. ej. la plantilla de utilidad del módulo missed-call).
+ * bodyParams: valores de {{1}}, {{2}}... del cuerpo.
+ * buttonPayloads: payloads de los botones quick-reply, en orden; permiten
+ * distinguir la respuesta de botón del texto libre al recibirla.
+ */
+async function sendTemplateMessage({
+  phoneNumberId,
+  accessToken,
+  to,
+  templateName,
+  languageCode = 'es',
+  bodyParams = [],
+  buttonPayloads = []
+}) {
+  const normalizedAccessToken = normalizeToken(accessToken);
+  if (!phoneNumberId || !normalizedAccessToken) {
+    throw new Error('sendTemplateMessage requiere phoneNumberId y accessToken');
+  }
+  if (!to || !templateName) {
+    throw new Error('sendTemplateMessage requiere to y templateName');
+  }
+
+  const components = buildTemplateComponents({ bodyParams, buttonPayloads });
+  const version = config.metaGraphApiVersion || 'v22.0';
+  const url = `https://graph.facebook.com/${version}/${phoneNumberId}/messages`;
+
+  console.log('[WhatsAppCloud] Enviando plantilla', { phoneNumberId, to, templateName, languageCode });
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${normalizedAccessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          ...(components.length ? { components } : {})
+        }
+      })
+    });
+
+    const rawText = await res.text();
+    let payload = null;
+    try {
+      payload = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      payload = { _raw: rawText };
+    }
+
+    if (!res.ok) {
+      console.error('[WhatsAppCloud] Error enviando plantilla', {
+        status: res.status,
+        phoneNumberId,
+        to,
+        templateName,
+        payload: JSON.stringify(payload)
+      });
+      const err = new Error('Error enviando plantilla a WhatsApp Cloud API');
+      err.status = res.status;
+      err.payload = payload;
+      throw err;
+    }
+
+    const metaMessageId = payload?.messages?.[0]?.id ?? null;
+    console.log('[WhatsAppCloud] Plantilla enviada correctamente', { phoneNumberId, to, templateName, metaMessageId });
+    return { payload, messageId: metaMessageId };
+  } catch (err) {
+    console.error('[WhatsAppCloud] Excepción enviando plantilla', {
+      phoneNumberId,
+      to,
+      templateName,
+      errorMessage: err?.message,
+      status: err?.status
+    });
+    throw err;
+  }
+}
+
+/** Construye el array components de la Graph API (exportado para tests). */
+function buildTemplateComponents({ bodyParams = [], buttonPayloads = [] } = {}) {
+  const components = [];
+  if (bodyParams.length) {
+    components.push({
+      type: 'body',
+      parameters: bodyParams.map((t) => ({ type: 'text', text: String(t) }))
+    });
+  }
+  buttonPayloads.forEach((payload, i) => {
+    components.push({
+      type: 'button',
+      sub_type: 'quick_reply',
+      index: String(i),
+      parameters: [{ type: 'payload', payload }]
+    });
+  });
+  return components;
+}
+
 module.exports = {
   verifyWebhook,
   verifySignature,
   sendTextMessage,
+  sendTemplateMessage,
+  buildTemplateComponents,
   extractIncomingMessages
 };
 
