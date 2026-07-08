@@ -59,33 +59,9 @@ app.use(
   })
 );
 
-function authMiddleware(req, res, next) {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const adminToken = config.adminToken;
-
-  if (!isProduction && !adminToken) {
-    return next();
-  }
-
-  if (isProduction && !adminToken) {
-    console.error('[Auth] ADMIN_TOKEN no configurado en producción');
-    return res.status(500).json({ error: 'Configuración de seguridad incompleta' });
-  }
-
-  const headerToken = req.header('x-admin-token');
-  const authHeader = req.header('authorization') || '';
-  const bearerToken = authHeader.toLowerCase().startsWith('bearer ')
-    ? authHeader.slice(7)
-    : null;
-
-  const providedToken = headerToken || bearerToken;
-
-  if (!providedToken || providedToken !== adminToken) {
-    return res.status(401).json({ error: 'No autorizado' });
-  }
-
-  return next();
-}
+// Paso 4: middleware dual (JWT Supabase Auth para usuarios de tienda,
+// ADMIN_TOKEN para el admin). Ver backend/src/auth.js.
+const { authMiddleware, resolveStoreId } = require('./auth');
 
 app.get('/', (req, res) => {
   res.status(200).send('Backend WhatsApp OK');
@@ -800,8 +776,8 @@ app.use('/api', authMiddleware);
 
 app.get('/api/whatsapp/status', async (req, res) => {
   try {
-    const storeIdRaw = req.query.store_id;
-    const storeId = storeIdRaw ? String(storeIdRaw).trim() : null;
+    // store_id de la sesión (usuario) o del query (solo admin)
+    const storeId = resolveStoreId(req);
     if (!storeId) {
       return res.status(400).json({ error: 'Falta store_id' });
     }
@@ -821,8 +797,8 @@ app.get('/api/whatsapp/status', async (req, res) => {
 
 app.get('/api/appointments', async (req, res) => {
   try {
-    const { date, store_id: storeIdRaw } = req.query;
-    const storeId = storeIdRaw ? String(storeIdRaw) : null;
+    const { date } = req.query;
+    const storeId = resolveStoreId(req);
     if (!storeId) {
       return res.status(400).json({ error: 'Falta store_id' });
     }
@@ -838,8 +814,7 @@ app.get('/api/appointments', async (req, res) => {
 app.get('/api/messages', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '50', 10);
-    const storeIdRaw = req.query.store_id;
-    const storeId = storeIdRaw ? String(storeIdRaw) : null;
+    const storeId = resolveStoreId(req);
     if (!storeId) {
       return res.status(400).json({ error: 'Falta store_id' });
     }
