@@ -70,7 +70,7 @@ app.use(
 
 // Paso 4: middleware dual (JWT Supabase Auth para usuarios de tienda,
 // ADMIN_TOKEN para el admin). Ver backend/src/auth.js.
-const { authMiddleware, resolveStoreId } = require('./auth');
+const { authMiddleware, resolveStoreId, requireStoreId } = require('./auth');
 
 app.get('/', (req, res) => {
   res.status(200).send('Backend WhatsApp OK');
@@ -786,10 +786,8 @@ app.use('/api', authMiddleware);
 app.get('/api/whatsapp/status', async (req, res) => {
   try {
     // store_id de la sesión (usuario) o del query (solo admin)
-    const storeId = resolveStoreId(req);
-    if (!storeId) {
-      return res.status(400).json({ error: 'Falta store_id' });
-    }
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
 
     const account = await getWhatsappAccountByStoreId(storeId);
     const configured = !!account && !!account.access_token;
@@ -807,10 +805,8 @@ app.get('/api/whatsapp/status', async (req, res) => {
 app.get('/api/appointments', async (req, res) => {
   try {
     const { date } = req.query;
-    const storeId = resolveStoreId(req);
-    if (!storeId) {
-      return res.status(400).json({ error: 'Falta store_id' });
-    }
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const target = date || new Date().toISOString();
     const appointments = await getAppointmentsByDate(storeId, target);
     res.json(appointments);
@@ -823,10 +819,8 @@ app.get('/api/appointments', async (req, res) => {
 app.get('/api/messages', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '50', 10);
-    const storeId = resolveStoreId(req);
-    if (!storeId) {
-      return res.status(400).json({ error: 'Falta store_id' });
-    }
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const messages = await getRecentMessages(storeId, limit);
     res.json(messages);
   } catch (err) {
@@ -889,8 +883,8 @@ app.post('/api/stores', async (req, res) => {
 // Estado del onboarding (draft → calendar_connected/whatsapp_connected → ready)
 app.get('/api/store/status', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const overview = await getStoreOverview(storeId);
     if (!overview) return res.status(404).json({ error: 'Tienda no encontrada' });
     res.json(overview);
@@ -903,8 +897,8 @@ app.get('/api/store/status', async (req, res) => {
 // Conectar Google Calendar
 app.post('/api/onboarding/calendar', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const { google_calendar_id: calId } = req.body || {};
     if (!calId || !String(calId).trim()) {
       return res.status(400).json({ error: 'google_calendar_id es obligatorio' });
@@ -919,8 +913,8 @@ app.post('/api/onboarding/calendar', async (req, res) => {
 
 app.post('/api/onboarding/calendar/test', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const storeConfig = await getStoreConfig(storeId);
     res.json(await testCalendarConnection(storeId, storeConfig?.timezone));
   } catch (err) {
@@ -932,8 +926,8 @@ app.post('/api/onboarding/calendar/test', async (req, res) => {
 // Conectar WhatsApp (semimanual: la tienda pega phone_number_id + token)
 app.post('/api/onboarding/whatsapp', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const { phone_number_id: pnid, access_token: token, waba_id: waba } = req.body || {};
     if (!pnid || !token) {
       return res.status(400).json({ error: 'phone_number_id y access_token son obligatorios' });
@@ -951,8 +945,8 @@ app.post('/api/onboarding/whatsapp', async (req, res) => {
 
 app.post('/api/onboarding/whatsapp/test', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     res.json(await testWhatsappConnection(storeId));
   } catch (err) {
     console.error('[API] Error en /api/onboarding/whatsapp/test', err);
@@ -965,8 +959,8 @@ app.post('/api/onboarding/whatsapp/test', async (req, res) => {
 // ============================================================
 app.get('/api/missed-call/settings', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     res.json(await getMissedCallOverview(storeId));
   } catch (err) {
     console.error('[API] Error en GET /api/missed-call/settings', err);
@@ -976,8 +970,8 @@ app.get('/api/missed-call/settings', async (req, res) => {
 
 app.put('/api/missed-call/settings', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     await updateMissedCallSettings(storeId, req.body || {});
     res.json({ ok: true });
   } catch (err) {
@@ -991,8 +985,8 @@ app.put('/api/missed-call/settings', async (req, res) => {
 
 app.get('/api/missed-call/metrics', async (req, res) => {
   try {
-    const storeId = resolveStoreId(req);
-    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
     const month = req.query.month ? String(req.query.month) : null;
     res.json(await getMissedCallMetrics(storeId, month));
   } catch (err) {

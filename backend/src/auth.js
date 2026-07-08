@@ -70,15 +70,13 @@ async function authMiddleware(req, res, next) {
       return res.status(401).json({ error: 'No autorizado' });
     }
 
+    // OJO: un usuario SIN tienda debe poder pasar (necesita POST /api/stores
+    // para crearla — onboarding). Las rutas de datos exigen tienda con
+    // requireStoreId, que responde 403 si no la hay.
     const storeUser = await getStoreUserByUserId(data.user.id);
-    if (!storeUser) {
-      console.warn('[Auth] Usuario autenticado sin tienda asignada', { userId: data.user.id });
-      return res.status(403).json({ error: 'Usuario sin tienda asignada' });
-    }
-
     req.userId = data.user.id;
-    req.userRole = storeUser.role;
-    req.storeId = storeUser.store_id; // fuente de verdad del multi-tenant en ACCESO
+    req.userRole = storeUser?.role || null;
+    req.storeId = storeUser?.store_id || null; // fuente de verdad del multi-tenant en ACCESO
     return next();
   } catch (err) {
     console.error('[Auth] Error validando JWT', { err });
@@ -100,4 +98,20 @@ function resolveStoreId(req) {
   return null;
 }
 
-module.exports = { authMiddleware, resolveStoreId, extractToken, getStoreUserByUserId };
+/**
+ * store_id obligatorio o respuesta de error ya enviada (devuelve null):
+ *  - usuario autenticado sin tienda → 403 (el frontend redirige al onboarding)
+ *  - admin sin ?store_id= → 400
+ */
+function requireStoreId(req, res) {
+  const storeId = resolveStoreId(req);
+  if (storeId) return storeId;
+  if (req.userId) {
+    res.status(403).json({ error: 'Usuario sin tienda asignada' });
+    return null;
+  }
+  res.status(400).json({ error: 'Falta store_id' });
+  return null;
+}
+
+module.exports = { authMiddleware, resolveStoreId, requireStoreId, extractToken, getStoreUserByUserId };

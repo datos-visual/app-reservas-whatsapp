@@ -1,10 +1,10 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // OJO: este proyecto NO tiene carpeta src/ — el código vive en app/ y lib/
   content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
