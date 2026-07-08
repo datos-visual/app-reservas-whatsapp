@@ -43,11 +43,20 @@ const {
 
 const app = express();
 
-const allowedOrigin = config.dashboardOrigin || 'http://localhost:3000';
+// CORS multi-origen: DASHBOARD_ORIGIN admite lista separada por comas
+// (p. ej. "https://app-whatsapp-frontend.onrender.com,http://localhost:3000")
+const allowedOrigins = (config.dashboardOrigin || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin: (origin, callback) => {
+      // Sin cabecera Origin (curl, webhooks, server-to-server) → permitir
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(null, false);
+    },
     credentials: true
   })
 );
@@ -823,6 +832,172 @@ app.get('/api/messages', async (req, res) => {
   } catch (err) {
     console.error('[API] Error en /api/messages', err);
     res.status(500).json({ error: 'Error obteniendo mensajes' });
+  }
+});
+
+// ============================================================
+// Paso 5 — Onboarding autoservicio
+// ============================================================
+const {
+  createStoreWithOwner,
+  getStoreOverview,
+  upsertCalendarConnection,
+  upsertWhatsappAccount,
+  testCalendarConnection,
+  testWhatsappConnection
+} = require('./onboarding');
+const { getStoreUserByUserId } = require('./auth');
+const {
+  getMissedCallOverview,
+  updateMissedCallSettings,
+  getMissedCallMetrics
+} = require('./missedCall');
+
+// Crear tienda (solo usuarios autenticados por JWT; Fase 1: 1 usuario → 1 tienda)
+app.post('/api/stores', async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(400).json({ error: 'Solo usuarios registrados pueden crear tienda (no admin)' });
+    }
+    const existing = await getStoreUserByUserId(req.userId);
+    if (existing) {
+      return res.status(409).json({ error: 'Ya tienes una tienda creada' });
+    }
+
+    const { name, timezone, appointment_duration_minutes, business_email, business_phone } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'El nombre del negocio es obligatorio' });
+    }
+    const duration = parseInt(appointment_duration_minutes, 10);
+
+    const store = await createStoreWithOwner({
+      userId: req.userId,
+      name: String(name).trim(),
+      timezone: timezone || 'Europe/Madrid',
+      appointmentDurationMinutes: Number.isFinite(duration) && duration > 0 ? duration : 30,
+      businessEmail: business_email,
+      businessPhone: business_phone
+    });
+
+    res.status(201).json({ store_id: store.id, name: store.name });
+  } catch (err) {
+    console.error('[API] Error en POST /api/stores', err);
+    res.status(500).json({ error: 'Error creando la tienda' });
+  }
+});
+
+// Estado del onboarding (draft → calendar_connected/whatsapp_connected → ready)
+app.get('/api/store/status', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const overview = await getStoreOverview(storeId);
+    if (!overview) return res.status(404).json({ error: 'Tienda no encontrada' });
+    res.json(overview);
+  } catch (err) {
+    console.error('[API] Error en /api/store/status', err);
+    res.status(500).json({ error: 'Error obteniendo estado de la tienda' });
+  }
+});
+
+// Conectar Google Calendar
+app.post('/api/onboarding/calendar', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const { google_calendar_id: calId } = req.body || {};
+    if (!calId || !String(calId).trim()) {
+      return res.status(400).json({ error: 'google_calendar_id es obligatorio' });
+    }
+    await upsertCalendarConnection(storeId, String(calId).trim());
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[API] Error en /api/onboarding/calendar', err);
+    res.status(500).json({ error: 'Error guardando el calendario' });
+  }
+});
+
+app.post('/api/onboarding/calendar/test', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const storeConfig = await getStoreConfig(storeId);
+    res.json(await testCalendarConnection(storeId, storeConfig?.timezone));
+  } catch (err) {
+    console.error('[API] Error en /api/onboarding/calendar/test', err);
+    res.status(500).json({ error: 'Error probando el calendario' });
+  }
+});
+
+// Conectar WhatsApp (semimanual: la tienda pega phone_number_id + token)
+app.post('/api/onboarding/whatsapp', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const { phone_number_id: pnid, access_token: token, waba_id: waba } = req.body || {};
+    if (!pnid || !token) {
+      return res.status(400).json({ error: 'phone_number_id y access_token son obligatorios' });
+    }
+    await upsertWhatsappAccount(storeId, { phoneNumberId: pnid, accessToken: token, wabaId: waba });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === 'EN_USO') {
+      return res.status(409).json({ error: err.message });
+    }
+    console.error('[API] Error en /api/onboarding/whatsapp', err);
+    res.status(500).json({ error: 'Error guardando la conexión de WhatsApp' });
+  }
+});
+
+app.post('/api/onboarding/whatsapp/test', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    res.json(await testWhatsappConnection(storeId));
+  } catch (err) {
+    console.error('[API] Error en /api/onboarding/whatsapp/test', err);
+    res.status(500).json({ error: 'Error probando WhatsApp' });
+  }
+});
+
+// ============================================================
+// M5 — Config y métricas del módulo missed-call
+// ============================================================
+app.get('/api/missed-call/settings', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    res.json(await getMissedCallOverview(storeId));
+  } catch (err) {
+    console.error('[API] Error en GET /api/missed-call/settings', err);
+    res.status(500).json({ error: 'Error obteniendo configuración' });
+  }
+});
+
+app.put('/api/missed-call/settings', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    await updateMissedCallSettings(storeId, req.body || {});
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === 'SIN_CAMBIOS' || err.code === 'VALOR_INVALIDO') {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('[API] Error en PUT /api/missed-call/settings', err);
+    res.status(500).json({ error: 'Error guardando configuración' });
+  }
+});
+
+app.get('/api/missed-call/metrics', async (req, res) => {
+  try {
+    const storeId = resolveStoreId(req);
+    if (!storeId) return res.status(400).json({ error: 'Falta store_id' });
+    const month = req.query.month ? String(req.query.month) : null;
+    res.json(await getMissedCallMetrics(storeId, month));
+  } catch (err) {
+    console.error('[API] Error en /api/missed-call/metrics', err);
+    res.status(500).json({ error: 'Error obteniendo métricas' });
   }
 });
 

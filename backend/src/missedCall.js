@@ -413,6 +413,115 @@ async function attributeBooking(storeId, phone, appointmentId) {
   }
 }
 
+// ---------------------------------------------------------------------
+// M5 — configuración y métricas (para el dashboard)
+// ---------------------------------------------------------------------
+
+const SETTINGS_EDITABLE_FIELDS = [
+  'enabled', 'monthly_quota', 'business_name', 'ticket_medio_eur',
+  'quiet_start', 'quiet_end', 'template_status', 'template_name', 'template_language'
+];
+
+/** Config del módulo + DIDs de la tienda. Nunca expone datos de otras tiendas. */
+async function getMissedCallOverview(storeId) {
+  const [settingsRes, didsRes] = await Promise.all([
+    supabase.from('missed_call_settings').select('*').eq('store_id', storeId).maybeSingle(),
+    supabase.from('store_phone_numbers').select('did_e164, provider, is_active').eq('store_id', storeId)
+  ]);
+
+  return {
+    configured: !!settingsRes.data,
+    settings: settingsRes.data || {
+      enabled: false,
+      monthly_quota: 100,
+      business_name: null,
+      template_status: 'pending',
+      quiet_start: '21:00',
+      quiet_end: '09:00',
+      ticket_medio_eur: null
+    },
+    dids: didsRes.data || []
+  };
+}
+
+/** Actualiza (upsert) la config del módulo. Solo campos de la whitelist. */
+async function updateMissedCallSettings(storeId, patch) {
+  const clean = {};
+  for (const field of SETTINGS_EDITABLE_FIELDS) {
+    if (patch[field] !== undefined) clean[field] = patch[field];
+  }
+  if (Object.keys(clean).length === 0) {
+    const err = new Error('Nada que actualizar');
+    err.code = 'SIN_CAMBIOS';
+    throw err;
+  }
+  if (clean.template_status && !['pending', 'approved', 'rejected'].includes(clean.template_status)) {
+    const err = new Error('template_status inválido');
+    err.code = 'VALOR_INVALIDO';
+    throw err;
+  }
+
+  const { error } = await supabase
+    .from('missed_call_settings')
+    .upsert({ store_id: storeId, ...clean, updated_at: new Date().toISOString() }, { onConflict: 'store_id' });
+  if (error) {
+    console.error('[MissedCall] Error actualizando settings', { storeId, error });
+    throw error;
+  }
+  console.log('[MissedCall] Settings actualizados', { storeId, campos: Object.keys(clean) });
+}
+
+/**
+ * Métricas del mes (natural, timezone de la tienda). La cifra que vende:
+ * citas recuperadas × ticket_medio_eur = euros estimados.
+ */
+async function getMissedCallMetrics(storeId, monthStr) {
+  const storeConfig = await getStoreConfig(storeId);
+  const zone = storeConfig?.timezone || 'Europe/Madrid';
+
+  let start = DateTime.now().setZone(zone).startOf('month');
+  if (monthStr) {
+    const parsed = DateTime.fromFormat(monthStr, 'yyyy-MM', { zone });
+    if (parsed.isValid) start = parsed.startOf('month');
+  }
+  const end = start.plus({ months: 1 });
+
+  const { data, error } = await supabase
+    .from('missed_calls')
+    .select('status, skip_reason, is_anonymous, callback_requested, resulted_in_conversation, resulted_in_booking_id, caller_phone, occurred_at')
+    .eq('store_id', storeId)
+    .gte('occurred_at', start.toISO())
+    .lt('occurred_at', end.toISO());
+
+  if (error) {
+    console.error('[MissedCall] Error leyendo métricas', { storeId, error });
+    throw error;
+  }
+
+  const rows = data || [];
+  const settings = await getMissedCallSettings(storeId);
+  const ticket = settings?.ticket_medio_eur != null ? Number(settings.ticket_medio_eur) : null;
+
+  const enviadas = rows.filter((r) => r.status === 'sent');
+  const citas = enviadas.filter((r) => r.resulted_in_booking_id != null);
+  const callbacks = enviadas.filter((r) => r.callback_requested);
+
+  return {
+    mes: start.toFormat('yyyy-MM'),
+    llamadas_capturadas: rows.length,
+    anonimas: rows.filter((r) => r.is_anonymous).length,
+    plantillas_enviadas: enviadas.length,
+    conversaciones_iniciadas: enviadas.filter((r) => r.resulted_in_conversation).length,
+    callbacks_solicitados: callbacks.length,
+    callbacks_pendientes: callbacks.map((r) => ({ phone: r.caller_phone, occurred_at: r.occurred_at })),
+    citas_recuperadas: citas.length,
+    ticket_medio_eur: ticket,
+    euros_estimados: ticket != null ? Math.round(citas.length * ticket * 100) / 100 : null,
+    descartes: rows.filter((r) => r.status === 'skipped')
+      .reduce((acc, r) => { acc[r.skip_reason || 'otro'] = (acc[r.skip_reason || 'otro'] || 0) + 1; return acc; }, {})
+  };
+}
+
 module.exports = {
   BUTTON_PAYLOADS,
   normalizePhoneToMeta,
@@ -425,5 +534,8 @@ module.exports = {
   registerOptout,
   markConversationIfRecent,
   requestCallback,
-  attributeBooking
+  attributeBooking,
+  getMissedCallOverview,
+  updateMissedCallSettings,
+  getMissedCallMetrics
 };
