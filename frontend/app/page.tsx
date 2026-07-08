@@ -79,7 +79,9 @@ export default function DashboardPage() {
         if (statusRes.status === 401 || appRes.status === 401 || msgRes.status === 401) {
           setAuthError('Tu sesión ha caducado. Vuelve a iniciar sesión.');
         } else if (statusRes.status === 403 || appRes.status === 403 || msgRes.status === 403) {
-          setAuthError('Tu usuario no tiene ninguna tienda asignada. Contacta con CanalAgenda.');
+          // Usuario sin tienda: al asistente de onboarding
+          router.replace('/onboarding/store');
+          return;
         } else {
           setAuthError('Error cargando datos desde la API.');
         }
@@ -100,7 +102,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [session]);
+  }, [session, router]);
 
   useEffect(() => {
     if (!session) return;
