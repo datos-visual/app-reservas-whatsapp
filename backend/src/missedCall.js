@@ -314,6 +314,105 @@ async function dispatchPendingMissedCalls({ limit = 50, requestId } = {}) {
   return resumen;
 }
 
+// ---------------------------------------------------------------------
+// M4 — opt-out, callback y atribución
+// ---------------------------------------------------------------------
+
+const ATTRIBUTION_WINDOW_HOURS = 48;
+
+/** Exclusión permanente por tienda. Idempotente (PK compuesta, ignora 23505). */
+async function registerOptout(storeId, phone, source = 'missed_call') {
+  try {
+    const { error } = await supabase
+      .from('contact_optouts')
+      .insert({ store_id: storeId, phone, source });
+    if (error && error.code !== '23505') {
+      console.error('[MissedCall] Error registrando optout', { storeId, phone, error });
+      throw error;
+    }
+    console.log('[MissedCall] Optout registrado', { storeId, phone, source });
+  } catch (err) {
+    console.error('[MissedCall] Excepción en registerOptout', { storeId, phone, err });
+    throw err;
+  }
+}
+
+/**
+ * Marca resulted_in_conversation=true en las plantillas enviadas a este
+ * teléfono en las últimas 48 h. Se invoca con CUALQUIER mensaje entrante:
+ * si no hay missed_call reciente, el update simplemente no afecta filas.
+ */
+async function markConversationIfRecent(storeId, phone) {
+  try {
+    const since = DateTime.now().minus({ hours: ATTRIBUTION_WINDOW_HOURS }).toISO();
+    await supabase
+      .from('missed_calls')
+      .update({ resulted_in_conversation: true })
+      .eq('store_id', storeId)
+      .eq('caller_phone', phone)
+      .eq('status', 'sent')
+      .eq('resulted_in_conversation', false)
+      .gte('template_sent_at', since);
+  } catch (err) {
+    console.error('[MissedCall] Excepción en markConversationIfRecent', { storeId, phone, err });
+  }
+}
+
+/** Botón "Que me llamen": deja constancia para el panel del dueño. */
+async function requestCallback(storeId, phone) {
+  try {
+    const since = DateTime.now().minus({ hours: ATTRIBUTION_WINDOW_HOURS }).toISO();
+    await supabase
+      .from('missed_calls')
+      .update({ callback_requested: true })
+      .eq('store_id', storeId)
+      .eq('caller_phone', phone)
+      .eq('status', 'sent')
+      .gte('template_sent_at', since);
+    console.log('[MissedCall] Callback solicitado', { storeId, phone });
+  } catch (err) {
+    console.error('[MissedCall] Excepción en requestCallback', { storeId, phone, err });
+  }
+}
+
+/**
+ * Atribución: vincula una reserva confirmada con la plantilla más reciente
+ * enviada a ese teléfono en la ventana de 48 h. Es la cifra que vende el
+ * módulo ("N citas recuperadas ≈ N × ticket_medio €", cálculo en métricas M5).
+ */
+async function attributeBooking(storeId, phone, appointmentId) {
+  try {
+    const since = DateTime.now().minus({ hours: ATTRIBUTION_WINDOW_HOURS }).toISO();
+    const { data, error } = await supabase
+      .from('missed_calls')
+      .select('id')
+      .eq('store_id', storeId)
+      .eq('caller_phone', phone)
+      .eq('status', 'sent')
+      .is('resulted_in_booking_id', null)
+      .gte('template_sent_at', since)
+      .order('template_sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('[MissedCall] Error buscando missed_call para atribuir', { storeId, phone, error });
+      return;
+    }
+    if (!data) return; // la reserva no procede de una llamada perdida: nada que atribuir
+
+    await updateMissedCall(data.id, {
+      resulted_in_booking_id: appointmentId,
+      resulted_in_conversation: true
+    });
+    console.log('[MissedCall] Reserva atribuida a llamada perdida', {
+      storeId, phone, missedCallId: data.id, appointmentId
+    });
+  } catch (err) {
+    console.error('[MissedCall] Excepción en attributeBooking', { storeId, phone, appointmentId, err });
+  }
+}
+
 module.exports = {
   BUTTON_PAYLOADS,
   normalizePhoneToMeta,
@@ -322,5 +421,9 @@ module.exports = {
   getMissedCallSettings,
   registerMissedCall,
   processMissedCallSend,
-  dispatchPendingMissedCalls
+  dispatchPendingMissedCalls,
+  registerOptout,
+  markConversationIfRecent,
+  requestCallback,
+  attributeBooking
 };

@@ -162,17 +162,44 @@ function extractIncomingMessages(body) {
           const from = m.from;
           const messageId = m.id;
           const type = m.type;
-          const textBody = type === 'text' ? m.text?.body : null;
-          const bodyText = (textBody || '').trim();
+
+          // Extracción GENÉRICA: texto, botones de plantilla (quick-reply) y
+          // mensajes interactivos nativos (button_reply / list_reply).
+          // kind: 'text' | 'button' · payload: identificador del botón si existe.
+          let bodyText = null;
+          let payload = null;
+          let kind = 'text';
+
+          if (type === 'text') {
+            bodyText = (m.text?.body || '').trim();
+          } else if (type === 'button') {
+            // Respuesta a botón quick-reply de una PLANTILLA
+            kind = 'button';
+            bodyText = (m.button?.text || '').trim();
+            payload = m.button?.payload || null;
+          } else if (type === 'interactive') {
+            // Mensajes interactivos nativos (base para listas/botones futuros)
+            kind = 'button';
+            const ir = m.interactive || {};
+            if (ir.type === 'button_reply') {
+              bodyText = (ir.button_reply?.title || '').trim();
+              payload = ir.button_reply?.id || null;
+            } else if (ir.type === 'list_reply') {
+              bodyText = (ir.list_reply?.title || '').trim();
+              payload = ir.list_reply?.id || null;
+            }
+          }
 
           if (!phoneNumberId || !from || !messageId) continue;
-          if (!bodyText) continue;
+          if (!bodyText && !payload) continue;
 
           out.push({
             phoneNumberId,
             from,
             body: bodyText,
-            messageId
+            messageId,
+            kind,
+            payload
           });
         }
       }

@@ -29,11 +29,16 @@ const {
 const { sendTextMessage, verifyWebhook, extractIncomingMessages, verifySignature } = require('./whatsappCloud');
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
 const {
+  BUTTON_PAYLOADS,
   getStorePhoneNumberByDid,
   getMissedCallSettings,
   registerMissedCall,
   processMissedCallSend,
-  dispatchPendingMissedCalls
+  dispatchPendingMissedCalls,
+  registerOptout,
+  markConversationIfRecent,
+  requestCallback,
+  attributeBooking
 } = require('./missedCall');
 
 const app = express();
@@ -220,6 +225,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         });
 
         await deleteConversationState(storeId, from);
+
+        // Atribución missed-call: si esta reserva procede de una plantilla de
+        // llamada perdida (ventana 48 h), vincularla para las métricas en €.
+        attributeBooking(storeId, from, appointment.id).catch(() => {});
 
         await sendAndLog({
           storeId,
@@ -443,6 +452,25 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     return;
   }
 
+  // BAJA: exclusión permanente de mensajes automáticos (opt-out por palabra clave).
+  // OJO: el "NO" textual NO da de baja — conserva su significado de cancelar
+  // la reserva pendiente (decisión cerrada del módulo missed-call).
+  if (lower === 'baja') {
+    try {
+      await registerOptout(storeId, from, 'keyword');
+    } catch (err) {
+      console.error('[MissedCall] Error en optout por BAJA', { storeId, from, err });
+    }
+    await sendAndLog({
+      storeId,
+      phoneNumberId,
+      accessToken,
+      to: from,
+      text: 'De acuerdo, no volveremos a enviarte mensajes automáticos. Si cambias de opinión, escríbenos cuando quieras.'
+    });
+    return;
+  }
+
   if (lower === 'ayuda' || lower === 'menu') {
     await sendAndLog({
       storeId,
@@ -467,10 +495,56 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   });
 }
 
+/**
+ * Botones del módulo missed-call (payloads de la plantilla). Devuelve true
+ * si el payload era conocido y ya se ha respondido; false → tratar como texto.
+ */
+async function handleMissedCallButton({ storeId, phoneNumberId, accessToken, from, payload }) {
+  if (payload === BUTTON_PAYLOADS.OPTOUT) {
+    await registerOptout(storeId, from, 'button');
+    await sendAndLog({
+      storeId,
+      phoneNumberId,
+      accessToken,
+      to: from,
+      text: 'Entendido, no volveremos a escribirte. Disculpa las molestias.'
+    });
+    return true;
+  }
+
+  if (payload === BUTTON_PAYLOADS.CALLBACK) {
+    await requestCallback(storeId, from);
+    await sendAndLog({
+      storeId,
+      phoneNumberId,
+      accessToken,
+      to: from,
+      text: 'Perfecto, te llamaremos en cuanto podamos. Gracias por tu paciencia.'
+    });
+    return true;
+  }
+
+  if (payload === BUTTON_PAYLOADS.BOOK) {
+    await sendAndLog({
+      storeId,
+      phoneNumberId,
+      accessToken,
+      to: from,
+      text:
+        'Estupendo. Para ver los huecos libres envía:\n' +
+        'DISPONIBLE YYYY-MM-DD (ejemplo: DISPONIBLE 2026-07-10)\n\n' +
+        'Y para reservar: CITA YYYY-MM-DD HH:MM'
+    });
+    return true;
+  }
+
+  return false; // payload desconocido → se tratará como texto normal
+}
+
 async function processWebhookBody(body, { requestId }) {
   const incoming = extractIncomingMessages(body);
   for (const msg of incoming) {
-    const { phoneNumberId, from, body: textBody, messageId } = msg;
+    const { phoneNumberId, from, body: textBody, messageId, kind, payload } = msg;
 
     try {
       const storeContext = await resolveStoreContextByPhoneNumberId(phoneNumberId);
@@ -515,6 +589,10 @@ async function processWebhookBody(body, { requestId }) {
         continue;
       }
 
+      // Atribución missed-call: cualquier respuesta reciente a una plantilla
+      // cuenta como conversación iniciada (si no la hay, no afecta filas).
+      markConversationIfRecent(storeId, from).catch(() => {});
+
       // Ratelimit por usuario antes de responder
       const sentToday = await getMessagesSentToday(storeId, from);
       if (sentToday >= config.maxMessagesPerDay) {
@@ -525,6 +603,19 @@ async function processWebhookBody(body, { requestId }) {
           sentToday
         });
         continue;
+      }
+
+      // Botones (plantillas e interactivos): payloads conocidos tienen
+      // respuesta propia; los desconocidos caen al flujo de texto.
+      if (kind === 'button' && payload) {
+        const handled = await handleMissedCallButton({
+          storeId,
+          phoneNumberId,
+          accessToken,
+          from,
+          payload
+        });
+        if (handled) continue;
       }
 
       await handleIncomingText({
