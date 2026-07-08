@@ -267,6 +267,35 @@ tienda demo → aparece el aviso en dashboard y en logs.
 
 ---
 
+## MÓDULO "LLAMADA PERDIDA → WHATSAPP" (missed-call) — añadido jul-2026
+
+Módulo aditivo aprobado tras el informe de viabilidad: captura llamadas no
+contestadas (desvío condicional → DID Twilio → webhook de voz) y envía una
+plantilla de WhatsApp que desemboca en el flujo de reservas.
+Documentación completa: `docs/07-modulo-missed-call.md` (técnica) y
+`docs/onboarding-desvio-llamadas.md` (para el cliente final).
+
+Estado de sus incrementos:
+
+| Incremento | Qué es | Estado |
+|---|---|---|
+| M1 | Migración SQL (5 tablas) + consolidado | ✅ Hecho y aplicado en Supabase |
+| M2 | Webhook de voz Twilio (firma + TwiML + registro idempotente) | ✅ Hecho |
+| M3 | Motor de envío (dedupe día natural, cupo, horario silencioso, optout) + despachador con cron externo gratuito | ✅ Hecho; cron en cron-job.org operativo |
+| M4 | Botones genéricos (plantilla+interactivos), BAJA/payload optout, atribución de reservas | ✅ Hecho |
+| M5 | Endpoints de config y métricas (con € vía ticket_medio_eur) | ⏳ Se construye SOBRE el paso 4 (auth), después de él |
+| M6 | Documentación | ✅ Este bloque + docs/ |
+
+Pendiente operativo del módulo (acciones del admin, no de código):
+plantilla `canalagenda_missed_call_v1` aprobada por Meta en la WABA de cada
+tienda (24-72 h; pedirla el DÍA 0 del alta) · DID de Twilio con regulatory
+bundle aprobado · prueba end-to-end del checklist de docs/07.
+
+**ORDEN REVISADO del proyecto (criterio: vender en septiembre primero,
+escalar sin ti después):** M1→M4+M6 (hecho) → **paso 4 (auth)** →
+**paso 5 (onboarding)** → **M5 (config/métricas sobre auth)** → paso 6
+(tokens). Los pilotos se configuran a mano (Fase 1 semimanual por diseño).
+
 ## Resumen del orden y dependencias
 
 | Paso | Qué | Depende de | Riesgo |
