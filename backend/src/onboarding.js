@@ -128,12 +128,14 @@ async function upsertCalendarConnection(storeId, googleCalendarId) {
  * Los índices únicos de phone_number_id garantizan que un número no pueda
  * pertenecer a dos tiendas (23505 → error EN_USO para respuesta 409).
  */
-async function upsertWhatsappAccount(storeId, { phoneNumberId, accessToken, wabaId }) {
+async function upsertWhatsappAccount(storeId, { phoneNumberId, accessToken, wabaId, tokenExpiresAt }) {
   const normalizedToken = (accessToken || '').replace(/\s+/g, '');
   const row = {
     phone_number_id: (phoneNumberId || '').trim(),
     access_token: normalizedToken,
     waba_id: wabaId ? String(wabaId).trim() : null,
+    // null = token permanente; fecha ISO = token temporal (aviso al acercarse)
+    token_expires_at: tokenExpiresAt || null,
     is_active: true,
     verify_token: config.globalWebhookVerifyToken || 'global'
   };
@@ -218,11 +220,44 @@ async function testWhatsappConnection(storeId) {
   }
 }
 
+/**
+ * Paso 6 — Tokens de WhatsApp a punto de caducar (o caducados) en todo el
+ * sistema. Lo consulta el despachador (cron) para avisar por logs antes de
+ * que una tienda se quede muda.
+ */
+async function listExpiringTokens(days = 7) {
+  const limit = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('whatsapp_accounts')
+    .select('store_id, phone_number_id, token_expires_at')
+    .eq('is_active', true)
+    .not('token_expires_at', 'is', null)
+    .lte('token_expires_at', limit);
+
+  if (error) {
+    console.error('[Tokens] Error listando tokens por caducar', { error });
+    throw error;
+  }
+  return data || [];
+}
+
+/** Estado de caducidad de un token: null (sin caducidad/lejana) | 'expira_pronto' | 'caducado'. */
+function tokenExpiryWarning(tokenExpiresAt, warnDays = 7) {
+  if (!tokenExpiresAt) return { warning: null, dias_restantes: null };
+  const ms = new Date(tokenExpiresAt).getTime() - Date.now();
+  const dias = Math.floor(ms / (24 * 60 * 60 * 1000));
+  if (ms <= 0) return { warning: 'caducado', dias_restantes: 0 };
+  if (dias <= warnDays) return { warning: 'expira_pronto', dias_restantes: dias };
+  return { warning: null, dias_restantes: dias };
+}
+
 module.exports = {
   createStoreWithOwner,
   getStoreOverview,
   upsertCalendarConnection,
   upsertWhatsappAccount,
   testCalendarConnection,
-  testWhatsappConnection
+  testWhatsappConnection,
+  listExpiringTokens,
+  tokenExpiryWarning
 };

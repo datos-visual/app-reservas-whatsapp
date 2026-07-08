@@ -12,6 +12,9 @@ type WhatsappStatus = {
   ready: boolean;
   phone_number_id?: string | null;
   configured?: boolean;
+  token_expires_at?: string | null;
+  token_warning?: 'expira_pronto' | 'caducado' | null;
+  token_dias_restantes?: number | null;
 };
 
 type Appointment = {
@@ -183,6 +186,18 @@ export default function DashboardPage() {
           {status?.phone_number_id && (
             <p className="mt-2 text-xs text-slate-400">
               phone_number_id: {status.phone_number_id}
+            </p>
+          )}
+          {status?.token_warning === 'caducado' && (
+            <p className="mt-2 text-xs font-semibold text-red-400">
+              ⚠ El token de WhatsApp ha CADUCADO: el bot no puede responder.
+              Contacta con CanalAgenda para renovarlo.
+            </p>
+          )}
+          {status?.token_warning === 'expira_pronto' && (
+            <p className="mt-2 text-xs font-semibold text-amber-400">
+              ⚠ El token de WhatsApp caduca en {status.token_dias_restantes}{' '}
+              {status.token_dias_restantes === 1 ? 'día' : 'días'}. Conviene renovarlo ya.
             </p>
           )}
           {!status?.configured && status !== null && (

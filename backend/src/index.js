@@ -774,7 +774,24 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
 
   try {
     const resumen = await dispatchPendingMissedCalls({ requestId });
-    res.json(resumen);
+
+    // Paso 6: aprovechar el cron para vigilar tokens por caducar (<7 días)
+    let tokensPorCaducar = 0;
+    try {
+      const expiring = await listExpiringTokens(7);
+      tokensPorCaducar = expiring.length;
+      for (const t of expiring) {
+        console.warn('[Tokens] Token de WhatsApp por caducar o caducado — renovar y actualizar', {
+          storeId: t.store_id,
+          phoneNumberId: t.phone_number_id,
+          expira: t.token_expires_at
+        });
+      }
+    } catch (err) {
+      console.error('[Tokens] Error comprobando caducidades', { requestId, err });
+    }
+
+    res.json({ ...resumen, tokens_por_caducar: tokensPorCaducar });
   } catch (err) {
     console.error('[MissedCall] Error en despacho', { requestId, err });
     res.status(500).json({ error: 'Error despachando pendientes' });
@@ -791,10 +808,15 @@ app.get('/api/whatsapp/status', async (req, res) => {
 
     const account = await getWhatsappAccountByStoreId(storeId);
     const configured = !!account && !!account.access_token;
+    // Paso 6: aviso de caducidad del token (null = permanente)
+    const { warning, dias_restantes } = tokenExpiryWarning(account?.token_expires_at || null);
     res.json({
-      ready: configured,
+      ready: configured && warning !== 'caducado',
       phone_number_id: account?.phone_number_id || null,
-      configured
+      configured,
+      token_expires_at: account?.token_expires_at || null,
+      token_warning: warning,
+      token_dias_restantes: dias_restantes
     });
   } catch (err) {
     console.error('[API] Error en /api/whatsapp/status', err);
@@ -838,7 +860,9 @@ const {
   upsertCalendarConnection,
   upsertWhatsappAccount,
   testCalendarConnection,
-  testWhatsappConnection
+  testWhatsappConnection,
+  listExpiringTokens,
+  tokenExpiryWarning
 } = require('./onboarding');
 const { getStoreUserByUserId } = require('./auth');
 const {
@@ -928,11 +952,16 @@ app.post('/api/onboarding/whatsapp', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const { phone_number_id: pnid, access_token: token, waba_id: waba } = req.body || {};
+    const { phone_number_id: pnid, access_token: token, waba_id: waba, token_expires_at: expira } = req.body || {};
     if (!pnid || !token) {
       return res.status(400).json({ error: 'phone_number_id y access_token son obligatorios' });
     }
-    await upsertWhatsappAccount(storeId, { phoneNumberId: pnid, accessToken: token, wabaId: waba });
+    await upsertWhatsappAccount(storeId, {
+      phoneNumberId: pnid,
+      accessToken: token,
+      wabaId: waba,
+      tokenExpiresAt: expira || null
+    });
     res.json({ ok: true });
   } catch (err) {
     if (err.code === 'EN_USO') {

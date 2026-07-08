@@ -296,6 +296,15 @@ escalar sin ti después):** M1→M4+M6 (hecho) → **paso 4 (auth)** →
 **paso 5 (onboarding)** → **M5 (config/métricas sobre auth)** → paso 6
 (tokens). Los pilotos se configuran a mano (Fase 1 semimanual por diseño).
 
+**ESTADO jul-2026: PLAN TÉCNICO COMPLETADO — pasos 0-6 y módulo missed-call
+(M1-M6, incluido M5) construidos y verificados.** Pendiente de OPERACIÓN (no
+de código): plantilla de Meta aprobada por tienda, DID de Twilio con
+regulatory bundle, rotación final de credenciales expuestas, variables
+NEXT_PUBLIC_* en el frontend de Render, y la Fase B/C de la hoja de ruta del
+informe (RGPD/términos/Stripe → pilotos). Mejora Fase 2 con nombre:
+**Embedded Signup de Meta** (Tech Provider + App Review) para sustituir la
+pantalla manual de WhatsApp del onboarding.
+
 ## Resumen del orden y dependencias
 
 | Paso | Qué | Depende de | Riesgo |

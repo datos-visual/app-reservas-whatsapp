@@ -23,9 +23,11 @@ create table if not exists public.stores (
   name                          text not null,
   timezone                      text not null default 'Europe/Madrid',
   appointment_duration_minutes  integer not null default 30,
+  business_email                text,
+  business_phone                text,
   created_at                    timestamptz not null default now()
 );
--- Pendiente (paso 5, onboarding): status, business_email, business_phone.
+-- El estado del onboarding (draft/ready) NO se guarda: se deriva de las conexiones.
 
 -- ---------------------------------------------------------------------
 -- 2) WHATSAPP_ACCOUNTS — mapeo phone_number_id → store_id + credenciales
@@ -38,9 +40,9 @@ create table if not exists public.whatsapp_accounts (
   access_token     text not null,
   verify_token     text not null,
   is_active        boolean not null default true,
+  token_expires_at timestamptz,  -- null = token permanente (paso 6)
   created_at       timestamptz not null default now()
 );
--- Pendiente (paso 6): token_expires_at.
 
 -- Unicidad global de phone_number_id (un número solo puede pertenecer a una fila)
 create unique index if not exists whatsapp_accounts_phone_number_id_key
