@@ -18,7 +18,9 @@ const {
   deleteConversationState,
   getWhatsappAccountByStoreId,
   getStoreConfig,
-  getStoreBusinessHours
+  getStoreBusinessHours,
+  getUpcomingConfirmedAppointments,
+  cancelAppointment
 } = require('./db');
 const {
   listEventsForDay,
@@ -129,6 +131,50 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
   let pending = await getConversationState(storeId, from);
   const current = pending?.state?.pendingAppointment || null;
+  const pendingCancel = pending?.state?.pendingCancellation || null;
+
+  // Formato humano de fechas en la timezone de la tienda
+  const fmt = (iso) => DateTime.fromISO(iso, { zone }).toFormat("dd/MM/yyyy 'a las' HH:mm");
+
+  // Confirmación SI de una CANCELACIÓN pendiente (antes que la de reserva)
+  if (pendingCancel && (lower === 'si' || lower === 'sí')) {
+    try {
+      const cancelled = await cancelAppointment(storeId, pendingCancel.appointmentId);
+      await deleteConversationState(storeId, from);
+
+      if (!cancelled) {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: 'Esa cita ya no estaba activa (quizá ya se canceló antes).'
+        });
+        return;
+      }
+
+      // Best-effort: liberar también el evento de Google Calendar
+      await deleteCalendarEvent(storeId, cancelled.google_event_id);
+
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Tu cita del ${fmt(cancelled.start_at)} ha sido cancelada. Si quieres otra, envía DISPONIBLE YYYY-MM-DD.`
+      });
+    } catch (err) {
+      console.error('[WhatsAppCloud] Error cancelando cita', { storeId, from, err });
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Ha ocurrido un error cancelando tu cita. Inténtalo de nuevo más tarde.'
+      });
+    }
+    return;
+  }
+
+  if (pendingCancel && lower === 'no') {
+    await deleteConversationState(storeId, from);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: 'Perfecto, tu cita se mantiene tal cual.'
+    });
+    return;
+  }
 
   // Confirmación SI (el estado NO se borra al entrar: solo tras éxito o cuando el pendiente deja de ser válido)
   if (current && (lower === 'si' || lower === 'sí')) {
@@ -438,6 +484,74 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     return;
   }
 
+  // MIS CITAS: próximas citas confirmadas del cliente
+  if (lower === 'mis citas' || lower === 'miscitas') {
+    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+    if (!citas.length) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'No tienes citas próximas. Para reservar, envía DISPONIBLE YYYY-MM-DD.'
+      });
+      return;
+    }
+    const lines = citas.map((c) => `- ${fmt(c.start_at)} (ID ${c.id})`).join('\n');
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `Tus próximas citas:\n${lines}\n\nPara cancelar una: CANCELAR seguido del ID (ejemplo: CANCELAR ${citas[0].id})`
+    });
+    return;
+  }
+
+  // CANCELAR [id]: cancelación con confirmación SI/NO
+  if (lower === 'cancelar' || lower.startsWith('cancelar ')) {
+    const arg = body.trim().split(/\s+/)[1] || null;
+    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+
+    if (!citas.length) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'No tienes citas próximas que cancelar.'
+      });
+      return;
+    }
+
+    let target = null;
+    if (arg) {
+      target = citas.find((c) => String(c.id) === arg);
+      if (!target) {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: 'No encuentro esa cita entre tus próximas citas. Envía MIS CITAS para ver la lista.'
+        });
+        return;
+      }
+    } else if (citas.length === 1) {
+      target = citas[0];
+    } else {
+      const lines = citas.map((c) => `- ID ${c.id}: ${fmt(c.start_at)}`).join('\n');
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Tienes varias citas próximas:\n${lines}\n\n¿Cuál cancelo? Envía CANCELAR seguido del ID (ejemplo: CANCELAR ${citas[0].id})`
+      });
+      return;
+    }
+
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingCancellation: {
+        appointmentId: target.id,
+        startIso: target.start_at,
+        expiresAt
+      }
+    }, expiresAt);
+
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `¿Cancelo tu cita del ${fmt(target.start_at)}? Responde SI para cancelarla o NO para mantenerla.`
+    });
+    return;
+  }
+
   // BAJA: exclusión permanente de mensajes automáticos (opt-out por palabra clave).
   // OJO: el "NO" textual NO da de baja — conserva su significado de cancelar
   // la reserva pendiente (decisión cerrada del módulo missed-call).
@@ -467,7 +581,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         'Hola, soy el bot de citas.\n\n' +
         'Comandos disponibles:\n' +
         '- DISPONIBLE YYYY-MM-DD → ver huecos libres\n' +
-        '- CITA YYYY-MM-DD HH:MM → reservar cita de 30 minutos\n'
+        '- CITA YYYY-MM-DD HH:MM → reservar cita\n' +
+        '- MIS CITAS → ver tus próximas citas\n' +
+        '- CANCELAR → cancelar una cita\n\n' +
+        'También puedes escribirme con tus palabras: "¿tenéis hueco mañana por la tarde?"'
     });
     return;
   }

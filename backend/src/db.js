@@ -447,6 +447,66 @@ async function logInboundMessageOnce({ storeId, phone, body, messageId }) {
   }
 }
 
+/** Próximas citas confirmadas de un cliente (por teléfono) en su tienda. */
+async function getUpcomingConfirmedAppointments(storeId, phone, { limit = 5 } = {}) {
+  try {
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('store_id', storeId)
+      .eq('phone', phone)
+      .maybeSingle();
+    if (!customer) return [];
+
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('customer_id', customer.id)
+      .eq('status', 'confirmed')
+      .gte('start_at', new Date().toISOString())
+      .order('start_at', { ascending: true })
+      .limit(limit);
+
+    if (error) {
+      console.error('[DB] Error listando próximas citas', { storeId, phone, error });
+      throw error;
+    }
+    return data || [];
+  } catch (err) {
+    console.error('[DB] Excepción en getUpcomingConfirmedAppointments', { storeId, phone, err });
+    throw err;
+  }
+}
+
+/**
+ * Cancela una cita confirmada (status → cancelled) verificando tienda.
+ * Devuelve la fila cancelada o null si no existía/no era cancelable.
+ * Gracias al índice parcial (WHERE status='confirmed'), el hueco queda
+ * automáticamente rereservable.
+ */
+async function cancelAppointment(storeId, appointmentId) {
+  try {
+    const { data, error } = await supabase
+      .from('appointments')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', appointmentId)
+      .eq('store_id', storeId)
+      .eq('status', 'confirmed')
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[DB] Error cancelando cita', { storeId, appointmentId, error });
+      throw error;
+    }
+    return data || null;
+  } catch (err) {
+    console.error('[DB] Excepción en cancelAppointment', { storeId, appointmentId, err });
+    throw err;
+  }
+}
+
 module.exports = {
   supabase,
   logMessage,
@@ -465,6 +525,8 @@ module.exports = {
   logInboundMessageOnce,
   getConversationState,
   setConversationState,
-  deleteConversationState
+  deleteConversationState,
+  getUpcomingConfirmedAppointments,
+  cancelAppointment
 };
 
