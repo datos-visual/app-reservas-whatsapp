@@ -20,16 +20,28 @@ const TIMEOUT_MS = 6000;
 // ---------------------------------------------------------------------
 // Prompt
 // ---------------------------------------------------------------------
-function buildPrompt({ text, timezone, nowDt }) {
+function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
   const hoy = nowDt.toFormat('yyyy-MM-dd');
   const diaSemana = nowDt.setLocale('es').toFormat('cccc');
+
+  // Contexto: últimos mensajes de ESTA conversación (para resolver referencias
+  // como "a las 11" cuando el día se dijo dos mensajes antes)
+  let contexto = '';
+  if (conversation.length) {
+    const lines = conversation
+      .map((m) => `${m.from_me ? 'Bot' : 'Cliente'}: ${String(m.content).slice(0, 160)}`)
+      .join('\n');
+    contexto = `Conversación reciente (para resolver referencias como "a esa hora" o un día ya mencionado):\n${lines}\n\n`;
+  }
+
   return (
     'Eres el intérprete de mensajes de un sistema de reservas por WhatsApp de un negocio en España. ' +
-    'Tu ÚNICA tarea es clasificar el mensaje del cliente y extraer fecha/hora si las hay. ' +
+    'Tu ÚNICA tarea es clasificar el ÚLTIMO mensaje del cliente y extraer fecha/hora/franja si las hay. ' +
     'NO respondes al cliente, NO inventas datos.\n\n' +
     `Hoy es ${diaSemana} ${hoy} (zona horaria ${timezone}).\n\n` +
+    contexto +
     'Devuelve SOLO un objeto JSON con esta forma exacta:\n' +
-    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null}\n\n' +
+    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null}\n\n' +
     'Reglas:\n' +
     '- DISPONIBLE: pregunta por huecos/disponibilidad/horarios de un día ("¿tenéis hueco el viernes?"). Extrae la fecha; time null salvo hora concreta preguntada.\n' +
     '- CITA: quiere reservar en fecha Y hora concretas ("resérvame mañana a las 5 de la tarde"). Ambos campos obligatorios; si falta la hora, usa DISPONIBLE.\n' +
@@ -41,9 +53,11 @@ function buildPrompt({ text, timezone, nowDt }) {
     '- BAJA: pide expresamente no recibir más mensajes.\n' +
     '- OTRO: cualquier otra cosa (consultas de precios, ubicación, charla) o si tienes dudas. Ante la duda, SIEMPRE "OTRO".\n' +
     '- Fechas relativas en español: "mañana", "pasado mañana", "el viernes" (el próximo), "la semana que viene". ' +
-    'Horas: "a las 5 de la tarde" = 17:00, "por la mañana" sin hora concreta = time null.\n' +
-    '- Nunca inventes fecha ni hora que el cliente no haya dicho.\n\n' +
-    `Mensaje del cliente: "${String(text).slice(0, 500)}"`
+    'Horas: "a las 5 de la tarde" = 17:00. "por la tarde"/"por la mañana" SIN hora concreta = time null y franja "tarde"/"manana".\n' +
+    '- Si el día o la hora se mencionaron en la conversación reciente y el cliente se refiere a ellos, úsalos. ' +
+    'Si el cliente da hora pero ningún día (ni ahora ni antes), devuelve CITA con date null.\n' +
+    '- Nunca inventes fecha ni hora que el cliente no haya dicho (ni en este mensaje ni en la conversación).\n\n' +
+    `ÚLTIMO mensaje del cliente: "${String(text).slice(0, 500)}"`
   );
 }
 
@@ -57,24 +71,31 @@ function validateNluResult(raw) {
 
   let date = raw.date ?? null;
   let time = raw.time ?? null;
+  let franja = raw.franja ?? null;
   if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) date = null;
   if (time !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time))) time = null;
+  if (franja !== null && !['manana', 'tarde'].includes(String(franja))) franja = null;
 
   // Coherencia mínima por intención
-  if (intent === 'CITA' && (!date || !time)) {
-    // sin fecha+hora completas, degradar a DISPONIBLE si hay fecha, si no OTRO
-    return date ? { intent: 'DISPONIBLE', date, time: null } : { intent: 'OTRO', date: null, time: null };
+  if (intent === 'CITA' && !time && date) {
+    // quiere reservar pero sin hora → enseñarle huecos de ese día
+    return { intent: 'DISPONIBLE', date, time: null, franja };
   }
-  if (intent === 'DISPONIBLE' && !date) return { intent: 'OTRO', date: null, time: null };
+  if (intent === 'CITA' && time && !date) {
+    // hora sin día: intención válida a medias → el flujo preguntará el día
+    return { intent: 'CITA_SIN_FECHA', date: null, time, franja: null };
+  }
+  if (intent === 'CITA' && !date && !time) return { intent: 'OTRO', date: null, time: null, franja: null };
+  if (intent === 'DISPONIBLE' && !date) return { intent: 'OTRO', date: null, time: null, franja: null };
 
-  return { intent, date, time };
+  return { intent, date, time, franja };
 }
 
 /** Traduce el resultado NLU al comando determinista equivalente (o null). */
 function nluResultToCommand(result) {
   if (!result) return null;
   switch (result.intent) {
-    case 'DISPONIBLE': return `DISPONIBLE ${result.date}`;
+    case 'DISPONIBLE': return `DISPONIBLE ${result.date}${result.franja ? ' ' + result.franja.toUpperCase() : ''}`;
     case 'CITA': return `CITA ${result.date} ${result.time}`;
     case 'CONFIRMAR': return 'SI';
     case 'RECHAZAR': return 'NO';

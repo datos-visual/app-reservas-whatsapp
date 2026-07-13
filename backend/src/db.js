@@ -447,6 +447,31 @@ async function logInboundMessageOnce({ storeId, phone, body, messageId }) {
   }
 }
 
+/** Últimos mensajes de UNA conversación (tienda+teléfono), recientes primero.
+ *  Para dar contexto al NLU ("a las 11" hereda el "mañana" de antes). */
+async function getRecentConversation(storeId, phone, { limit = 6, maxAgeMinutes = 30 } = {}) {
+  try {
+    const since = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('messages')
+      .select('content, from_me, created_at')
+      .eq('store_id', storeId)
+      .eq('phone', phone)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('[DB] Error leyendo conversación reciente', { storeId, phone, error });
+      return [];
+    }
+    return (data || []).reverse(); // orden cronológico
+  } catch (err) {
+    console.error('[DB] Excepción en getRecentConversation', { storeId, phone, err });
+    return [];
+  }
+}
+
 /** Próximas citas confirmadas de un cliente (por teléfono) en su tienda. */
 async function getUpcomingConfirmedAppointments(storeId, phone, { limit = 5 } = {}) {
   try {
@@ -527,6 +552,7 @@ module.exports = {
   setConversationState,
   deleteConversationState,
   getUpcomingConfirmedAppointments,
-  cancelAppointment
+  cancelAppointment,
+  getRecentConversation
 };
 

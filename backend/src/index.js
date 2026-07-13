@@ -20,7 +20,8 @@ const {
   getStoreConfig,
   getStoreBusinessHours,
   getUpcomingConfirmedAppointments,
-  cancelAppointment
+  cancelAppointment,
+  getRecentConversation
 } = require('./db');
 const {
   listEventsForDay,
@@ -324,9 +325,14 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     return;
   }
 
-  // DISPONIBLE YYYY-MM-DD
+  // DISPONIBLE YYYY-MM-DD [MANANA|TARDE]
   if (lower.startsWith('disponible ')) {
-    const dateStr = body.substring('disponible '.length).trim();
+    const rest = body.substring('disponible '.length).trim();
+    const [dateStrRaw, franjaRaw] = rest.split(/\s+/);
+    const dateStr = (dateStrRaw || '').trim();
+    const franja = franjaRaw
+      ? franjaRaw.trim().toUpperCase().replace('Ñ', 'N')
+      : null;
     const date = DateTime.fromISO(dateStr, { zone });
     if (!date.isValid) {
       await sendAndLog({
@@ -363,14 +369,26 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     };
 
     const events = await listEventsForDay(storeId, iso, zone);
-    const slots = generate30MinSlots(iso, events, slotOptions);
+    let slots = generate30MinSlots(iso, events, slotOptions);
+
+    // Franja horaria (viene del NLU: "por la tarde" → TARDE)
+    let franjaTxt = '';
+    if (franja === 'TARDE') {
+      slots = slots.filter((s) => s.label >= '14:00');
+      franjaTxt = ' por la tarde';
+    } else if (franja === 'MANANA') {
+      slots = slots.filter((s) => s.label < '14:00');
+      franjaTxt = ' por la mañana';
+    }
+
     if (!slots.length) {
       await sendAndLog({
         storeId,
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'No hay huecos disponibles para ese día.'
+        text: `No hay huecos disponibles para ese día${franjaTxt}.` +
+          (franjaTxt ? ` Envía DISPONIBLE ${iso} para ver el día completo.` : '')
       });
       return;
     }
@@ -384,11 +402,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       accessToken,
       to: from,
       text:
-        `Huecos disponibles para ${iso}:\n` +
+        `Huecos disponibles para ${iso}${franjaTxt}:\n` +
         lines.map((l) => `- ${l}`).join('\n') +
         '\n\nReserva enviando: CITA YYYY-MM-DD HH:MM (ejemplo: CITA ' +
         iso +
-        ' 09:00)'
+        ' ' + top[0].label + ')'
     });
     return;
   }
@@ -595,11 +613,26 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // error o intención dudosa ('OTRO') → cae al mensaje estándar de siempre.
   if (!nluAttempted) {
     try {
+      const conversation = await getRecentConversation(storeId, from);
       const interpreted = await interpretMessage({
         text: body,
         timezone: zone,
-        nowDt: DateTime.now().setZone(zone)
+        nowDt: DateTime.now().setZone(zone),
+        conversation
       });
+
+      // Reserva a medias (hora sin día): preguntar el día, sin adivinar nada
+      if (interpreted && interpreted.intent === 'CITA_SIN_FECHA') {
+        await sendAndLog({
+          storeId,
+          phoneNumberId,
+          accessToken,
+          to: from,
+          text: `¿Para qué día quieres la cita de las ${interpreted.time}? Dímelo todo junto, por ejemplo: "mañana a las ${interpreted.time}".`
+        });
+        return;
+      }
+
       const command = nluResultToCommand(interpreted);
       if (command) {
         console.log('[NLU] Reencaminando lenguaje natural como comando', {
