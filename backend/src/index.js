@@ -28,6 +28,7 @@ const {
 } = require('./calendar');
 const { sendTextMessage, verifyWebhook, extractIncomingMessages, verifySignature } = require('./whatsappCloud');
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
+const { interpretMessage, nluResultToCommand } = require('./nlu');
 const {
   BUTTON_PAYLOADS,
   getStorePhoneNumberByDid,
@@ -119,7 +120,7 @@ async function sendAndLog({ storeId, phoneNumberId, accessToken, to, text }) {
   }
 }
 
-async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body }) {
+async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body, nluAttempted = false }) {
   const lower = (body || '').trim().toLowerCase();
 
   const storeConfig = await getStoreConfig(storeId);
@@ -469,6 +470,38 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         '- CITA YYYY-MM-DD HH:MM → reservar cita de 30 minutos\n'
     });
     return;
+  }
+
+  // NLU (mejora nº5): si no era un comando, intentar interpretar lenguaje
+  // natural. La IA SOLO interpreta → se reencamina al comando determinista
+  // equivalente, UNA sola vez (nluAttempted evita bucles). Sin claves, con
+  // error o intención dudosa ('OTRO') → cae al mensaje estándar de siempre.
+  if (!nluAttempted) {
+    try {
+      const interpreted = await interpretMessage({
+        text: body,
+        timezone: zone,
+        nowDt: DateTime.now().setZone(zone)
+      });
+      const command = nluResultToCommand(interpreted);
+      if (command) {
+        console.log('[NLU] Reencaminando lenguaje natural como comando', {
+          storeId,
+          provider: interpreted.provider,
+          command
+        });
+        return handleIncomingText({
+          storeId,
+          phoneNumberId,
+          accessToken,
+          from,
+          body: command,
+          nluAttempted: true
+        });
+      }
+    } catch (err) {
+      console.error('[NLU] Error interpretando; fallback a mensaje estándar', { storeId, err });
+    }
   }
 
   await sendAndLog({

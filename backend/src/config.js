@@ -22,7 +22,13 @@ const config = {
   // validar la firma de Twilio detrás del proxy de Render.
   publicBaseUrl: process.env.PUBLIC_BASE_URL || null,
   // Token del cron externo que invoca /internal/missed-calls/dispatch
-  internalCronToken: process.env.INTERNAL_CRON_TOKEN || null
+  internalCronToken: process.env.INTERNAL_CRON_TOKEN || null,
+  // NLU (la IA solo interpreta, nunca decide): cascada "titular,suplente"
+  nluProviders: process.env.NLU_PROVIDERS || 'gemini,mistral',
+  geminiApiKey: process.env.GEMINI_API_KEY || null,
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-flash-lite-latest',
+  mistralApiKey: process.env.MISTRAL_API_KEY || null,
+  mistralModel: process.env.MISTRAL_MODEL || 'mistral-small-latest'
 };
 
 module.exports = config;
