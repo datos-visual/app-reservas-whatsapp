@@ -448,6 +448,20 @@ async function logInboundMessageOnce({ storeId, phone, body, messageId }) {
   }
 }
 
+/** Guarda el nombre del cliente (se pide al confirmar su primera reserva). */
+async function updateCustomerName(storeId, phone, name) {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .update({ name, updated_at: new Date().toISOString() })
+      .eq('store_id', storeId)
+      .eq('phone', phone);
+    if (error) console.error('[DB] Error guardando nombre de cliente', { storeId, phone, error });
+  } catch (err) {
+    console.error('[DB] Excepción en updateCustomerName', { storeId, phone, err });
+  }
+}
+
 /** Últimos mensajes de UNA conversación (tienda+teléfono), recientes primero.
  *  Para dar contexto al NLU ("a las 11" hereda el "mañana" de antes). */
 async function getRecentConversation(storeId, phone, { limit = 6, maxAgeMinutes = 30 } = {}) {
@@ -474,7 +488,7 @@ async function getRecentConversation(storeId, phone, { limit = 6, maxAgeMinutes 
 }
 
 /** Próximas citas confirmadas de un cliente (por teléfono) en su tienda. */
-async function getUpcomingConfirmedAppointments(storeId, phone, { limit = 5 } = {}) {
+async function getUpcomingConfirmedAppointments(storeId, phone, { limit = 10 } = {}) {
   try {
     const { data: customer } = await supabase
       .from('customers')
@@ -554,6 +568,7 @@ module.exports = {
   deleteConversationState,
   getUpcomingConfirmedAppointments,
   cancelAppointment,
-  getRecentConversation
+  getRecentConversation,
+  updateCustomerName
 };
 

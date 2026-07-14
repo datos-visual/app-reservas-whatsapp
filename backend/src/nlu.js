@@ -70,7 +70,8 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     'C) Cliente: "el miércoles a las nueve y media" → CITA con la fecha del próximo miércoles y time "09:30".\n' +
     'D) Bot acaba de cancelar una cita del 2026-07-15. Cliente: "resérvame ese mismo día a las 10" → {"intent":"CITA","date":"2026-07-15","time":"10:00","franja":null}\n' +
     'E) Cliente: "quiero cambiar la de hoy a las 16 a las 15:30" (hoy 2026-07-14) → {"intent":"CAMBIAR_CITA","old_date":"2026-07-14","old_time":"16:00","date":null,"time":"15:30","franja":null}\n' +
-    'F) Cliente: "cambia la del martes a las 16:00, ponla el jueves a las 10" → old_date=<martes>, old_time="16:00", date=<jueves>, time="10:00".\n\n' +
+    'F) Cliente: "cambia la del martes a las 16:00, ponla el jueves a las 10" → old_date=<martes>, old_time="16:00", date=<jueves>, time="10:00".\n' +
+    'G) Bot: "Huecos disponibles para 2026-07-15: ... 12:00 ...". Cliente: "el de las 12" o "vale, a las 12" → {"intent":"CITA","date":"2026-07-15","time":"12:00","franja":null} (elegir un hueco de la lista ES reservar).\n\n' +
     `ÚLTIMO mensaje del cliente: "${String(text).slice(0, 500)}"`
   );
 }

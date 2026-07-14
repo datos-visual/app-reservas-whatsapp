@@ -21,7 +21,8 @@ const {
   getStoreBusinessHours,
   getUpcomingConfirmedAppointments,
   cancelAppointment,
-  getRecentConversation
+  getRecentConversation,
+  updateCustomerName
 } = require('./db');
 const {
   listEventsForDay,
@@ -279,23 +280,22 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     if (idx === null) {
+      // Salida de emergencia: si no parece una elección, soltar el estado y
+      // procesar el mensaje con normalidad (evita bucles de "no te entiendo")
+      await deleteConversationState(storeId, from);
+      pending = null;
+    } else {
+      const chosen = pendingChoice.options[idx];
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        pendingCancellation: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
+      }, expiresAt);
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `No te he entendido bien. Dime el número (1 a ${pendingChoice.options.length}) o el día — por ejemplo: "la del ${pendingChoice.options[0].label.split(' ')[0]}". Si no quieres cancelar nada, di "ninguna".`
+        text: `¿Cancelo tu cita del ${chosen.label}? Responde SI para cancelarla o NO para mantenerla.`
       });
-      return; // la elección sigue pendiente
+      return;
     }
-
-    const chosen = pendingChoice.options[idx];
-    const expiresAt = Date.now() + 10 * 60 * 1000;
-    await setConversationState(storeId, from, {
-      pendingCancellation: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
-    }, expiresAt);
-    await sendAndLog({
-      storeId, phoneNumberId, accessToken, to: from,
-      text: `¿Cancelo tu cita del ${chosen.label}? Responde SI para cancelarla o NO para mantenerla.`
-    });
-    return;
   }
 
   // Elección de cita pendiente de CAMBIAR ("la del martes", "2")
@@ -317,30 +317,51 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       idx = await interpretChoice({ text: body, options: pendingReChoice.options.map((o) => o.label) });
     }
     if (idx === null) {
+      // Salida de emergencia: no parece una elección → soltar el estado y
+      // procesar el mensaje con normalidad (fin de los bucles)
+      await deleteConversationState(storeId, from);
+      pending = null;
+    } else {
+      const chosen = pendingReChoice.options[idx];
+      await deleteConversationState(storeId, from);
+
+      if (pendingReChoice.newTime) {
+        await proposeReschedule({ id: chosen.id, startIso: chosen.startIso }, pendingReChoice.newDate, pendingReChoice.newTime);
+        return;
+      }
+
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        pendingRescheduleFrom: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
+      }, expiresAt);
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `No te he entendido. Dime el número (1 a ${pendingReChoice.options.length}) o el día de la cita que quieres cambiar.`
+        text: `¿A qué día y hora paso tu cita del ${chosen.label}?`
       });
       return;
     }
+  }
 
-    const chosen = pendingReChoice.options[idx];
+  // ¿Estamos esperando el NOMBRE del cliente (tras su primera reserva)?
+  const pendingName = pending?.state?.pendingName || null;
+  if (pendingName) {
+    const candidate = body.trim().replace(/\s+/g, ' ');
+    const pareceNombre =
+      /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ' -]{2,40}$/.test(candidate) &&
+      !/^(si|sí|no|hola|ayuda|menu|menú|gracias|vale|ok|cancelar|cita|citas|baja)$/i.test(candidate);
+
     await deleteConversationState(storeId, from);
 
-    if (pendingReChoice.newTime) {
-      await proposeReschedule({ id: chosen.id, startIso: chosen.startIso }, pendingReChoice.newDate, pendingReChoice.newTime);
+    if (pareceNombre) {
+      const nombre = candidate.charAt(0).toUpperCase() + candidate.slice(1);
+      await updateCustomerName(storeId, from, nombre);
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `¡Gracias, ${nombre}! Queda apuntado. Hasta pronto.`
+      });
       return;
     }
-
-    const expiresAt = Date.now() + 10 * 60 * 1000;
-    await setConversationState(storeId, from, {
-      pendingRescheduleFrom: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
-    }, expiresAt);
-    await sendAndLog({
-      storeId, phoneNumberId, accessToken, to: from,
-      text: `¿A qué día y hora paso tu cita del ${chosen.label}?`
-    });
-    return;
+    // No parece un nombre → seguir procesando el mensaje con normalidad
   }
 
   // Ya sabemos QUÉ cita cambiar; falta el nuevo día/hora
@@ -471,6 +492,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         // Si era un CAMBIO de cita: cancelar la anterior (mejor tener dos un
         // instante que ninguna: primero se reserva la nueva, luego se anula la vieja)
         let textoConfirmacion = `¡Hecho! Tu cita queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
+
+        // Primera reserva sin nombre → pedirlo (para la agenda del negocio)
+        const pedirNombre = !customer?.name;
         if (current.rescheduleOfId) {
           try {
             const old = await cancelAppointment(storeId, current.rescheduleOfId);
@@ -486,6 +510,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           }
         }
 
+        if (pedirNombre) {
+          textoConfirmacion += '\n\nPor cierto, ¿a nombre de quién pongo la cita?';
+        }
+
         await sendAndLog({
           storeId,
           phoneNumberId,
@@ -493,6 +521,13 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           to: from,
           text: textoConfirmacion
         });
+
+        if (pedirNombre) {
+          const nameExpiresAt = Date.now() + 15 * 60 * 1000;
+          await setConversationState(storeId, from, {
+            pendingName: { expiresAt: nameExpiresAt }
+          }, nameExpiresAt);
+        }
       } catch (err) {
         console.error('[WhatsAppCloud] Error creando cita en BD', err);
         const isDuplicate = err?.code === '23505';
@@ -725,7 +760,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
   // MIS CITAS: próximas citas confirmadas del cliente
   if (lower === 'mis citas' || lower === 'miscitas') {
-    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
     if (!citas.length) {
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
@@ -744,7 +779,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // CANCELAR [id]: cancelación con confirmación SI/NO
   if (lower === 'cancelar' || lower.startsWith('cancelar ')) {
     const arg = body.trim().split(/\s+/)[1] || null;
-    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
 
     if (!citas.length) {
       await sendAndLog({
@@ -894,7 +929,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       // Cancelación DIRECTA de una cita concreta ("cancela la de las 16:00"):
       // si el filtro identifica exactamente una, ni lista ni elección.
       if (interpreted && interpreted.intent === 'CANCELAR_CITA' && (interpreted.date || interpreted.time)) {
-        const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+        const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
         const matches = citas.filter((c) => {
           const dt = DateTime.fromISO(c.start_at, { zone });
           if (interpreted.date && dt.toISODate() !== interpreted.date) return false;
@@ -925,7 +960,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       // Cambio de cita rediseñado (N6): primero identificar la cita ORIGEN
       // (old_date/old_time del NLU, o única, o preguntando), luego el destino.
       if (interpreted && interpreted.intent === 'CAMBIAR_CITA') {
-        const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+        const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
 
         if (!citas.length) {
           await sendAndLog({
