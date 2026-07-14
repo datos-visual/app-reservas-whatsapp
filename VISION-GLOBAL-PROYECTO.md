@@ -2,9 +2,11 @@
 
 > **Propósito de este documento:** dar a cualquier persona (o conversación de IA)
 > el contexto completo del proyecto: qué es, por qué existe, cómo está construido,
-> qué está hecho y verificado, y qué queda. Actualizado: **10 de julio de 2026**.
-> Complementa a `INSTRUCCIONES-PROYECTO.md` (reglas fijas) y
-> `GUIA-PASO-A-PASO.md` (plan de ejecución). Ante conflicto, INSTRUCCIONES manda.
+> qué está hecho y verificado, y qué queda. Actualizado: **14 de julio de 2026**.
+> Complementa a `INSTRUCCIONES-PROYECTO.md` (reglas fijas), `GUIA-PASO-A-PASO.md`
+> (plan histórico de saneamiento) y `docs/08-especificacion-guiones-verticales.md`
+> (especificación vigente del flujo guiado y los verticales — **el plan activo de
+> desarrollo es su orden de bloques B1-B7**). Ante conflicto, INSTRUCCIONES manda.
 
 ---
 
@@ -54,6 +56,16 @@ del proyecto). Conclusiones operativas:
   en español, 19-49 €/mes, **sin comisiones**".
 - **Orden de verticales:** 1º talleres o peluquería/estética · 2º clínicas
   pequeñas y gimnasios boutique · 3º alojamiento rural.
+- **Lenguaje de modelos de reserva (decisión estratégica, jul-2026):** todo
+  vertical se clasifica en uno de tres modelos — **A**: hueco con duración y
+  recursos (peluquería, clínica); **B**: capacidad por franja/pool (taller por
+  nº de trabajos, clases de gimnasio) — variante barata de A vía parámetro de
+  capacidad; **C**: inventario de unidades por noche (rural/hotel) — módulo
+  hermano futuro, NO forzarlo en A. El motor es único y genérico; el vertical
+  es configuración: `vertical_code` + catálogo `services` editable + semilla
+  por sector + **configurador guiado en el onboarding** (pieza de producto,
+  no mejora menor). El 80% del sistema (tenant, canal, NLU, recordatorios,
+  panel, cobro) es común a los tres modelos.
 - **Probabilidades estimadas** (con supuestos, ver informe): micro-SaaS
   rentable (50-100 clientes, 1,5-3k€ MRR a 18 meses) 20-35% con foco
   comercial; startup escalable 3-7%. **El riesgo dominante es comercial
@@ -163,14 +175,23 @@ histórico obsoleto, NO usar). Resumen:
 ## 5. Funcionalidad construida (flujos)
 
 ### 5.1 Bot conversacional (cliente final, por WhatsApp)
-Comandos: `DISPONIBLE YYYY-MM-DD` (huecos libres respetando horario, timezone,
-eventos de Calendar y **sin ofrecer horas ya pasadas**) · `CITA fecha hora`
-(reserva pendiente 10 min en `conversation_state`) · `SI` (revalida, crea
-evento en Calendar, guarda cita; si carrera → rollback y aviso) · `NO`
-(cancela la pendiente) · `AYUDA` · `BAJA` (opt-out permanente). Soporta
-**botones** (plantillas quick-reply y mensajes interactivos) de forma genérica
-(`kind`/`payload` en el extractor) — base para elegir servicio/hora tocando.
-Rate-limit: 80 mensajes salientes/día por cliente.
+**El cliente habla en lenguaje natural** (los comandos siguen funcionando por
+debajo como capa determinista): "¿tenéis hueco mañana por la tarde?" (franja
+mañana/tarde filtra huecos), "el de las 12" tras una lista, "resérvame a las
+nueve y media" (hereda el día del contexto de conversación, con red
+determinista si el modelo falla), "¿qué citas tengo?", "cancela la de las
+16:00" (directo a confirmación, sin listas), "cambia la de hoy a las 16 a las
+15:30" (identifica cita ORIGEN y destino; si falta un dato lo pregunta y
+recuerda el resto; al confirmar reserva la nueva Y anula la vieja). Tras la
+primera reserva pide **el nombre del cliente** (con prefijos naturales: "a
+nombre de...", "me llamo..."). Saludos y mensajes no entendidos → **menú de
+bienvenida con botones nativos** [Reservar cita] [Mis citas] [Hablar con
+alguien] (B1). Fechas siempre en formato humano ("el miércoles 15/07 a las
+09:30"), sin IDs ni coletillas técnicas. Elecciones entre citas por lenguaje
+natural ("la del miércoles", "la segunda") con salida de emergencia
+anti-bucle. Rate-limit: 80 mensajes salientes/día por cliente. Reserva
+validada contra horario, timezone, eventos de Calendar y horas pasadas;
+confirmación SI/NO con revalidación y rollback ante carreras.
 
 ### 5.2 Módulo "Llamada perdida → WhatsApp" (missed-call) — el diferencial
 El negocio activa en su operadora el **desvío condicional** (códigos `**61*`,
@@ -208,6 +229,32 @@ whatsapp_connected → ready (no se persiste). API: `POST /api/stores`,
 enviadas, conversaciones, callbacks pendientes (lista), citas recuperadas,
 **euros estimados**, desglose de descartes.
 
+### 5.6 NLU — intérprete de lenguaje natural (`nlu.js`)
+Principio inviolable: **la IA solo interpreta, nunca decide ni responde** —
+convierte texto libre en {intent, date, time, franja, old_date, old_time} y la
+lógica determinista actúa. Proveedores **Gemini y Mistral** tras interfaz común
+con cascada titular→suplente (`NLU_PROVIDERS`, claves en env; free tiers sin
+tarjeta). Prompt con contexto conversacional (últimos 6 mensajes, 30 min),
+ejemplos few-shot, salida JSON validada estrictamente y **degradación elegante**:
+sin claves/timeout/duda → comandos de siempre. `interpretChoice` elige entre
+opciones numeradas en lenguaje natural.
+
+### 5.7 Recordatorios anti no-show (R1)
+Plantilla `canalagenda_reminder_v1` a las **24 h y 2 h** de cada cita
+confirmada, con botones [Confirmo] (marca `confirmed_by_client_at`) y
+[Cancelar cita] (entra al flujo SI/NO). Anti-spam: 1 por ventana (tracking en
+`appointments`), zona muerta 2-4 h, horario silencioso, opt-out respetado, sin
+reintentos en bucle. Despacho en el cron existente. Config por tienda en
+`reminder_settings` (enabled, template_status...). **Evolución prevista en B4
+del doc 08** (tabla `appointment_reminders` + plantillas con nombre del
+servicio) cuando exista el catálogo B2.
+
+### 5.8 Flujo guiado con botones (B1 hecho; B2-B7 en curso)
+Senders nativos `sendInteractiveButtons`/`sendInteractiveList` (gratis en
+ventana 24 h), router de payloads `ca:*` con validación contra store_id y
+manejo de payloads caducados, menú de bienvenida. Los bloques B2 (catálogo de
+servicios + duración variable), B3-B7 siguen el doc 08.
+
 ---
 
 ## 6. Estado: hecho y verificado (julio 2026)
@@ -236,58 +283,82 @@ missed-call (M1-M6) están **construidos, desplegados y probados**:
 - ✅ Estilos del frontend arreglados (Tailwind escaneaba `src/` inexistente;
   faltaban `globals.css` y su import).
 - ✅ Informe de viabilidad (13 págs., .docx) con investigación de mercado.
+- ✅ **NLU completo (N1-N7)**: Gemini+Mistral en cascada, contexto
+  conversacional, franjas, CAMBIAR cita por pasos, cancelación directa por
+  hora, captura de nombre — **pulido con 4 rondas de pruebas reales por
+  WhatsApp** del fundador (los fallos de cada ronda alimentaron la siguiente).
+- ✅ CANCELAR / MIS CITAS / CAMBIAR conversacionales (R2+N5+N6), sin IDs.
+- ✅ Recordatorios R1 (migración + motor + botones + cron), armado a la espera
+  de la plantilla de Meta.
+- ✅ B1 del doc 08: senders interactivos nativos, router `ca:*` y menú de
+  bienvenida con botones.
+- ✅ Doc 08 (especificación de flujo guiado y verticales, de la conversación
+  paralela de negocio) leído y reconciliado con lo construido.
 
 **Tienda demo:** `store_id = 0aa6d8d7-7be8-4292-8a6b-cac0a0c917da` (usuario
-panel: piloto1@test.com).
+panel: piloto1@test.com). **Plantillas Meta:** `canalagenda_missed_call_v2` y
+`canalagenda_reminder_v1` EN REVISIÓN (14-jul); la v1 aprobada no sirve (botón
+de permiso de llamada). **Twilio:** cuenta upgraded, bundle español APROBADO,
+número belga de pruebas pendiente de compra/webhook (España no se vende en
+autoservicio: ticket/número exclusivo para el +34 de producción).
 
 ---
 
 ## 7. Qué queda por hacer
 
-### 7.1 Operación inmediata (en curso, sin código)
-1. **Twilio:** regulatory bundle español enviado (Individual) → al aprobarse:
-   comprar DID Voice, apuntar webhook a `/webhook/voice/twilio`, `insert` en
-   `store_phone_numbers`, llamada de prueba. Credenciales en Render; alerta
-   de gasto 10 $/mes creada; cuenta en trial (sin riesgo de cobro).
-2. **Meta:** plantilla `canalagenda_missed_call_v1` (Utilidad, es) → al
-   aprobarse: `template_status='approved'` → **primera demo completa del
-   módulo** (llamar → no contestar → WhatsApp → reservar → métrica en €).
-3. **Seguridad pendiente:** rotar token GitHub `ghp_` y ADMIN_TOKEN definitivo
+### 7.1 Desarrollo — plan activo: bloques del doc 08 (orden B2→B7)
+1. **B2 ← SIGUIENTE:** migración de catálogo (`services`, `resources`,
+   `stores.vertical_code`, `appointments.service_id/resource_id/extra`) + seed
+   peluquería + flujo guiado Servicio→Día→Hueco→Confirmar con **duración
+   variable por servicio** (el Tinte de 120 min ocupa 2 h). Guardas de diseño
+   acordadas: la función de disponibilidad nace con parámetro de capacidad
+   (default 1, para B5/talleres) y el índice anti doble-reserva NO se toca
+   hasta la migración consciente de multi-recurso.
+2. **B3:** mapear payloads `ca:apt:*` (la lógica conversacional ya existe).
+3. **B4:** evolucionar R1 al modelo `appointment_reminders` del doc con
+   plantillas 24h/2h que incluyen el SERVICIO (requiere B2).
+4. **B5:** recursos/empleados (capacidad real), paquete taller (franjas,
+   matrícula/avería, rama urgencia), plantilla coche listo.
+5. **B6:** panel de servicios + **configurador guiado de vertical** en el
+   onboarding (pieza de producto, ver §2).
+6. **B7:** post-cita (reseña) y recompra ITV — marketing con opt-out estricto.
+
+### 7.2 Operación inmediata (gestiones del fundador)
+1. **Meta:** esperando aprobación de `canalagenda_missed_call_v2` y
+   `canalagenda_reminder_v1` → al llegar, los dos UPDATE de `template_status`
+   (y `template_name` a v2 en missed_call_settings) → demo completa: llamada
+   perdida → WhatsApp → reserva hablando → recordatorio → métricas en €.
+2. **Twilio:** poner `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` en Render
+   (acceso a la cuenta pendiente de recuperar), comprar el número belga
+   (Mobile, address requirement "Any" con la dirección española), webhook de
+   voz e `insert` del DID. Para el +34 de producción: formulario "Número
+   Exclusivo" o ticket (España no está en autoservicio).
+3. **Seguridad (arrastrado):** rotar token GitHub y ADMIN_TOKEN definitivos
    (salieron en capturas); sacar de la carpeta compartida `GIT/CONFIG/
-   config.txt`, `JSON/` (service account) y los ZIPs con `.env`.
-4. **Render frontend:** añadir las 4 variables `NEXT_PUBLIC_*` y verificar
-   producción como local.
+   config.txt`, `JSON/` y los ZIPs con `.env`. Identidades git: usar SOLO
+   `datos-visual`.
+4. **Render frontend:** variables `NEXT_PUBLIC_*` en producción.
 
-### 7.2 Fase B — requisitos de vender en serio (semanas)
+### 7.3 Fase B — requisitos de vender en serio (semanas)
 Verificación de empresa en Meta Business + display name · RGPD (aviso de
-privacidad, encargado del tratamiento por tienda, retención de mensajes) ·
-términos y precios publicados · alta de actividad y facturación (Stripe) ·
-backups Supabase Pro + monitorización /health con alertas · runbook de
-incidencias.
-
-### 7.3 Mejoras de producto priorizadas (impacto/esfuerzo, del informe)
-1. **Recordatorios anti no-show** (plantilla utility 24 h/2 h antes con
-   botones Confirmo/Cancelar) — el argumento de venta nº1. ← *siguiente*
-2. Comandos **CANCELAR** y **MIS CITAS** para el cliente final.
-3. **Catálogo de servicios por vertical** (duración/precio por servicio) —
-   corazón de la hiperpersonalización.
-4. Multi-recurso (empleado/sillón/elevador/habitación).
-5. Lenguaje natural (LLM solo para interpretar intención; lógica determinista).
-6. Botones/listas interactivas para elegir servicio y hora (extractor ya listo).
-7. Señas con Stripe · 8. Panel con métricas anti no-show · 9. Plantillas de
-   configuración por sector.
+privacidad, encargado del tratamiento por tienda, retención de mensajes;
+mención del NLU: mensajes procesados por proveedor de IA — en pilotos pasar
+las claves NLU a tier de pago sin uso de datos) · términos y precios
+publicados · alta de actividad y facturación (Stripe) · backups Supabase Pro +
+monitorización /health con alertas · runbook de incidencias.
 
 ### 7.4 Fase C — pilotos (objetivo septiembre 2026)
-Elegir vertical 1 (talleres o peluquería) → plantilla de configuración del
-sector → 10 pilotos gratuitos 60 días con instalación asistida → medir
-(citas, no-shows, llamadas recuperadas) → convertir a 19-29 €/mes → caso de
-éxito con cifras.
+Elegir vertical 1 (talleres o peluquería) → B2-B6 mínimos + configurador →
+10 pilotos gratuitos 60 días con instalación asistida → medir (citas,
+no-shows, llamadas recuperadas, € estimados) → convertir a 19-29 €/mes →
+caso de éxito con cifras.
 
 ### 7.5 Fase 2 técnica (cuando el negocio valide)
 Embedded Signup de Meta (elimina la pantalla manual de WhatsApp) · OAuth
 Google Calendar · SMTP + confirmación de email · cifrado de tokens · migrar
-DIDs a Telnyx si el volumen lo justifica (20-30% más barato) · bundles ISV de
-Twilio con datos de cada tienda cliente.
+DIDs a Telnyx si el volumen lo justifica · bundles ISV de Twilio por tienda ·
+**modelo C (estancias/rural)** como módulo hermano · multi-recurso simultáneo
+(migración consciente del índice anti doble-reserva).
 
 ---
 
@@ -296,11 +367,15 @@ Twilio con datos de cada tienda cliente.
 ```
 GIT/app-whatsapp/                      ← repo principal (main → deploy Render)
 ├── backend/src/
-│   ├── index.js          Express: webhooks (Meta + voz), rutas /api/*, despachador
+│   ├── index.js          Express: webhooks (Meta + voz), flujos conversacionales,
+│   │                     router ca:*, menú, rutas /api/*, despachador del cron
 │   ├── auth.js           Middleware dual JWT/admin + requireStoreId
 │   ├── db.js             Queries core (siempre por store_id)
 │   ├── calendar.js       Google Calendar + generación de huecos (luxon)
-│   ├── whatsappCloud.js  Firma Meta, envío texto/plantillas, extractor genérico
+│   ├── whatsappCloud.js  Firma Meta, texto/plantillas/BOTONES Y LISTAS nativas,
+│   │                     extractor genérico (texto/button/interactive)
+│   ├── nlu.js            Intérprete de lenguaje natural (Gemini+Mistral, cascada)
+│   ├── reminders.js      Recordatorios anti no-show 24h/2h (R1)
 │   ├── missedCall.js     Módulo missed-call completo (motor, métricas, optout)
 │   ├── onboarding.js     Alta de tienda, conexiones, tests, tokens caducidad
 │   └── providers/twilioVoice.js  Interfaz proveedor de voz
@@ -309,8 +384,9 @@ GIT/app-whatsapp/                      ← repo principal (main → deploy Rende
 │   ├── schema_consolidated.sql   ★ FUENTE DE VERDAD de la BD
 │   └── migration_*.sql           histórico aplicado (idempotentes)
 ├── docs/                 00-07 + onboarding-desvio-llamadas.md (cliente final)
+│   └── 08-especificacion-guiones-verticales.md  ★ PLAN ACTIVO (bloques B1-B7)
 ├── INSTRUCCIONES-PROYECTO.md     ★ reglas inviolables + DoD
-├── GUIA-PASO-A-PASO.md           ★ plan por pasos con estado
+├── GUIA-PASO-A-PASO.md           ★ plan histórico de saneamiento (completado)
 └── VISION-GLOBAL-PROYECTO.md     ★ este documento
 
 Raíz de la carpeta compartida:
