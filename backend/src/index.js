@@ -345,9 +345,15 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // ¿Estamos esperando el NOMBRE del cliente (tras su primera reserva)?
   const pendingName = pending?.state?.pendingName || null;
   if (pendingName) {
-    const candidate = body.trim().replace(/\s+/g, ' ');
+    // Quitar prefijos naturales: "a nombre de X", "me llamo X", "soy X"...
+    const candidate = body
+      .trim()
+      .replace(/^(a\s+nombre\s+de|me\s+llamo|mi\s+nombre\s+es|soy|para|pon(?:lo)?\s+a\s+nombre\s+de)\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const pareceNombre =
-      /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ' -]{2,40}$/.test(candidate) &&
+      /^[a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ.' -]{2,40}$/.test(candidate) &&
+      /[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/.test(candidate) &&
       !/^(si|sí|no|hola|ayuda|menu|menú|gracias|vale|ok|cancelar|cita|citas|baja)$/i.test(candidate);
 
     await deleteConversationState(storeId, from);
@@ -1049,7 +1055,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     phoneNumberId,
     accessToken,
     to: from,
-    text: 'Gracias por tu mensaje. Envía AYUDA para ver los comandos disponibles.'
+    text:
+      'Perdona, no te he entendido bien. Puedo darte cita, enseñarte los huecos libres, ' +
+      'o cambiar y cancelar tus citas — dímelo con tus palabras, por ejemplo: "¿tenéis hueco mañana por la tarde?"'
   });
 }
 
