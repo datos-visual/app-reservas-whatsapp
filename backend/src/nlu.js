@@ -56,7 +56,14 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     'Horas: "a las 5 de la tarde" = 17:00. "por la tarde"/"por la mañana" SIN hora concreta = time null y franja "tarde"/"manana".\n' +
     '- Si el día o la hora se mencionaron en la conversación reciente y el cliente se refiere a ellos, úsalos. ' +
     'Si el cliente da hora pero ningún día (ni ahora ni antes), devuelve CITA con date null.\n' +
-    '- Nunca inventes fecha ni hora que el cliente no haya dicho (ni en este mensaje ni en la conversación).\n\n' +
+    '- Nunca inventes fecha ni hora que el cliente no haya dicho (ni en este mensaje ni en la conversación). ' +
+    'El día SÍ puede venir de un mensaje anterior del Bot (p. ej. "Huecos disponibles para 2026-07-15").\n\n' +
+    'Ejemplos:\n' +
+    'A) Conversación: Bot: "Huecos disponibles para 2026-07-15 por la mañana: 09:00, 09:30...". ' +
+    'Cliente: "pues resérvame a las nueve y media" → {"intent":"CITA","date":"2026-07-15","time":"09:30","franja":null}\n' +
+    'B) Sin conversación previa. Cliente: "quiero reservar a las 10" → {"intent":"CITA","date":null,"time":"10:00","franja":null}\n' +
+    'C) Cliente: "el miércoles a las nueve y media" → CITA con la fecha del próximo miércoles y time "09:30".\n' +
+    'D) Bot acaba de cancelar una cita del 2026-07-15. Cliente: "resérvame ese mismo día a las 10" → {"intent":"CITA","date":"2026-07-15","time":"10:00","franja":null}\n\n' +
     `ÚLTIMO mensaje del cliente: "${String(text).slice(0, 500)}"`
   );
 }
@@ -216,4 +223,53 @@ async function interpretMessage({ text, timezone, nowDt }) {
   return null;
 }
 
-module.exports = { interpretMessage, nluResultToCommand, buildPrompt, validateNluResult, providerChain };
+/**
+ * Elige entre opciones numeradas en lenguaje natural ("la del miércoles",
+ * "la segunda", "la de las 9 y media"). options: array de textos legibles.
+ * Devuelve el índice (base 0) o null si no está claro / sin proveedores.
+ */
+async function interpretChoice({ text, options }) {
+  const chain = providerChain();
+  if (chain.length === 0) return null;
+  if (!text || !Array.isArray(options) || options.length === 0) return null;
+
+  const lista = options.map((o, i) => `${i + 1}) ${o}`).join('\n');
+  const prompt =
+    'Un cliente debe elegir UNA de estas opciones de cita:\n' +
+    `${lista}\n\n` +
+    `El cliente responde: "${String(text).slice(0, 300)}"\n\n` +
+    'Devuelve SOLO JSON: {"choice": número de la opción elegida (1..' + options.length + ') o null si no está claro o no se refiere a ninguna}. ' +
+    'Puede referirse por número, día de la semana, fecha u hora. Ante la duda, null.';
+
+  for (const name of chain) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const rawText = await PROVIDERS[name].call(prompt, controller.signal);
+      clearTimeout(timer);
+      if (!rawText) continue;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {
+        const match = String(rawText).match(/\{[\s\S]*\}/);
+        if (!match) continue;
+        try { parsed = JSON.parse(match[0]); } catch { continue; }
+      }
+
+      const n = parseInt(parsed?.choice, 10);
+      if (Number.isInteger(n) && n >= 1 && n <= options.length) {
+        console.log('[NLU] Elección interpretada', { provider: name, choice: n });
+        return n - 1;
+      }
+      return null; // el modelo dijo null explícitamente: respetar la duda
+    } catch (err) {
+      clearTimeout(timer);
+      console.warn('[NLU] Proveedor falló en interpretChoice, probando siguiente', { provider: name, error: err?.message });
+    }
+  }
+  return null;
+}
+
+module.exports = { interpretMessage, interpretChoice, nluResultToCommand, buildPrompt, validateNluResult, providerChain };

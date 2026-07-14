@@ -31,7 +31,7 @@ const {
 } = require('./calendar');
 const { sendTextMessage, verifyWebhook, extractIncomingMessages, verifySignature } = require('./whatsappCloud');
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
-const { interpretMessage, nluResultToCommand } = require('./nlu');
+const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
 const {
   BUTTON_PAYLOADS,
   getStorePhoneNumberByDid,
@@ -136,6 +136,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
   // Formato humano de fechas en la timezone de la tienda
   const fmt = (iso) => DateTime.fromISO(iso, { zone }).toFormat("dd/MM/yyyy 'a las' HH:mm");
+  // Versión conversacional: "miércoles 15/07 a las 09:30"
+  const fmtHuman = (iso) =>
+    DateTime.fromISO(iso, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
 
   // Confirmación SI de una CANCELACIÓN pendiente (antes que la de reserva)
   if (pendingCancel && (lower === 'si' || lower === 'sí')) {
@@ -173,6 +176,52 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to: from,
       text: 'Perfecto, tu cita se mantiene tal cual.'
+    });
+    return;
+  }
+
+  // Elección de cita pendiente de cancelar ("la del miércoles", "la segunda", "2")
+  const pendingChoice = pending?.state?.pendingCancelChoice || null;
+  if (pendingChoice && Array.isArray(pendingChoice.options) && pendingChoice.options.length) {
+    if (lower === 'no' || lower === 'ninguna' || lower === 'dejalo' || lower === 'déjalo') {
+      await deleteConversationState(storeId, from);
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Vale, no cancelo ninguna. Tus citas siguen igual.'
+      });
+      return;
+    }
+
+    // 1º intento determinista: un número (con o sin "cancelar" delante)
+    let idx = null;
+    const num = parseInt(lower.replace(/^cancelar\s+/, '').trim(), 10);
+    if (Number.isInteger(num) && num >= 1 && num <= pendingChoice.options.length) {
+      idx = num - 1;
+    }
+    // 2º intento: lenguaje natural ("la del miércoles", "la de las 9 y media")
+    if (idx === null) {
+      idx = await interpretChoice({
+        text: body,
+        options: pendingChoice.options.map((o) => o.label)
+      });
+    }
+
+    if (idx === null) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `No te he entendido bien. Dime el número (1 a ${pendingChoice.options.length}) o el día — por ejemplo: "la del ${pendingChoice.options[0].label.split(' ')[0]}". Si no quieres cancelar nada, di "ninguna".`
+      });
+      return; // la elección sigue pendiente
+    }
+
+    const chosen = pendingChoice.options[idx];
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingCancellation: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
+    }, expiresAt);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `¿Cancelo tu cita del ${chosen.label}? Responde SI para cancelarla o NO para mantenerla.`
     });
     return;
   }
@@ -512,10 +561,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       });
       return;
     }
-    const lines = citas.map((c) => `- ${fmt(c.start_at)} (ID ${c.id})`).join('\n');
+    const lines = citas.map((c) => `- el ${fmtHuman(c.start_at)}`).join('\n');
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to: from,
-      text: `Tus próximas citas:\n${lines}\n\nPara cancelar una: CANCELAR seguido del ID (ejemplo: CANCELAR ${citas[0].id})`
+      text: `Tus próximas citas:\n${lines}\n\nSi quieres anular alguna, escribe CANCELAR y te pregunto cuál.`
     });
     return;
   }
@@ -535,21 +584,34 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     let target = null;
     if (arg) {
-      target = citas.find((c) => String(c.id) === arg);
+      // compatibilidad: acepta tanto el nº de la lista (1..N) como el ID interno
+      const n = parseInt(arg, 10);
+      if (Number.isInteger(n) && n >= 1 && n <= citas.length) target = citas[n - 1];
+      if (!target) target = citas.find((c) => String(c.id) === arg);
       if (!target) {
         await sendAndLog({
           storeId, phoneNumberId, accessToken, to: from,
-          text: 'No encuentro esa cita entre tus próximas citas. Envía MIS CITAS para ver la lista.'
+          text: 'No encuentro esa cita. Escribe CANCELAR a secas y te pregunto cuál quieres anular.'
         });
         return;
       }
     } else if (citas.length === 1) {
       target = citas[0];
     } else {
-      const lines = citas.map((c) => `- ID ${c.id}: ${fmt(c.start_at)}`).join('\n');
+      // Varias citas: elección conversacional (sin IDs)
+      const options = citas.map((c) => ({
+        id: c.id,
+        startIso: c.start_at,
+        label: fmtHuman(c.start_at)
+      }));
+      const lines = options.map((o, i) => `${i + 1}) el ${o.label}`).join('\n');
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        pendingCancelChoice: { options, expiresAt }
+      }, expiresAt);
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `Tienes varias citas próximas:\n${lines}\n\n¿Cuál cancelo? Envía CANCELAR seguido del ID (ejemplo: CANCELAR ${citas[0].id})`
+        text: `Tienes ${citas.length} citas próximas:\n${lines}\n\n¿Cuál quieres cancelar? Puedes decirme el día ("la del ${options[0].label.split(' ')[0]}") o el número. Si ninguna, di "ninguna".`
       });
       return;
     }
@@ -565,7 +627,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to: from,
-      text: `¿Cancelo tu cita del ${fmt(target.start_at)}? Responde SI para cancelarla o NO para mantenerla.`
+      text: `¿Cancelo tu cita del ${fmtHuman(target.start_at)}? Responde SI para cancelarla o NO para mantenerla.`
     });
     return;
   }
@@ -621,8 +683,32 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         conversation
       });
 
-      // Reserva a medias (hora sin día): preguntar el día, sin adivinar nada
+      // Reserva a medias (hora sin día): antes de preguntar, red determinista —
+      // si el bot mostró huecos o gestionó una cita de un día concreto en los
+      // últimos mensajes, ese día es la referencia (no depende del modelo).
       if (interpreted && interpreted.intent === 'CITA_SIN_FECHA') {
+        let rescuedDate = null;
+        for (let i = conversation.length - 1; i >= 0 && !rescuedDate; i--) {
+          const m = conversation[i];
+          if (!m.from_me) continue;
+          const match = String(m.content).match(
+            /(?:Huecos disponibles para|Confirmas la cita el)\s+(\d{4}-\d{2}-\d{2})/
+          );
+          if (match) rescuedDate = match[1];
+        }
+
+        if (rescuedDate) {
+          console.log('[NLU] Fecha rescatada del contexto del bot', { storeId, rescuedDate });
+          return handleIncomingText({
+            storeId,
+            phoneNumberId,
+            accessToken,
+            from,
+            body: `CITA ${rescuedDate} ${interpreted.time}`,
+            nluAttempted: true
+          });
+        }
+
         await sendAndLog({
           storeId,
           phoneNumberId,
