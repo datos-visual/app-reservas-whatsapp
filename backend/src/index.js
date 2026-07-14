@@ -33,6 +33,12 @@ const { sendTextMessage, verifyWebhook, extractIncomingMessages, verifySignature
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
 const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
 const {
+  REMINDER_PAYLOADS,
+  dispatchReminders,
+  confirmAppointmentByClient,
+  getCancelableAppointment
+} = require('./reminders');
+const {
   BUTTON_PAYLOADS,
   getStorePhoneNumberByDid,
   getMissedCallSettings,
@@ -885,6 +891,48 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
  * Botones del módulo missed-call (payloads de la plantilla). Devuelve true
  * si el payload era conocido y ya se ha respondido; false → tratar como texto.
  */
+/** Botones de los RECORDATORIOS de cita ([Confirmo] / [Cancelar cita]). */
+async function handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload }) {
+  const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+  const fmtHuman = (iso) =>
+    DateTime.fromISO(iso, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+
+  if (payload.startsWith(REMINDER_PAYLOADS.CONFIRM_PREFIX)) {
+    const id = parseInt(payload.slice(REMINDER_PAYLOADS.CONFIRM_PREFIX.length), 10);
+    const cita = Number.isInteger(id) ? await confirmAppointmentByClient(storeId, id) : null;
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: cita
+        ? `¡Gracias por confirmar! Te esperamos el ${fmtHuman(cita.start_at)}.`
+        : 'Esa cita ya no está activa. Escríbeme "mis citas" si quieres revisarlas.'
+    });
+    return true;
+  }
+
+  if (payload.startsWith(REMINDER_PAYLOADS.CANCEL_PREFIX)) {
+    const id = parseInt(payload.slice(REMINDER_PAYLOADS.CANCEL_PREFIX.length), 10);
+    const cita = Number.isInteger(id) ? await getCancelableAppointment(storeId, id) : null;
+    if (!cita) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Esa cita ya no está activa. Escríbeme "mis citas" si quieres revisarlas.'
+      });
+      return true;
+    }
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingCancellation: { appointmentId: cita.id, startIso: cita.start_at, expiresAt }
+    }, expiresAt);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `¿Seguro que cancelo tu cita del ${fmtHuman(cita.start_at)}? Responde SI para cancelarla o NO para mantenerla.`
+    });
+    return true;
+  }
+
+  return false;
+}
+
 async function handleMissedCallButton({ storeId, phoneNumberId, accessToken, from, payload }) {
   if (payload === BUTTON_PAYLOADS.OPTOUT) {
     await registerOptout(storeId, from, 'button');
@@ -993,13 +1041,13 @@ async function processWebhookBody(body, { requestId }) {
       // Botones (plantillas e interactivos): payloads conocidos tienen
       // respuesta propia; los desconocidos caen al flujo de texto.
       if (kind === 'button' && payload) {
-        const handled = await handleMissedCallButton({
-          storeId,
-          phoneNumberId,
-          accessToken,
-          from,
-          payload
-        });
+        let handled = false;
+        if (payload.startsWith('REMINDER_')) {
+          handled = await handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload });
+        }
+        if (!handled) {
+          handled = await handleMissedCallButton({ storeId, phoneNumberId, accessToken, from, payload });
+        }
         if (handled) continue;
       }
 
@@ -1191,7 +1239,15 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
       console.error('[Tokens] Error comprobando caducidades', { requestId, err });
     }
 
-    res.json({ ...resumen, tokens_por_caducar: tokensPorCaducar });
+    // R1: recordatorios anti no-show — mismo cron, sin infraestructura nueva
+    let recordatorios = null;
+    try {
+      recordatorios = await dispatchReminders({ requestId });
+    } catch (err) {
+      console.error('[Reminders] Error en despacho de recordatorios', { requestId, err });
+    }
+
+    res.json({ ...resumen, tokens_por_caducar: tokensPorCaducar, recordatorios });
   } catch (err) {
     console.error('[MissedCall] Error en despacho', { requestId, err });
     res.status(500).json({ error: 'Error despachando pendientes' });

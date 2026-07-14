@@ -133,6 +133,9 @@ create table if not exists public.appointments (
   source           text not null default 'whatsapp'
                      check (source in ('whatsapp', 'admin')),
   notes            text,
+  reminder_24h_sent_at    timestamptz,  -- R1: recordatorio 24 h enviado
+  reminder_2h_sent_at     timestamptz,  -- R1: recordatorio 2 h enviado
+  confirmed_by_client_at  timestamptz,  -- R1: botón [Confirmo] pulsado
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -316,8 +319,31 @@ alter table public.missed_calls         enable row level security;
 alter table public.missed_call_sends    enable row level security;
 alter table public.contact_optouts      enable row level security;
 
+-- ---------------------------------------------------------------------
+-- 12) RECORDATORIOS ANTI NO-SHOW (R1) — config por tienda + índice de cola
+-- ---------------------------------------------------------------------
+create table if not exists public.reminder_settings (
+  store_id           uuid primary key references public.stores (id) on delete cascade,
+  enabled            boolean not null default false,
+  remind_24h         boolean not null default true,
+  remind_2h          boolean not null default true,
+  template_name      text not null default 'canalagenda_reminder_v1',
+  template_language  text not null default 'es',
+  template_status    text not null default 'pending'
+                       check (template_status in ('pending', 'approved', 'rejected')),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create index if not exists appointments_reminders_due_idx
+  on public.appointments (start_at)
+  where status = 'confirmed'
+    and (reminder_24h_sent_at is null or reminder_2h_sent_at is null);
+
+alter table public.reminder_settings enable row level security;
+
 -- =====================================================================
--- VERIFICACIÓN RÁPIDA tras ejecutar (debe devolver 14 tablas):
+-- VERIFICACIÓN RÁPIDA tras ejecutar (debe devolver 15 tablas):
 --   select table_name from information_schema.tables
 --   where table_schema='public' order by 1;
 -- =====================================================================
