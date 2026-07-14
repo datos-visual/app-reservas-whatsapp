@@ -298,6 +298,101 @@ async function sendTemplateMessage({
   }
 }
 
+/** Núcleo compartido de envío a la Graph API (texto/plantilla/interactivo). */
+async function postToGraph({ phoneNumberId, accessToken, payload, descripcion }) {
+  const normalizedAccessToken = normalizeToken(accessToken);
+  if (!phoneNumberId || !normalizedAccessToken) {
+    throw new Error(`${descripcion} requiere phoneNumberId y accessToken`);
+  }
+  const version = config.metaGraphApiVersion || 'v22.0';
+  const url = `https://graph.facebook.com/${version}/${phoneNumberId}/messages`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${normalizedAccessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const rawText = await res.text();
+  let body = null;
+  try { body = rawText ? JSON.parse(rawText) : null; } catch { body = { _raw: rawText }; }
+
+  if (!res.ok) {
+    console.error(`[WhatsAppCloud] Error en ${descripcion}`, {
+      status: res.status, phoneNumberId, payload: JSON.stringify(body)
+    });
+    const err = new Error(`Error en ${descripcion} (WhatsApp Cloud API)`);
+    err.status = res.status;
+    err.payload = body;
+    throw err;
+  }
+  return { payload: body, messageId: body?.messages?.[0]?.id ?? null };
+}
+
+/**
+ * Botones interactivos nativos (máx. 3; gratis dentro de la ventana de 24 h).
+ * buttons = [{ id: 'ca:menu:reservar', title: 'Reservar cita' }] (title ≤ 20 chars)
+ */
+async function sendInteractiveButtons({ phoneNumberId, accessToken, to, bodyText, buttons, footerText }) {
+  if (!to || !bodyText || !Array.isArray(buttons) || !buttons.length) {
+    throw new Error('sendInteractiveButtons requiere to, bodyText y buttons');
+  }
+  const payload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: bodyText },
+      ...(footerText ? { footer: { text: footerText } } : {}),
+      action: {
+        buttons: buttons.slice(0, 3).map((b) => ({
+          type: 'reply',
+          reply: { id: b.id, title: String(b.title).slice(0, 20) }
+        }))
+      }
+    }
+  };
+  console.log('[WhatsAppCloud] Enviando botones interactivos', { phoneNumberId, to, n: buttons.length });
+  return postToGraph({ phoneNumberId, accessToken, payload, descripcion: 'botones interactivos' });
+}
+
+/**
+ * Lista interactiva nativa (máx. 10 filas en total).
+ * sections = [{ title, rows: [{ id, title, description }] }]
+ */
+async function sendInteractiveList({ phoneNumberId, accessToken, to, bodyText, buttonText, sections, footerText }) {
+  if (!to || !bodyText || !buttonText || !Array.isArray(sections) || !sections.length) {
+    throw new Error('sendInteractiveList requiere to, bodyText, buttonText y sections');
+  }
+  const payload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      body: { text: bodyText },
+      ...(footerText ? { footer: { text: footerText } } : {}),
+      action: {
+        button: String(buttonText).slice(0, 20),
+        sections: sections.map((s) => ({
+          ...(s.title ? { title: String(s.title).slice(0, 24) } : {}),
+          rows: (s.rows || []).map((r) => ({
+            id: r.id,
+            title: String(r.title).slice(0, 24),
+            ...(r.description ? { description: String(r.description).slice(0, 72) } : {})
+          }))
+        }))
+      }
+    }
+  };
+  console.log('[WhatsAppCloud] Enviando lista interactiva', { phoneNumberId, to });
+  return postToGraph({ phoneNumberId, accessToken, payload, descripcion: 'lista interactiva' });
+}
+
 /** Construye el array components de la Graph API (exportado para tests). */
 function buildTemplateComponents({ bodyParams = [], buttonPayloads = [] } = {}) {
   const components = [];
@@ -323,6 +418,8 @@ module.exports = {
   verifySignature,
   sendTextMessage,
   sendTemplateMessage,
+  sendInteractiveButtons,
+  sendInteractiveList,
   buildTemplateComponents,
   extractIncomingMessages
 };

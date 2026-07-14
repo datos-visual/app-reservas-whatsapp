@@ -30,7 +30,13 @@ const {
   deleteCalendarEvent,
   generate30MinSlots
 } = require('./calendar');
-const { sendTextMessage, verifyWebhook, extractIncomingMessages, verifySignature } = require('./whatsappCloud');
+const {
+  sendTextMessage,
+  verifyWebhook,
+  extractIncomingMessages,
+  verifySignature,
+  sendInteractiveButtons
+} = require('./whatsappCloud');
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
 const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
 const {
@@ -128,6 +134,93 @@ async function sendAndLog({ storeId, phoneNumberId, accessToken, to, text }) {
       error: err
     });
   }
+}
+
+/**
+ * Menú de bienvenida con botones nativos (B1). Es el destino de "hola",
+ * AYUDA y del "no te he entendido" — sustituye a los textos con comandos.
+ * Gratis: es respuesta de servicio dentro de la ventana de 24 h.
+ */
+async function sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to, headerText = null }) {
+  try {
+    const sentToday = await getMessagesSentToday(storeId, to);
+    if (sentToday >= config.maxMessagesPerDay) {
+      console.log('[RateLimit] Límite diario alcanzado (menú)', { storeId, to, sentToday });
+      return;
+    }
+
+    const storeConfig = await getStoreConfig(storeId);
+    const nombre = storeConfig?.name ? ` de ${storeConfig.name}` : '';
+    const bodyText =
+      (headerText ? `${headerText}\n\n` : '') +
+      `¡Hola! Soy el asistente${nombre}. ¿Qué necesitas?`;
+
+    await sendInteractiveButtons({
+      phoneNumberId,
+      accessToken,
+      to,
+      bodyText,
+      footerText: 'También puedes escribirme con tus palabras',
+      buttons: [
+        { id: 'ca:menu:reservar', title: '📅 Reservar cita' },
+        { id: 'ca:menu:miscitas', title: 'Mis citas' },
+        { id: 'ca:menu:humano', title: 'Hablar con alguien' }
+      ]
+    });
+
+    await logMessage({
+      storeId,
+      phone: to,
+      body: '[menú] ¿Qué necesitas? [Reservar cita | Mis citas | Hablar con alguien]',
+      fromMe: true
+    });
+  } catch (err) {
+    console.error('[Flujo] Error enviando menú de bienvenida', { storeId, to, err });
+  }
+}
+
+/**
+ * Router de payloads del flujo guiado (`ca:*`, B1). Devuelve true si el
+ * payload era conocido y se ha respondido. Los ids se validan siempre contra
+ * el store_id resuelto por webhook — nunca se confía en el payload.
+ */
+async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload }) {
+  if (payload === 'ca:menu:reservar') {
+    // Hasta B2 (catálogo), el puente es el flujo conversacional ya probado
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: '¡Genial! Dime qué día y hora te vienen bien — por ejemplo: "mañana por la tarde" o "el viernes a las 10".'
+    });
+    return true;
+  }
+
+  if (payload === 'ca:menu:miscitas') {
+    return handleIncomingText({
+      storeId, phoneNumberId, accessToken, from,
+      body: 'MIS CITAS', nluAttempted: true
+    }).then(() => true);
+  }
+
+  if (payload === 'ca:menu:humano') {
+    console.log('[Flujo] Cliente pide hablar con el negocio', { storeId, from });
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: 'De acuerdo, aviso al equipo para que te atienda por aquí lo antes posible. Si es urgente, llama directamente al negocio.'
+    });
+    return true;
+  }
+
+  // Payload ca:* desconocido o de una conversación caducada → nunca reventar
+  if (payload.startsWith('ca:')) {
+    console.warn('[Flujo] Payload desconocido o caducado', { storeId, payload });
+    await sendWelcomeMenu({
+      storeId, phoneNumberId, accessToken, to: from,
+      headerText: 'Esa selección ya caducó — empecemos de nuevo.'
+    });
+    return true;
+  }
+
+  return false;
 }
 
 async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body, nluAttempted = false }) {
@@ -865,20 +958,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   }
 
   if (lower === 'ayuda' || lower === 'menu' || lower === 'menú') {
-    const nombreNegocio = storeConfig?.name ? ` de ${storeConfig.name}` : '';
-    await sendAndLog({
-      storeId,
-      phoneNumberId,
-      accessToken,
-      to: from,
-      text:
-        `¡Hola! Soy el asistente${nombreNegocio}. Puedo darte cita, decirte los huecos libres, o cambiar y cancelar tus citas.\n\n` +
-        'Dímelo con tus palabras, por ejemplo:\n' +
-        '- "¿Tenéis hueco mañana por la tarde?"\n' +
-        '- "Quiero cita el viernes a las 10"\n' +
-        '- "¿Qué citas tengo?"\n' +
-        '- "Cancela mi cita de las 16:00"'
-    });
+    await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from });
     return;
   }
 
@@ -1050,14 +1130,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
   }
 
-  await sendAndLog({
-    storeId,
-    phoneNumberId,
-    accessToken,
-    to: from,
-    text:
-      'Perdona, no te he entendido bien. Puedo darte cita, enseñarte los huecos libres, ' +
-      'o cambiar y cancelar tus citas — dímelo con tus palabras, por ejemplo: "¿tenéis hueco mañana por la tarde?"'
+  // Último recurso: menú de bienvenida con botones (B1) en vez de texto seco
+  await sendWelcomeMenu({
+    storeId, phoneNumberId, accessToken, to: from,
+    headerText: 'Perdona, no te he entendido bien.'
   });
 }
 
@@ -1216,7 +1292,10 @@ async function processWebhookBody(body, { requestId }) {
       // respuesta propia; los desconocidos caen al flujo de texto.
       if (kind === 'button' && payload) {
         let handled = false;
-        if (payload.startsWith('REMINDER_')) {
+        if (payload.startsWith('ca:')) {
+          handled = await handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload });
+        }
+        if (!handled && payload.startsWith('REMINDER_')) {
           handled = await handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload });
         }
         if (!handled) {
