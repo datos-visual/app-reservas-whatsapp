@@ -41,7 +41,7 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     `Hoy es ${diaSemana} ${hoy} (zona horaria ${timezone}).\n\n` +
     contexto +
     'Devuelve SOLO un objeto JSON con esta forma exacta:\n' +
-    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|CAMBIAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null}\n\n' +
+    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|CAMBIAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null, "old_date": "YYYY-MM-DD" o null, "old_time": "HH:MM" o null}\n\n' +
     'Reglas:\n' +
     '- DISPONIBLE: pregunta por huecos/disponibilidad/horarios de un día ("¿tenéis hueco el viernes?"). Extrae la fecha; time null salvo hora concreta preguntada.\n' +
     '- CITA: quiere reservar en fecha Y hora concretas ("resérvame mañana a las 5 de la tarde"). Ambos campos obligatorios; si falta la hora, usa DISPONIBLE.\n' +
@@ -50,8 +50,10 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     '- MIS_CITAS: pregunta por SUS citas ya reservadas ("¿qué citas tengo?", "¿cuándo era mi cita?").\n' +
     '- CANCELAR_CITA: quiere anular una cita YA RESERVADA ("cancela mi cita", "no podré ir el viernes, anúlala"). ' +
     'Si dice CUÁL ("la de las 16:00", "la del martes"), extrae date/time de esa cita.\n' +
-    '- CAMBIAR_CITA: quiere MOVER una cita ya reservada a otro momento ("cambia mi cita a las 16:30", ' +
-    '"mejor el jueves"). date/time = el NUEVO momento deseado.\n' +
+    '- CAMBIAR_CITA: quiere MOVER una cita ya reservada a otro momento. date/time = el NUEVO momento deseado; ' +
+    'old_date/old_time = referencia de la cita ACTUAL si menciona cuál es. ' +
+    'En frases como "cambia la de hoy a las 16 a las 15:30": old_time=16:00 y time=15:30. ' +
+    'En "cambia la del martes a las 16" (una sola hora tras identificar la cita): old_time=16:00 y time=null.\n' +
     '- AYUDA: pregunta qué se puede hacer o saluda pidiendo información general.\n' +
     '- BAJA: pide expresamente no recibir más mensajes.\n' +
     '- OTRO: cualquier otra cosa (consultas de precios, ubicación, charla) o si tienes dudas. Ante la duda, SIEMPRE "OTRO".\n' +
@@ -66,7 +68,9 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     'Cliente: "pues resérvame a las nueve y media" → {"intent":"CITA","date":"2026-07-15","time":"09:30","franja":null}\n' +
     'B) Sin conversación previa. Cliente: "quiero reservar a las 10" → {"intent":"CITA","date":null,"time":"10:00","franja":null}\n' +
     'C) Cliente: "el miércoles a las nueve y media" → CITA con la fecha del próximo miércoles y time "09:30".\n' +
-    'D) Bot acaba de cancelar una cita del 2026-07-15. Cliente: "resérvame ese mismo día a las 10" → {"intent":"CITA","date":"2026-07-15","time":"10:00","franja":null}\n\n' +
+    'D) Bot acaba de cancelar una cita del 2026-07-15. Cliente: "resérvame ese mismo día a las 10" → {"intent":"CITA","date":"2026-07-15","time":"10:00","franja":null}\n' +
+    'E) Cliente: "quiero cambiar la de hoy a las 16 a las 15:30" (hoy 2026-07-14) → {"intent":"CAMBIAR_CITA","old_date":"2026-07-14","old_time":"16:00","date":null,"time":"15:30","franja":null}\n' +
+    'F) Cliente: "cambia la del martes a las 16:00, ponla el jueves a las 10" → old_date=<martes>, old_time="16:00", date=<jueves>, time="10:00".\n\n' +
     `ÚLTIMO mensaje del cliente: "${String(text).slice(0, 500)}"`
   );
 }
@@ -82,9 +86,17 @@ function validateNluResult(raw) {
   let date = raw.date ?? null;
   let time = raw.time ?? null;
   let franja = raw.franja ?? null;
+  let oldDate = raw.old_date ?? null;
+  let oldTime = raw.old_time ?? null;
   if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) date = null;
   if (time !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time))) time = null;
   if (franja !== null && !['manana', 'tarde'].includes(String(franja))) franja = null;
+  if (oldDate !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(oldDate))) oldDate = null;
+  if (oldTime !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(oldTime))) oldTime = null;
+
+  if (intent === 'CAMBIAR_CITA') {
+    return { intent, date, time, franja: null, old_date: oldDate, old_time: oldTime };
+  }
 
   // Coherencia mínima por intención
   if (intent === 'CITA' && !time && date) {

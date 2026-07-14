@@ -146,6 +146,72 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   const fmtHuman = (iso) =>
     DateTime.fromISO(iso, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
 
+  /**
+   * Propone un CAMBIO de cita: valida el hueco nuevo y deja la confirmación
+   * SI/NO preparada (al SI se reserva la nueva y se anula la vieja).
+   * oldCita: { id, startIso } · newDatePartRaw: YYYY-MM-DD o null (= mismo día).
+   */
+  async function proposeReschedule(oldCita, newDatePartRaw, newTimeRaw) {
+    const newDatePart = newDatePartRaw || DateTime.fromISO(oldCita.startIso, { zone }).toISODate();
+    const normalizedTime = String(newTimeRaw).trim().padStart(5, '0');
+    const dateTime = DateTime.fromFormat(`${newDatePart} ${normalizedTime}`, 'yyyy-MM-dd HH:mm', { zone });
+
+    if (!dateTime.isValid) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'No he entendido bien el nuevo día u hora. Dímelo como "el jueves a las 10" o "a las 15:30".'
+      });
+      return;
+    }
+
+    const weekday = dateTime.weekday === 7 ? 0 : dateTime.weekday;
+    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    if (businessHours?.isClosed) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Ese día está cerrado. ¿Te va bien otro?'
+      });
+      return;
+    }
+
+    const slotOptions = {
+      zone,
+      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      openTime: businessHours?.openTime || '08:00',
+      closeTime: businessHours?.closeTime || '17:00'
+    };
+    const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
+    const slots = generate30MinSlots(dateTime.toISO(), events, slotOptions);
+    const slotMatch = slots.find((s) => s.label === normalizedTime);
+
+    if (!slotMatch) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Ese horario no está libre. Pregúntame "¿qué huecos hay el ${newDatePart}?" y elegimos otro.`
+      });
+      return;
+    }
+
+    const startNew = DateTime.fromISO(slotMatch.startIso, { zone });
+    const endNew = DateTime.fromISO(slotMatch.endIso, { zone });
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingAppointment: {
+        datePart: newDatePart,
+        timePart: normalizedTime,
+        startIso: startNew.toISO(),
+        endIso: endNew.toISO(),
+        expiresAt,
+        rescheduleOfId: oldCita.id,
+        rescheduleOldLabel: fmtHuman(oldCita.startIso)
+      }
+    }, expiresAt);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `¿Te cambio la cita del ${fmtHuman(oldCita.startIso)} al ${fmtHuman(startNew.toISO())}? Responde SI para confirmar o NO para dejarla como está.`
+    });
+  }
+
   // Confirmación SI de una CANCELACIÓN pendiente (antes que la de reserva)
   if (pendingCancel && (lower === 'si' || lower === 'sí')) {
     try {
@@ -229,6 +295,90 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       storeId, phoneNumberId, accessToken, to: from,
       text: `¿Cancelo tu cita del ${chosen.label}? Responde SI para cancelarla o NO para mantenerla.`
     });
+    return;
+  }
+
+  // Elección de cita pendiente de CAMBIAR ("la del martes", "2")
+  const pendingReChoice = pending?.state?.pendingRescheduleChoice || null;
+  if (pendingReChoice && Array.isArray(pendingReChoice.options) && pendingReChoice.options.length) {
+    if (lower === 'no' || lower === 'ninguna' || lower === 'dejalo' || lower === 'déjalo') {
+      await deleteConversationState(storeId, from);
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Vale, lo dejamos como está.'
+      });
+      return;
+    }
+
+    let idx = null;
+    const num = parseInt(lower.trim(), 10);
+    if (Number.isInteger(num) && num >= 1 && num <= pendingReChoice.options.length) idx = num - 1;
+    if (idx === null) {
+      idx = await interpretChoice({ text: body, options: pendingReChoice.options.map((o) => o.label) });
+    }
+    if (idx === null) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `No te he entendido. Dime el número (1 a ${pendingReChoice.options.length}) o el día de la cita que quieres cambiar.`
+      });
+      return;
+    }
+
+    const chosen = pendingReChoice.options[idx];
+    await deleteConversationState(storeId, from);
+
+    if (pendingReChoice.newTime) {
+      await proposeReschedule({ id: chosen.id, startIso: chosen.startIso }, pendingReChoice.newDate, pendingReChoice.newTime);
+      return;
+    }
+
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingRescheduleFrom: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
+    }, expiresAt);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `¿A qué día y hora paso tu cita del ${chosen.label}?`
+    });
+    return;
+  }
+
+  // Ya sabemos QUÉ cita cambiar; falta el nuevo día/hora
+  const pendingReFrom = pending?.state?.pendingRescheduleFrom || null;
+  if (pendingReFrom) {
+    if (lower === 'no' || lower === 'dejalo' || lower === 'déjalo') {
+      await deleteConversationState(storeId, from);
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Vale, tu cita se queda como estaba.'
+      });
+      return;
+    }
+
+    // Hora suelta ("a las 15:30", "15:30", "16h") sin gastar IA
+    let newDate = null;
+    let newTime = null;
+    const plain = lower.match(/^(?:a las?\s*)?([01]?\d|2[0-3])(?::([0-5]\d))?\s*h?$/);
+    if (plain) {
+      newTime = `${plain[1].padStart(2, '0')}:${plain[2] || '00'}`;
+    } else {
+      const conv = await getRecentConversation(storeId, from);
+      const interp = await interpretMessage({
+        text: body, timezone: zone, nowDt: DateTime.now().setZone(zone), conversation: conv
+      });
+      if (interp?.time) { newTime = interp.time; newDate = interp.date; }
+    }
+
+    if (!newTime) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Dime la nueva hora (y el día si cambia), por ejemplo: "a las 15:30" o "el jueves a las 10".'
+      });
+      return;
+    }
+
+    await deleteConversationState(storeId, from);
+    await proposeReschedule({ id: pendingReFrom.appointmentId, startIso: pendingReFrom.startIso }, newDate, newTime);
     return;
   }
 
@@ -772,8 +922,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         });
       }
 
-      // Cambio de cita ("cámbiala a las 16:30"): reservar la nueva y anular la
-      // vieja en una sola confirmación (lo que faltó en la prueba real).
+      // Cambio de cita rediseñado (N6): primero identificar la cita ORIGEN
+      // (old_date/old_time del NLU, o única, o preguntando), luego el destino.
       if (interpreted && interpreted.intent === 'CAMBIAR_CITA') {
         const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
 
@@ -784,77 +934,58 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           });
           return;
         }
-        if (citas.length > 1) {
-          const lines = citas.map((c) => `- el ${fmtHuman(c.start_at)}`).join('\n');
-          await sendAndLog({
-            storeId, phoneNumberId, accessToken, to: from,
-            text: `Tienes varias citas:\n${lines}\n\nDime cuál quieres cambiar y a qué hora (p. ej. "cambia la del martes a las 16:30").`
+
+        // 1) Identificar la cita origen
+        let candidatas = citas;
+        if (interpreted.old_date || interpreted.old_time) {
+          candidatas = citas.filter((c) => {
+            const dt = DateTime.fromISO(c.start_at, { zone });
+            if (interpreted.old_date && dt.toISODate() !== interpreted.old_date) return false;
+            if (interpreted.old_time && dt.toFormat('HH:mm') !== interpreted.old_time) return false;
+            return true;
           });
-          return;
-        }
-        if (!interpreted.time) {
-          await sendAndLog({
-            storeId, phoneNumberId, accessToken, to: from,
-            text: `¿A qué día y hora quieres mover tu cita del ${fmtHuman(citas[0].start_at)}?`
-          });
-          return;
         }
 
-        const old = citas[0];
-        const oldDt = DateTime.fromISO(old.start_at, { zone });
-        // Sin día nuevo explícito, se asume el mismo día de la cita actual
-        const newDatePart = interpreted.date || oldDt.toISODate();
-        const normalizedTime = interpreted.time;
-        const dateTime = DateTime.fromFormat(`${newDatePart} ${normalizedTime}`, 'yyyy-MM-dd HH:mm', { zone });
+        let old = null;
+        if (candidatas.length === 1) old = candidatas[0];
+        else if (citas.length === 1) old = citas[0];
 
-        if (dateTime.isValid) {
-          const weekday = dateTime.weekday === 7 ? 0 : dateTime.weekday;
-          const businessHours = await getStoreBusinessHours(storeId, weekday);
-          if (businessHours?.isClosed) {
-            await sendAndLog({
-              storeId, phoneNumberId, accessToken, to: from,
-              text: 'Ese día está cerrado. ¿Te va bien otro día?'
-            });
-            return;
-          }
-          const slotOptions = {
-            zone,
-            slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
-            openTime: businessHours?.openTime || '08:00',
-            closeTime: businessHours?.closeTime || '17:00'
-          };
-          const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
-          const slots = generate30MinSlots(dateTime.toISO(), events, slotOptions);
-          const slotMatch = slots.find((s) => s.label === normalizedTime);
-
-          if (!slotMatch) {
-            await sendAndLog({
-              storeId, phoneNumberId, accessToken, to: from,
-              text: `Ese horario no está libre. Pregúntame "¿qué huecos hay el ${newDatePart}?" y elegimos otro.`
-            });
-            return;
-          }
-
-          const startNew = DateTime.fromISO(slotMatch.startIso, { zone });
-          const endNew = DateTime.fromISO(slotMatch.endIso, { zone });
+        // 2) Sin origen claro → elegir (recordando el destino si ya lo dijo)
+        if (!old) {
+          const options = citas.map((c) => ({ id: c.id, startIso: c.start_at, label: fmtHuman(c.start_at) }));
+          const lines = options.map((o, i) => `${i + 1}) el ${o.label}`).join('\n');
           const expiresAt = Date.now() + 10 * 60 * 1000;
           await setConversationState(storeId, from, {
-            pendingAppointment: {
-              datePart: newDatePart,
-              timePart: normalizedTime,
-              startIso: startNew.toISO(),
-              endIso: endNew.toISO(),
-              expiresAt,
-              rescheduleOfId: old.id,
-              rescheduleOldLabel: fmtHuman(old.start_at)
+            pendingRescheduleChoice: {
+              options,
+              newDate: interpreted.date || null,
+              newTime: interpreted.time || null,
+              expiresAt
             }
           }, expiresAt);
           await sendAndLog({
             storeId, phoneNumberId, accessToken, to: from,
-            text: `¿Te cambio la cita del ${fmtHuman(old.start_at)} al ${fmtHuman(startNew.toISO())}? Responde SI para confirmar o NO para dejarla como está.`
+            text: `Tienes varias citas:\n${lines}\n\n¿Cuál de ellas quieres cambiar? Dime el día ("la del martes de las 16:00") o el número.`
           });
           return;
         }
+
+        // 3) Origen claro pero sin hora nueva → preguntarla (con memoria)
+        if (!interpreted.time) {
+          const expiresAt = Date.now() + 10 * 60 * 1000;
+          await setConversationState(storeId, from, {
+            pendingRescheduleFrom: { appointmentId: old.id, startIso: old.start_at, expiresAt }
+          }, expiresAt);
+          await sendAndLog({
+            storeId, phoneNumberId, accessToken, to: from,
+            text: `¿A qué día y hora paso tu cita del ${fmtHuman(old.start_at)}?`
+          });
+          return;
+        }
+
+        // 4) Origen y destino claros → proponer el cambio
+        await proposeReschedule({ id: old.id, startIso: old.start_at }, interpreted.date, interpreted.time);
+        return;
       }
 
       const command = nluResultToCommand(interpreted);
