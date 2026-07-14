@@ -14,7 +14,7 @@
 
 const config = require('./config');
 
-const VALID_INTENTS = ['DISPONIBLE', 'CITA', 'CONFIRMAR', 'RECHAZAR', 'MIS_CITAS', 'CANCELAR_CITA', 'AYUDA', 'BAJA', 'OTRO'];
+const VALID_INTENTS = ['DISPONIBLE', 'CITA', 'CONFIRMAR', 'RECHAZAR', 'MIS_CITAS', 'CANCELAR_CITA', 'CAMBIAR_CITA', 'AYUDA', 'BAJA', 'OTRO'];
 const TIMEOUT_MS = 6000;
 
 // ---------------------------------------------------------------------
@@ -41,14 +41,17 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     `Hoy es ${diaSemana} ${hoy} (zona horaria ${timezone}).\n\n` +
     contexto +
     'Devuelve SOLO un objeto JSON con esta forma exacta:\n' +
-    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null}\n\n' +
+    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|CAMBIAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null}\n\n' +
     'Reglas:\n' +
     '- DISPONIBLE: pregunta por huecos/disponibilidad/horarios de un día ("¿tenéis hueco el viernes?"). Extrae la fecha; time null salvo hora concreta preguntada.\n' +
     '- CITA: quiere reservar en fecha Y hora concretas ("resérvame mañana a las 5 de la tarde"). Ambos campos obligatorios; si falta la hora, usa DISPONIBLE.\n' +
     '- CONFIRMAR: acepta algo propuesto ("vale", "perfecto", "sí, esa hora me va bien").\n' +
     '- RECHAZAR: rechaza la propuesta que se le acaba de hacer ("mejor no", "déjalo", "esa hora no").\n' +
     '- MIS_CITAS: pregunta por SUS citas ya reservadas ("¿qué citas tengo?", "¿cuándo era mi cita?").\n' +
-    '- CANCELAR_CITA: quiere anular una cita YA RESERVADA ("cancela mi cita", "no podré ir el viernes, anúlala").\n' +
+    '- CANCELAR_CITA: quiere anular una cita YA RESERVADA ("cancela mi cita", "no podré ir el viernes, anúlala"). ' +
+    'Si dice CUÁL ("la de las 16:00", "la del martes"), extrae date/time de esa cita.\n' +
+    '- CAMBIAR_CITA: quiere MOVER una cita ya reservada a otro momento ("cambia mi cita a las 16:30", ' +
+    '"mejor el jueves"). date/time = el NUEVO momento deseado.\n' +
     '- AYUDA: pregunta qué se puede hacer o saluda pidiendo información general.\n' +
     '- BAJA: pide expresamente no recibir más mensajes.\n' +
     '- OTRO: cualquier otra cosa (consultas de precios, ubicación, charla) o si tienes dudas. Ante la duda, SIEMPRE "OTRO".\n' +
@@ -107,7 +110,10 @@ function nluResultToCommand(result) {
     case 'CONFIRMAR': return 'SI';
     case 'RECHAZAR': return 'NO';
     case 'MIS_CITAS': return 'MIS CITAS';
-    case 'CANCELAR_CITA': return 'CANCELAR';
+    // CANCELAR con cita concreta ("la de las 16") y CAMBIAR se gestionan en el
+    // flujo (index.js) ANTES de convertir a comando; aquí solo el caso simple.
+    case 'CANCELAR_CITA': return (result.date || result.time) ? null : 'CANCELAR';
+    case 'CAMBIAR_CITA': return null;
     case 'AYUDA': return 'AYUDA';
     case 'BAJA': return 'BAJA';
     default: return null; // OTRO → que el flujo actual responda su fallback

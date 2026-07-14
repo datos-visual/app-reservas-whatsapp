@@ -242,7 +242,7 @@ async function getStoreConfig(storeId) {
   try {
     const { data, error } = await supabase
       .from('stores')
-      .select('timezone, appointment_duration_minutes')
+      .select('name, timezone, appointment_duration_minutes')
       .eq('id', storeId)
       .limit(1)
       .maybeSingle();
@@ -255,6 +255,7 @@ async function getStoreConfig(storeId) {
     if (!data) return null;
 
     return {
+      name: data.name || null,
       timezone: data.timezone || 'Europe/Madrid',
       appointment_duration_minutes: data.appointment_duration_minutes ?? 30
     };

@@ -312,12 +312,30 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         // llamada perdida (ventana 48 h), vincularla para las métricas en €.
         attributeBooking(storeId, from, appointment.id).catch(() => {});
 
+        // Si era un CAMBIO de cita: cancelar la anterior (mejor tener dos un
+        // instante que ninguna: primero se reserva la nueva, luego se anula la vieja)
+        let textoConfirmacion = `¡Hecho! Tu cita queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
+        if (current.rescheduleOfId) {
+          try {
+            const old = await cancelAppointment(storeId, current.rescheduleOfId);
+            if (old) await deleteCalendarEvent(storeId, old.google_event_id);
+            textoConfirmacion = `¡Hecho! Te he cambiado la cita: del ${current.rescheduleOldLabel} al ${fmtHuman(startIso)}.`;
+          } catch (err) {
+            console.error('[WhatsAppCloud] Error cancelando la cita antigua en el cambio', {
+              storeId, oldId: current.rescheduleOfId, err
+            });
+            textoConfirmacion =
+              `Tu nueva cita del ${fmtHuman(startIso)} está confirmada, pero no he podido anular la anterior (${current.rescheduleOldLabel}). ` +
+              'Escríbeme "cancela la antigua" y lo intento de nuevo.';
+          }
+        }
+
         await sendAndLog({
           storeId,
           phoneNumberId,
           accessToken,
           to: from,
-          text: `Tu cita ha sido reservada para el ${current.datePart} a las ${current.timePart}.\n\nID: ${appointment.id}`
+          text: textoConfirmacion
         });
       } catch (err) {
         console.error('[WhatsAppCloud] Error creando cita en BD', err);
@@ -453,9 +471,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       text:
         `Huecos disponibles para ${iso}${franjaTxt}:\n` +
         lines.map((l) => `- ${l}`).join('\n') +
-        '\n\nReserva enviando: CITA YYYY-MM-DD HH:MM (ejemplo: CITA ' +
-        iso +
-        ' ' + top[0].label + ')'
+        '\n\n¿Cuál te viene bien? Dime la hora y te la reservo.'
     });
     return;
   }
@@ -546,7 +562,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       phoneNumberId,
       accessToken,
       to: from,
-      text: `Confirmas la cita el ${datePart} a las ${normalizedTime}? Responde SI para confirmar o NO para cancelar.`
+      text: `¿Te reservo el ${fmtHuman(start.toISO())}? Responde SI para confirmar o NO para dejarlo.`
     });
     return;
   }
@@ -564,7 +580,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const lines = citas.map((c) => `- el ${fmtHuman(c.start_at)}`).join('\n');
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to: from,
-      text: `Tus próximas citas:\n${lines}\n\nSi quieres anular alguna, escribe CANCELAR y te pregunto cuál.`
+      text: `Tus próximas citas:\n${lines}\n\n¿Quieres cambiar o cancelar alguna? Dímelo con tus palabras (p. ej. "cancela la de las 16:00").`
     });
     return;
   }
@@ -651,20 +667,20 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     return;
   }
 
-  if (lower === 'ayuda' || lower === 'menu') {
+  if (lower === 'ayuda' || lower === 'menu' || lower === 'menú') {
+    const nombreNegocio = storeConfig?.name ? ` de ${storeConfig.name}` : '';
     await sendAndLog({
       storeId,
       phoneNumberId,
       accessToken,
       to: from,
       text:
-        'Hola, soy el bot de citas.\n\n' +
-        'Comandos disponibles:\n' +
-        '- DISPONIBLE YYYY-MM-DD → ver huecos libres\n' +
-        '- CITA YYYY-MM-DD HH:MM → reservar cita\n' +
-        '- MIS CITAS → ver tus próximas citas\n' +
-        '- CANCELAR → cancelar una cita\n\n' +
-        'También puedes escribirme con tus palabras: "¿tenéis hueco mañana por la tarde?"'
+        `¡Hola! Soy el asistente${nombreNegocio}. Puedo darte cita, decirte los huecos libres, o cambiar y cancelar tus citas.\n\n` +
+        'Dímelo con tus palabras, por ejemplo:\n' +
+        '- "¿Tenéis hueco mañana por la tarde?"\n' +
+        '- "Quiero cita el viernes a las 10"\n' +
+        '- "¿Qué citas tengo?"\n' +
+        '- "Cancela mi cita de las 16:00"'
     });
     return;
   }
@@ -717,6 +733,122 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           text: `¿Para qué día quieres la cita de las ${interpreted.time}? Dímelo todo junto, por ejemplo: "mañana a las ${interpreted.time}".`
         });
         return;
+      }
+
+      // Cancelación DIRECTA de una cita concreta ("cancela la de las 16:00"):
+      // si el filtro identifica exactamente una, ni lista ni elección.
+      if (interpreted && interpreted.intent === 'CANCELAR_CITA' && (interpreted.date || interpreted.time)) {
+        const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+        const matches = citas.filter((c) => {
+          const dt = DateTime.fromISO(c.start_at, { zone });
+          if (interpreted.date && dt.toISODate() !== interpreted.date) return false;
+          if (interpreted.time && dt.toFormat('HH:mm') !== interpreted.time) return false;
+          return true;
+        });
+
+        if (matches.length === 1) {
+          const target = matches[0];
+          const expiresAt = Date.now() + 10 * 60 * 1000;
+          await setConversationState(storeId, from, {
+            pendingCancellation: { appointmentId: target.id, startIso: target.start_at, expiresAt }
+          }, expiresAt);
+          await sendAndLog({
+            storeId, phoneNumberId, accessToken, to: from,
+            text: `¿Cancelo tu cita del ${fmtHuman(target.start_at)}? Responde SI o NO.`
+          });
+          return;
+        }
+
+        // 0 o varias coincidencias → flujo genérico (lista + elección natural)
+        return handleIncomingText({
+          storeId, phoneNumberId, accessToken, from,
+          body: 'CANCELAR', nluAttempted: true
+        });
+      }
+
+      // Cambio de cita ("cámbiala a las 16:30"): reservar la nueva y anular la
+      // vieja en una sola confirmación (lo que faltó en la prueba real).
+      if (interpreted && interpreted.intent === 'CAMBIAR_CITA') {
+        const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 5 });
+
+        if (!citas.length) {
+          await sendAndLog({
+            storeId, phoneNumberId, accessToken, to: from,
+            text: 'No tienes citas próximas que cambiar. ¿Quieres reservar una nueva? Dime día y hora.'
+          });
+          return;
+        }
+        if (citas.length > 1) {
+          const lines = citas.map((c) => `- el ${fmtHuman(c.start_at)}`).join('\n');
+          await sendAndLog({
+            storeId, phoneNumberId, accessToken, to: from,
+            text: `Tienes varias citas:\n${lines}\n\nDime cuál quieres cambiar y a qué hora (p. ej. "cambia la del martes a las 16:30").`
+          });
+          return;
+        }
+        if (!interpreted.time) {
+          await sendAndLog({
+            storeId, phoneNumberId, accessToken, to: from,
+            text: `¿A qué día y hora quieres mover tu cita del ${fmtHuman(citas[0].start_at)}?`
+          });
+          return;
+        }
+
+        const old = citas[0];
+        const oldDt = DateTime.fromISO(old.start_at, { zone });
+        // Sin día nuevo explícito, se asume el mismo día de la cita actual
+        const newDatePart = interpreted.date || oldDt.toISODate();
+        const normalizedTime = interpreted.time;
+        const dateTime = DateTime.fromFormat(`${newDatePart} ${normalizedTime}`, 'yyyy-MM-dd HH:mm', { zone });
+
+        if (dateTime.isValid) {
+          const weekday = dateTime.weekday === 7 ? 0 : dateTime.weekday;
+          const businessHours = await getStoreBusinessHours(storeId, weekday);
+          if (businessHours?.isClosed) {
+            await sendAndLog({
+              storeId, phoneNumberId, accessToken, to: from,
+              text: 'Ese día está cerrado. ¿Te va bien otro día?'
+            });
+            return;
+          }
+          const slotOptions = {
+            zone,
+            slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+            openTime: businessHours?.openTime || '08:00',
+            closeTime: businessHours?.closeTime || '17:00'
+          };
+          const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
+          const slots = generate30MinSlots(dateTime.toISO(), events, slotOptions);
+          const slotMatch = slots.find((s) => s.label === normalizedTime);
+
+          if (!slotMatch) {
+            await sendAndLog({
+              storeId, phoneNumberId, accessToken, to: from,
+              text: `Ese horario no está libre. Pregúntame "¿qué huecos hay el ${newDatePart}?" y elegimos otro.`
+            });
+            return;
+          }
+
+          const startNew = DateTime.fromISO(slotMatch.startIso, { zone });
+          const endNew = DateTime.fromISO(slotMatch.endIso, { zone });
+          const expiresAt = Date.now() + 10 * 60 * 1000;
+          await setConversationState(storeId, from, {
+            pendingAppointment: {
+              datePart: newDatePart,
+              timePart: normalizedTime,
+              startIso: startNew.toISO(),
+              endIso: endNew.toISO(),
+              expiresAt,
+              rescheduleOfId: old.id,
+              rescheduleOldLabel: fmtHuman(old.start_at)
+            }
+          }, expiresAt);
+          await sendAndLog({
+            storeId, phoneNumberId, accessToken, to: from,
+            text: `¿Te cambio la cita del ${fmtHuman(old.start_at)} al ${fmtHuman(startNew.toISO())}? Responde SI para confirmar o NO para dejarla como está.`
+          });
+          return;
+        }
       }
 
       const command = nluResultToCommand(interpreted);
@@ -785,9 +917,8 @@ async function handleMissedCallButton({ storeId, phoneNumberId, accessToken, fro
       accessToken,
       to: from,
       text:
-        'Estupendo. Para ver los huecos libres envía:\n' +
-        'DISPONIBLE YYYY-MM-DD (ejemplo: DISPONIBLE 2026-07-10)\n\n' +
-        'Y para reservar: CITA YYYY-MM-DD HH:MM'
+        '¡Estupendo! Dime qué día y hora te vienen bien — por ejemplo: ' +
+        '"mañana por la tarde" o "el viernes a las 10".'
     });
     return true;
   }
