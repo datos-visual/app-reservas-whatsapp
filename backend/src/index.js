@@ -22,7 +22,9 @@ const {
   getUpcomingConfirmedAppointments,
   cancelAppointment,
   getRecentConversation,
-  updateCustomerName
+  updateCustomerName,
+  getActiveServices,
+  getServiceById
 } = require('./db');
 const {
   listEventsForDay,
@@ -35,7 +37,8 @@ const {
   verifyWebhook,
   extractIncomingMessages,
   verifySignature,
-  sendInteractiveButtons
+  sendInteractiveButtons,
+  sendInteractiveList
 } = require('./whatsappCloud');
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
 const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
@@ -180,17 +183,139 @@ async function sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to, header
 }
 
 /**
- * Router de payloads del flujo guiado (`ca:*`, B1). Devuelve true si el
+ * Helpers del flujo guiado de reserva (B2). Todos leen zone/config al vuelo
+ * (se invocan desde el router de payloads, fuera de handleIncomingText).
+ */
+async function sendServiceList({ storeId, phoneNumberId, accessToken, to }) {
+  const services = await getActiveServices(storeId);
+
+  if (!services.length) {
+    // Tienda sin catálogo (compatibilidad): puente al flujo conversacional
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to,
+      text: '¡Genial! Dime qué día y hora te vienen bien — por ejemplo: "mañana por la tarde" o "el viernes a las 10".'
+    });
+    return;
+  }
+
+  try {
+    await sendInteractiveList({
+      phoneNumberId,
+      accessToken,
+      to,
+      bodyText: '¿Qué servicio quieres reservar?',
+      buttonText: 'Ver servicios',
+      sections: [{
+        rows: services.map((s) => ({
+          id: `ca:res:svc:${s.id}`,
+          title: s.name,
+          description: s.description ||
+            `${s.duration_minutes} min${s.price_eur != null ? ` · ${Number(s.price_eur)} €` : ''}`
+        }))
+      }]
+    });
+    await logMessage({
+      storeId, phone: to, fromMe: true,
+      body: `[lista] ¿Qué servicio quieres reservar? (${services.map((s) => s.name).join(', ')})`
+    });
+  } catch (err) {
+    console.error('[Flujo] Error enviando lista de servicios', { storeId, err });
+  }
+}
+
+async function sendDateButtons({ storeId, phoneNumberId, accessToken, to, service }) {
+  const storeConfig = await getStoreConfig(storeId);
+  const zone = storeConfig?.timezone || 'Europe/Madrid';
+  const hoy = DateTime.now().setZone(zone);
+  const manana = hoy.plus({ days: 1 });
+
+  const precio = service.priceEur != null ? ` · ${Number(service.priceEur)} €` : '';
+  try {
+    await sendInteractiveButtons({
+      phoneNumberId,
+      accessToken,
+      to,
+      bodyText: `«${service.serviceName}» (${service.durationMinutes} min${precio}). ¿Para qué día?`,
+      buttons: [
+        { id: `ca:res:day:${hoy.toISODate()}`, title: 'Hoy' },
+        { id: `ca:res:day:${manana.toISODate()}`, title: 'Mañana' },
+        { id: 'ca:res:day:otro', title: 'Otro día' }
+      ]
+    });
+    await logMessage({
+      storeId, phone: to, fromMe: true,
+      body: `[botones] «${service.serviceName}»: ¿para qué día? [Hoy | Mañana | Otro día]`
+    });
+  } catch (err) {
+    console.error('[Flujo] Error enviando botones de fecha', { storeId, err });
+  }
+}
+
+async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, dateIso }) {
+  const storeConfig = await getStoreConfig(storeId);
+  const zone = storeConfig?.timezone || 'Europe/Madrid';
+  const date = DateTime.fromISO(dateIso, { zone });
+  const weekday = date.weekday === 7 ? 0 : date.weekday;
+  const businessHours = await getStoreBusinessHours(storeId, weekday);
+
+  if (businessHours?.isClosed) {
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to,
+      text: 'Ese día estamos cerrados. ¿Te va bien otro?'
+    });
+    return;
+  }
+
+  const slotOptions = {
+    zone,
+    // B2: la duración es la del SERVICIO elegido, no la de la tienda
+    slotDurationMinutes: service.durationMinutes,
+    openTime: businessHours?.openTime || '08:00',
+    closeTime: businessHours?.closeTime || '17:00'
+  };
+  const events = await listEventsForDay(storeId, dateIso, zone);
+  const slots = generate30MinSlots(dateIso, events, slotOptions);
+
+  if (!slots.length) {
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to,
+      text: `Para «${service.serviceName}» no queda hueco el ${date.setLocale('es').toFormat('cccc dd/MM')}. ¿Probamos otro día?`
+    });
+    return;
+  }
+
+  const manana = slots.filter((s) => s.label < '14:00').slice(0, 5);
+  const tarde = slots.filter((s) => s.label >= '14:00').slice(0, 10 - Math.min(manana.length, 5));
+  const sections = [];
+  if (manana.length) sections.push({ title: 'Mañana', rows: manana.map((s) => ({ id: `ca:res:slot:${s.label.replace(':', '')}`, title: s.label })) });
+  if (tarde.length) sections.push({ title: 'Tarde', rows: tarde.map((s) => ({ id: `ca:res:slot:${s.label.replace(':', '')}`, title: s.label })) });
+
+  try {
+    await sendInteractiveList({
+      phoneNumberId,
+      accessToken,
+      to,
+      bodyText: `Huecos para «${service.serviceName}» el ${date.setLocale('es').toFormat('cccc dd/MM')}:`,
+      buttonText: 'Elegir hora',
+      sections
+    });
+    await logMessage({
+      storeId, phone: to, fromMe: true,
+      body: `[lista] Huecos de «${service.serviceName}» el ${dateIso}: ${slots.slice(0, 10).map((s) => s.label).join(', ')}`
+    });
+  } catch (err) {
+    console.error('[Flujo] Error enviando lista de huecos', { storeId, err });
+  }
+}
+
+/**
+ * Router de payloads del flujo guiado (`ca:*`, B1/B2). Devuelve true si el
  * payload era conocido y se ha respondido. Los ids se validan siempre contra
  * el store_id resuelto por webhook — nunca se confía en el payload.
  */
 async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload }) {
   if (payload === 'ca:menu:reservar') {
-    // Hasta B2 (catálogo), el puente es el flujo conversacional ya probado
-    await sendAndLog({
-      storeId, phoneNumberId, accessToken, to: from,
-      text: '¡Genial! Dime qué día y hora te vienen bien — por ejemplo: "mañana por la tarde" o "el viernes a las 10".'
-    });
+    await sendServiceList({ storeId, phoneNumberId, accessToken, to: from });
     return true;
   }
 

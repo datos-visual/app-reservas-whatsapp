@@ -105,7 +105,11 @@ async function deleteCalendarEvent(storeId, eventId) {
   }
 }
 
-function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes }) {
+// capacity: nº de citas simultáneas admitidas (guarda de diseño B2 → B5).
+// Con capacity=1 (default) el comportamiento es idéntico al histórico.
+// ⚠️ capacity>1 requiere ADEMÁS la migración consciente del índice
+// anti doble-reserva (doc 08 §2) — no activar por configuración a la ligera.
+function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1 }) {
   const tz = zone || config.timezone || 'Europe/Madrid';
   const slotMins = slotDurationMinutes ?? 30;
 
@@ -135,9 +139,11 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
   while (cursor < end) {
     const slotEnd = cursor.plus({ minutes: slotMins });
 
-    const overlaps = busyRanges.some(
+    // Ocupación del hueco: nº de eventos que solapan vs capacidad admitida
+    const solapan = busyRanges.filter(
       (r) => cursor < r.end && slotEnd > r.start
-    );
+    ).length;
+    const overlaps = solapan >= (capacity ?? 1);
 
     if (!overlaps && slotEnd <= end && cursor > now) {
       slots.push({

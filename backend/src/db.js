@@ -70,7 +70,7 @@ async function createOrGetCustomer(storeId, phone) {
   }
 }
 
-async function createAppointment({ storeId, customerId, start, end, googleEventId, source }) {
+async function createAppointment({ storeId, customerId, start, end, googleEventId, source, serviceId = null, resourceId = null, extra = null }) {
   try {
     const { data, error } = await supabase
       .from('appointments')
@@ -80,7 +80,11 @@ async function createAppointment({ storeId, customerId, start, end, googleEventI
         start_at: start,
         end_at: end,
         google_event_id: googleEventId,
-        source: source || 'whatsapp'
+        source: source || 'whatsapp',
+        // B2: catálogo — nulos si la tienda no lo usa (compatibilidad total)
+        service_id: serviceId,
+        resource_id: resourceId,
+        extra
       })
       .select('*')
       .single();
@@ -448,6 +452,48 @@ async function logInboundMessageOnce({ storeId, phone, body, messageId }) {
   }
 }
 
+/** Catálogo de servicios activos de la tienda (B2), ordenados. */
+async function getActiveServices(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('services')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .limit(10);
+    if (error) {
+      console.error('[DB] Error listando servicios', { storeId, error });
+      throw error;
+    }
+    return data || [];
+  } catch (err) {
+    console.error('[DB] Excepción en getActiveServices', { storeId, err });
+    return [];
+  }
+}
+
+/** Servicio por id VALIDANDO tienda (nunca confiar en el payload del botón). */
+async function getServiceById(storeId, serviceId) {
+  try {
+    const { data, error } = await supabase
+      .from('services')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('id', serviceId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') {
+      console.error('[DB] Error buscando servicio', { storeId, serviceId, error });
+      throw error;
+    }
+    return data || null;
+  } catch (err) {
+    console.error('[DB] Excepción en getServiceById', { storeId, serviceId, err });
+    return null;
+  }
+}
+
 /** Guarda el nombre del cliente (se pide al confirmar su primera reserva). */
 async function updateCustomerName(storeId, phone, name) {
   try {
@@ -569,6 +615,8 @@ module.exports = {
   getUpcomingConfirmedAppointments,
   cancelAppointment,
   getRecentConversation,
-  updateCustomerName
+  updateCustomerName,
+  getActiveServices,
+  getServiceById
 };
 
