@@ -81,10 +81,11 @@ async function createAppointment({ storeId, customerId, start, end, googleEventI
         end_at: end,
         google_event_id: googleEventId,
         source: source || 'whatsapp',
-        // B2: catálogo — nulos si la tienda no lo usa (compatibilidad total)
-        service_id: serviceId,
-        resource_id: resourceId,
-        extra
+        // B2: las columnas del catálogo solo se envían si tienen valor —
+        // así una BD sin la migración aplicada sigue reservando sin romper
+        ...(serviceId != null ? { service_id: serviceId } : {}),
+        ...(resourceId != null ? { resource_id: resourceId } : {}),
+        ...(extra != null ? { extra } : {})
       })
       .select('*')
       .single();
