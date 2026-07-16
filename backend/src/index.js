@@ -335,6 +335,173 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     return true;
   }
 
+  // --- B2: flujo de reserva guiado (Servicio → Día → Hueco → Confirmar) ---
+
+  if (payload.startsWith('ca:res:svc:')) {
+    const serviceId = parseInt(payload.slice('ca:res:svc:'.length), 10);
+    const svc = Number.isInteger(serviceId) ? await getServiceById(storeId, serviceId) : null;
+    if (!svc) {
+      await sendWelcomeMenu({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: 'Ese servicio ya no está disponible.'
+      });
+      return true;
+    }
+    const service = {
+      serviceId: svc.id,
+      serviceName: svc.name,
+      durationMinutes: svc.duration_minutes,
+      priceEur: svc.price_eur
+    };
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      flow: { name: 'reserva', step: 'SELECT_DATE', data: service, expiresAt }
+    }, expiresAt);
+    await sendDateButtons({ storeId, phoneNumberId, accessToken, to: from, service });
+    return true;
+  }
+
+  if (payload === 'ca:res:day:otro') {
+    const pending = await getConversationState(storeId, from);
+    const flow = pending?.state?.flow;
+    if (!flow || flow.name !== 'reserva' || !flow.data?.serviceId) {
+      await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa selección ya caducó — empecemos de nuevo.' });
+      return true;
+    }
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      flow: { ...flow, step: 'WAIT_DATE_TEXT', expiresAt }
+    }, expiresAt);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: '¿Qué día te viene bien? Dímelo como quieras: "el viernes", "pasado mañana", "18/07"...'
+    });
+    return true;
+  }
+
+  if (payload.startsWith('ca:res:day:')) {
+    const dateIso = payload.slice('ca:res:day:'.length);
+    const pending = await getConversationState(storeId, from);
+    const flow = pending?.state?.flow;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso) || !flow?.data?.serviceId) {
+      await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa selección ya caducó — empecemos de nuevo.' });
+      return true;
+    }
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      flow: { ...flow, step: 'SELECT_SLOT', data: { ...flow.data, dateIso }, expiresAt }
+    }, expiresAt);
+    await sendSlotList({ storeId, phoneNumberId, accessToken, to: from, service: flow.data, dateIso });
+    return true;
+  }
+
+  if (payload.startsWith('ca:res:slot:')) {
+    const hhmm = payload.slice('ca:res:slot:'.length);
+    const timeLabel = `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+    const pending = await getConversationState(storeId, from);
+    const flow = pending?.state?.flow;
+    if (!flow?.data?.serviceId || !flow?.data?.dateIso || !/^\d{2}:\d{2}$/.test(timeLabel)) {
+      await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa selección ya caducó — empecemos de nuevo.' });
+      return true;
+    }
+    const d = flow.data;
+
+    // Revalidar el hueco con la duración del SERVICIO
+    const storeConfig = await getStoreConfig(storeId);
+    const zone = storeConfig?.timezone || 'Europe/Madrid';
+    const date = DateTime.fromISO(d.dateIso, { zone });
+    const weekday = date.weekday === 7 ? 0 : date.weekday;
+    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    const slotOptions = {
+      zone,
+      slotDurationMinutes: d.durationMinutes,
+      openTime: businessHours?.openTime || '08:00',
+      closeTime: businessHours?.closeTime || '17:00'
+    };
+    const events = await listEventsForDay(storeId, d.dateIso, zone);
+    const slots = generate30MinSlots(d.dateIso, events, slotOptions);
+    const match = slots.find((s) => s.label === timeLabel);
+
+    if (!match) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Ese hueco acaba de ocuparse. Te enseño los que quedan:'
+      });
+      await sendSlotList({ storeId, phoneNumberId, accessToken, to: from, service: d, dateIso: d.dateIso });
+      return true;
+    }
+
+    const startDt = DateTime.fromISO(match.startIso, { zone });
+    const endDt = DateTime.fromISO(match.endIso, { zone });
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingAppointment: {
+        datePart: d.dateIso,
+        timePart: timeLabel,
+        startIso: startDt.toISO(),
+        endIso: endDt.toISO(),
+        expiresAt,
+        serviceId: d.serviceId,
+        serviceName: d.serviceName,
+        durationMinutes: d.durationMinutes,
+        priceEur: d.priceEur ?? null
+      }
+    }, expiresAt);
+
+    const fecha = startDt.setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+    const precio = d.priceEur != null ? `\nPrecio: ${Number(d.priceEur)} €` : '';
+    try {
+      await sendInteractiveButtons({
+        phoneNumberId, accessToken, to: from,
+        bodyText: `Resumen de tu cita:\n${d.serviceName} (${d.durationMinutes} min)${precio}\nEl ${fecha}.\n\n¿Confirmamos?`,
+        buttons: [
+          { id: 'ca:res:confirm', title: 'Confirmar ✓' },
+          { id: 'ca:res:back', title: 'Cambiar hora' },
+          { id: 'ca:res:cancel', title: 'Cancelar' }
+        ]
+      });
+      await logMessage({
+        storeId, phone: from, fromMe: true,
+        body: `[botones] Resumen: ${d.serviceName} el ${fecha} [Confirmar ✓ | Cambiar hora | Cancelar]`
+      });
+    } catch (err) {
+      console.error('[Flujo] Error enviando resumen de confirmación', { storeId, err });
+    }
+    return true;
+  }
+
+  if (payload === 'ca:res:confirm') {
+    // Reutiliza ÍNTEGRO el circuito probado del SI (revalidación, Calendar,
+    // 23505+rollback, atribución, nombre) — el estado ya es pendingAppointment
+    await handleIncomingText({ storeId, phoneNumberId, accessToken, from, body: 'SI', nluAttempted: true });
+    return true;
+  }
+
+  if (payload === 'ca:res:back') {
+    const pending = await getConversationState(storeId, from);
+    const pa = pending?.state?.pendingAppointment;
+    if (!pa?.serviceId) {
+      await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa selección ya caducó — empecemos de nuevo.' });
+      return true;
+    }
+    const service = { serviceId: pa.serviceId, serviceName: pa.serviceName, durationMinutes: pa.durationMinutes, priceEur: pa.priceEur };
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      flow: { name: 'reserva', step: 'SELECT_SLOT', data: { ...service, dateIso: pa.datePart }, expiresAt }
+    }, expiresAt);
+    await sendSlotList({ storeId, phoneNumberId, accessToken, to: from, service, dateIso: pa.datePart });
+    return true;
+  }
+
+  if (payload === 'ca:res:cancel') {
+    await deleteConversationState(storeId, from);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: 'Sin problema, no he reservado nada. Aquí estoy cuando quieras.'
+    });
+    return true;
+  }
+
   // Payload ca:* desconocido o de una conversación caducada → nunca reventar
   if (payload.startsWith('ca:')) {
     console.warn('[Flujo] Payload desconocido o caducado', { storeId, payload });
@@ -375,6 +542,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const normalizedTime = String(newTimeRaw).trim().padStart(5, '0');
     const dateTime = DateTime.fromFormat(`${newDatePart} ${normalizedTime}`, 'yyyy-MM-dd HH:mm', { zone });
 
+    // B2: si la cita original era de un servicio, el cambio conserva su duración
+    const service = oldCita.serviceId ? await getServiceById(storeId, oldCita.serviceId) : null;
+
     if (!dateTime.isValid) {
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
@@ -395,7 +565,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const slotOptions = {
       zone,
-      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      slotDurationMinutes: service?.duration_minutes ?? storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00'
     };
@@ -422,7 +592,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         endIso: endNew.toISO(),
         expiresAt,
         rescheduleOfId: oldCita.id,
-        rescheduleOldLabel: fmtHuman(oldCita.startIso)
+        rescheduleOldLabel: fmtHuman(oldCita.startIso),
+        serviceId: service?.id ?? null,
+        serviceName: service?.name ?? null,
+        durationMinutes: service?.duration_minutes ?? null
       }
     }, expiresAt);
     await sendAndLog({
@@ -544,13 +717,17 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       await deleteConversationState(storeId, from);
 
       if (pendingReChoice.newTime) {
-        await proposeReschedule({ id: chosen.id, startIso: chosen.startIso }, pendingReChoice.newDate, pendingReChoice.newTime);
+        await proposeReschedule(
+          { id: chosen.id, startIso: chosen.startIso, serviceId: chosen.serviceId ?? null },
+          pendingReChoice.newDate,
+          pendingReChoice.newTime
+        );
         return;
       }
 
       const expiresAt = Date.now() + 10 * 60 * 1000;
       await setConversationState(storeId, from, {
-        pendingRescheduleFrom: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
+        pendingRescheduleFrom: { appointmentId: chosen.id, startIso: chosen.startIso, serviceId: chosen.serviceId ?? null, expiresAt }
       }, expiresAt);
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
@@ -588,6 +765,51 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // No parece un nombre → seguir procesando el mensaje con normalidad
   }
 
+  // Flujo guiado B2: esperando el DÍA por texto (botón "Otro día")
+  const flowState = pending?.state?.flow || null;
+  if (flowState?.name === 'reserva' && flowState.step === 'WAIT_DATE_TEXT' && flowState.data?.serviceId) {
+    let dateIso = null;
+    const t = lower.replace(/^el\s+/, '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+      dateIso = t;
+    } else {
+      const m = t.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+      if (m) {
+        const hoy = DateTime.now().setZone(zone);
+        const year = m[3]
+          ? (m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10))
+          : hoy.year;
+        const cand = DateTime.fromObject({ year, month: parseInt(m[2], 10), day: parseInt(m[1], 10) }, { zone });
+        if (cand.isValid) {
+          dateIso = (!m[3] && cand < hoy.startOf('day'))
+            ? cand.plus({ years: 1 }).toISODate()  // "05/01" en julio = enero próximo
+            : cand.toISODate();
+        }
+      }
+    }
+    // "el viernes", "pasado mañana"... → NLU
+    if (!dateIso) {
+      const conv = await getRecentConversation(storeId, from);
+      const interp = await interpretMessage({
+        text: body, timezone: zone, nowDt: DateTime.now().setZone(zone), conversation: conv
+      });
+      if (interp?.date) dateIso = interp.date;
+    }
+
+    if (dateIso) {
+      const service = flowState.data;
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        flow: { name: 'reserva', step: 'SELECT_SLOT', data: { ...service, dateIso }, expiresAt }
+      }, expiresAt);
+      await sendSlotList({ storeId, phoneNumberId, accessToken, to: from, service, dateIso });
+      return;
+    }
+
+    // No parece una fecha → soltar el flujo y procesar normal (anti-bucle)
+    await deleteConversationState(storeId, from);
+  }
+
   // Ya sabemos QUÉ cita cambiar; falta el nuevo día/hora
   const pendingReFrom = pending?.state?.pendingRescheduleFrom || null;
   if (pendingReFrom) {
@@ -623,7 +845,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     await deleteConversationState(storeId, from);
-    await proposeReschedule({ id: pendingReFrom.appointmentId, startIso: pendingReFrom.startIso }, newDate, newTime);
+    await proposeReschedule(
+      { id: pendingReFrom.appointmentId, startIso: pendingReFrom.startIso, serviceId: pendingReFrom.serviceId ?? null },
+      newDate,
+      newTime
+    );
     return;
   }
 
@@ -650,7 +876,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const slotOptions = {
       zone,
-      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      // B2: si la reserva es de un servicio del catálogo, manda SU duración
+      slotDurationMinutes: current.durationMinutes ?? storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00'
     };
@@ -690,9 +917,12 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     try {
       const customer = await createOrGetCustomer(storeId, from);
+      const quien = customer?.name ? `${customer.name} (${from})` : from;
       const calendarEvent = await createCalendarEvent(storeId, {
-        summary: `Cita WhatsApp ${from}`,
-        description: `Cita creada desde bot de WhatsApp para ${from}`,
+        summary: current.serviceName ? `${current.serviceName} — ${quien}` : `Cita WhatsApp ${quien}`,
+        description:
+          `Cita creada desde el bot de WhatsApp para ${quien}` +
+          (current.serviceName ? `\nServicio: ${current.serviceName} (${current.durationMinutes} min)` : ''),
         start: startIso,
         end: endIso
       }, zone);
@@ -704,7 +934,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           start: startIso,
           end: endIso,
           googleEventId: calendarEvent.id,
-          source: 'whatsapp'
+          source: 'whatsapp',
+          serviceId: current.serviceId ?? null
         });
 
         await deleteConversationState(storeId, from);
@@ -715,7 +946,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
         // Si era un CAMBIO de cita: cancelar la anterior (mejor tener dos un
         // instante que ninguna: primero se reserva la nueva, luego se anula la vieja)
-        let textoConfirmacion = `¡Hecho! Tu cita queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
+        let textoConfirmacion =
+          `¡Hecho! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
+          `queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
 
         // Primera reserva sin nombre → pedirlo (para la agenda del negocio)
         const pedirNombre = !customer?.name;
@@ -1198,7 +1431,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
         // 2) Sin origen claro → elegir (recordando el destino si ya lo dijo)
         if (!old) {
-          const options = citas.map((c) => ({ id: c.id, startIso: c.start_at, label: fmtHuman(c.start_at) }));
+          const options = citas.map((c) => ({
+            id: c.id, startIso: c.start_at, serviceId: c.service_id ?? null, label: fmtHuman(c.start_at)
+          }));
           const lines = options.map((o, i) => `${i + 1}) el ${o.label}`).join('\n');
           const expiresAt = Date.now() + 10 * 60 * 1000;
           await setConversationState(storeId, from, {
@@ -1230,7 +1465,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         }
 
         // 4) Origen y destino claros → proponer el cambio
-        await proposeReschedule({ id: old.id, startIso: old.start_at }, interpreted.date, interpreted.time);
+        await proposeReschedule(
+          { id: old.id, startIso: old.start_at, serviceId: old.service_id ?? null },
+          interpreted.date,
+          interpreted.time
+        );
         return;
       }
 
