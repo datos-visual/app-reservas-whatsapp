@@ -45,6 +45,7 @@ const {
 } = require('./whatsappCloud');
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
 const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
+const { joinWaitlist, getFirstWaitingForDate, markWaitlistNotified } = require('./waitlist');
 const {
   REMINDER_PAYLOADS,
   dispatchReminders,
@@ -274,6 +275,32 @@ function capitalizar(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+/**
+ * B3: detecta incongruencia entre el día de semana ESCRITO por el cliente
+ * ("el martes 22") y el día real de la fecha resuelta (22 = miércoles).
+ * Devuelve el texto del aviso o null si todo cuadra.
+ */
+const DIAS_SEMANA = {
+  lunes: 1, martes: 2, miercoles: 3, 'miércoles': 3,
+  jueves: 4, viernes: 5, sabado: 6, 'sábado': 6, domingo: 7
+};
+
+function avisoDiaIncongruente(textoCliente, dateIso, zone) {
+  try {
+    if (!textoCliente || !dateIso) return null;
+    const m = String(textoCliente).toLowerCase()
+      .match(/\b(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/);
+    if (!m) return null;
+    const dicho = DIAS_SEMANA[m[1]];
+    const d = DateTime.fromISO(dateIso, { zone: zone || 'Europe/Madrid' });
+    if (!d.isValid || !dicho || d.weekday === dicho) return null;
+    const real = d.setLocale('es').toFormat('cccc');
+    return `Ojo: el ${d.toFormat('dd/MM')} cae en ${real}, no en ${m[1]}. Sigo con el ${real} ${d.toFormat('dd/MM')} — si querías otro día, dímelo.`;
+  } catch {
+    return null;
+  }
+}
+
 async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, dateIso }) {
   const storeConfig = await getStoreConfig(storeId);
   const zone = storeConfig?.timezone || 'Europe/Madrid';
@@ -304,9 +331,31 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
   const slots = generate30MinSlots(dateIso, events, slotOptions);
 
   if (!slots.length) {
+    const fechaTxt = date.setLocale('es').toFormat('cccc dd/MM');
+    // P3: con el flag waitlist, ofrecer lista de espera en vez de despedir
+    if (premium?.waitlist === true) {
+      try {
+        await sendInteractiveButtons({
+          phoneNumberId, accessToken, to,
+          bodyText: `Para «${service.serviceName}» no queda hueco el ${fechaTxt}. Puedo apuntarte en la lista de espera y avisarte si alguien cancela ese día.`,
+          buttons: [
+            { id: `ca:wl:join:${dateIso}`, title: 'Apúntame ⏰' },
+            { id: 'ca:res:day:otro', title: 'Otro día' },
+            { id: 'ca:wl:no', title: 'No, gracias' }
+          ]
+        });
+        await logMessage({
+          storeId, phone: to, fromMe: true,
+          body: `[botones] Sin hueco el ${fechaTxt} para «${service.serviceName}» [Apúntame ⏰ | Otro día | No, gracias]`
+        });
+        return;
+      } catch (err) {
+        console.error('[Waitlist] Error ofreciendo lista de espera; fallback a texto', { storeId, err });
+      }
+    }
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to,
-      text: `Para «${service.serviceName}» no queda hueco el ${date.setLocale('es').toFormat('cccc dd/MM')}. ¿Probamos otro día?`
+      text: `Para «${service.serviceName}» no queda hueco el ${fechaTxt}. ¿Probamos otro día?`
     });
     return;
   }
@@ -339,6 +388,41 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     });
   } catch (err) {
     console.error('[Flujo] Error enviando lista de huecos', { storeId, err });
+  }
+}
+
+/**
+ * P3: al liberarse un hueco (cancelación o cambio de cita), avisar al PRIMER
+ * cliente en lista de espera de ese día. Fire-and-forget: cualquier error se
+ * traga aquí y la cancelación original NUNCA se ve afectada. El hueco no se
+ * bloquea: el primero que confirma se lo queda (anti doble-reserva mediante).
+ */
+async function notificarListaEspera({ storeId, phoneNumberId, accessToken, startIso }) {
+  try {
+    const premium = await getPremiumFeatures(storeId);
+    if (premium?.waitlist !== true) return;
+
+    const storeConfig = await getStoreConfig(storeId);
+    const zone = storeConfig?.timezone || 'Europe/Madrid';
+    const d = DateTime.fromISO(startIso, { zone });
+    if (!d.isValid || d < DateTime.now().setZone(zone)) return; // hueco ya pasado
+
+    const entry = await getFirstWaitingForDate(storeId, d.toISODate());
+    if (!entry?.customers?.phone) return;
+
+    await markWaitlistNotified(entry.id);
+    const fecha = d.setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+    const saludo = entry.customers.name ? `, ${entry.customers.name}` : '';
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: entry.customers.phone,
+      text:
+        `¡Buenas noticias${saludo}! Se acaba de liberar un hueco el ${fecha}. ` +
+        `Si lo quieres, escríbeme «resérvame el ${d.toFormat('dd/MM')} a las ${d.toFormat('HH:mm')}» y es tuyo — ` +
+        'el primero que confirme se lo queda.'
+    });
+    console.log('[Waitlist] Aviso de hueco liberado enviado', { storeId, waitlistId: entry.id, fecha: d.toISODate() });
+  } catch (err) {
+    console.error('[Waitlist] Error avisando hueco liberado (la cancelación NO se ve afectada)', { storeId, err });
   }
 }
 
@@ -536,6 +620,153 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     return true;
   }
 
+  // --- B3: gestión de citas existentes desde "Mis citas" (ca:apt:*) ---
+  // El id SIEMPRE se valida contra las citas del propio cliente en esta
+  // tienda (getUpcomingConfirmedAppointments filtra por store+phone+futuras).
+
+  if (payload.startsWith('ca:apt:sel:') || payload.startsWith('ca:apt:cancel:') || payload.startsWith('ca:apt:change:')) {
+    const aptId = parseInt(payload.split(':').pop(), 10);
+    const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
+    const cita = Number.isInteger(aptId) ? citas.find((c) => c.id === aptId) : null;
+    if (!cita) {
+      await sendWelcomeMenu({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: 'Esa cita ya no está activa (quizá se canceló o ya pasó).'
+      });
+      return true;
+    }
+
+    const storeConfig = await getStoreConfig(storeId);
+    const zone = storeConfig?.timezone || 'Europe/Madrid';
+    const etiqueta = DateTime.fromISO(cita.start_at, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+
+    if (payload.startsWith('ca:apt:sel:')) {
+      try {
+        await sendInteractiveButtons({
+          phoneNumberId, accessToken, to: from,
+          bodyText: `Tu cita del ${etiqueta}. ¿Qué hacemos?`,
+          buttons: [
+            { id: `ca:apt:change:${cita.id}`, title: 'Cambiar hora' },
+            { id: `ca:apt:cancel:${cita.id}`, title: 'Cancelar cita' },
+            { id: 'ca:apt:ok', title: 'Nada, está bien' }
+          ]
+        });
+        await logMessage({
+          storeId, phone: from, fromMe: true,
+          body: `[botones] Cita del ${etiqueta} [Cambiar hora | Cancelar cita | Nada]`
+        });
+      } catch (err) {
+        console.error('[Flujo] Error enviando botones de cita', { storeId, err });
+      }
+      return true;
+    }
+
+    if (payload.startsWith('ca:apt:cancel:')) {
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        pendingCancellation: { appointmentId: cita.id, startIso: cita.start_at, expiresAt }
+      }, expiresAt);
+      try {
+        await sendInteractiveButtons({
+          phoneNumberId, accessToken, to: from,
+          bodyText: `¿Seguro que cancelo tu cita del ${etiqueta}?`,
+          buttons: [
+            { id: 'ca:apt:si', title: 'Sí, cancélala' },
+            { id: 'ca:apt:no', title: 'No, la mantengo' }
+          ]
+        });
+        await logMessage({
+          storeId, phone: from, fromMe: true,
+          body: `[botones] ¿Cancelo la cita del ${etiqueta}? [Sí | No]`
+        });
+      } catch (err) {
+        console.error('[Flujo] Error enviando confirmación de cancelación', { storeId, err });
+      }
+      return true;
+    }
+
+    // ca:apt:change:<id> → mismo circuito que el CAMBIAR conversacional
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingRescheduleFrom: {
+        appointmentId: cita.id,
+        startIso: cita.start_at,
+        serviceId: cita.service_id ?? null,
+        expiresAt
+      }
+    }, expiresAt);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: `¿A qué día y hora paso tu cita del ${etiqueta}? Dímelo como quieras: "el lunes a las 12", "mañana a las 10:30"...`
+    });
+    return true;
+  }
+
+  // --- P3: lista de espera (ca:wl:*) — solo con flag premium "waitlist" ---
+
+  if (payload.startsWith('ca:wl:join:')) {
+    const dateIso = payload.slice('ca:wl:join:'.length);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) {
+      await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa selección ya caducó — empecemos de nuevo.' });
+      return true;
+    }
+    const premium = await getPremiumFeatures(storeId);
+    if (premium?.waitlist !== true) {
+      await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa opción ya no está disponible.' });
+      return true;
+    }
+    // Si venía del flujo guiado, recordamos el servicio deseado
+    const pending = await getConversationState(storeId, from);
+    const serviceId = pending?.state?.flow?.data?.serviceId ?? null;
+    try {
+      const r = await joinWaitlist(storeId, from, { serviceId, desiredDate: dateIso });
+      await deleteConversationState(storeId, from);
+      const storeConfig = await getStoreConfig(storeId);
+      const zone = storeConfig?.timezone || 'Europe/Madrid';
+      const fecha = DateTime.fromISO(dateIso, { zone }).setLocale('es').toFormat('cccc dd/MM');
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: r === 'ya_apuntado'
+          ? `Ya estabas en la lista de espera del ${fecha} — sigo atento y te aviso en cuanto se libere algo.`
+          : `¡Apuntado! Si se libera un hueco el ${fecha}, te aviso por aquí enseguida.`
+      });
+    } catch (err) {
+      console.error('[Waitlist] Error apuntando a la lista (¿migration_waitlist.sql aplicada?)', { storeId, err });
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'No he podido apuntarte ahora mismo. Inténtalo de nuevo en un momento, por favor.'
+      });
+    }
+    return true;
+  }
+
+  if (payload === 'ca:wl:no') {
+    await deleteConversationState(storeId, from);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: 'Sin problema. Si te encaja otro día, dímelo y miramos huecos.'
+    });
+    return true;
+  }
+
+  if (payload === 'ca:apt:si' || payload === 'ca:apt:no') {
+    // Reutiliza ÍNTEGRO el circuito SI/NO (pendingCancellation tiene prioridad)
+    await handleIncomingText({
+      storeId, phoneNumberId, accessToken, from,
+      body: payload === 'ca:apt:si' ? 'SI' : 'NO', nluAttempted: true
+    });
+    return true;
+  }
+
+  if (payload === 'ca:apt:ok') {
+    await deleteConversationState(storeId, from);
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to: from,
+      text: 'Perfecto, todo queda como está. ¡Hasta pronto!'
+    });
+    return true;
+  }
+
   // Payload ca:* desconocido o de una conversación caducada → nunca reventar
   if (payload.startsWith('ca:')) {
     console.warn('[Flujo] Payload desconocido o caducado', { storeId, payload });
@@ -659,6 +890,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         storeId, phoneNumberId, accessToken, to: from,
         text: `Tu cita del ${fmt(cancelled.start_at)} ha sido cancelada. Si quieres otra, envía DISPONIBLE YYYY-MM-DD.`
       });
+
+      // P3: avisar al primero de la lista de espera (nunca afecta al flujo)
+      notificarListaEspera({ storeId, phoneNumberId, accessToken, startIso: cancelled.start_at });
     } catch (err) {
       console.error('[WhatsAppCloud] Error cancelando cita', { storeId, from, err });
       await sendAndLog({
@@ -831,6 +1065,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     if (dateIso) {
+      // B3: avisar si el día de semana escrito no cuadra con la fecha
+      const aviso = avisoDiaIncongruente(body, dateIso, zone);
+      if (aviso) {
+        await sendAndLog({ storeId, phoneNumberId, accessToken, to: from, text: aviso });
+      }
       const service = flowState.data;
       const expiresAt = Date.now() + 10 * 60 * 1000;
       await setConversationState(storeId, from, {
@@ -993,7 +1232,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         if (current.rescheduleOfId) {
           try {
             const old = await cancelAppointment(storeId, current.rescheduleOfId);
-            if (old) await deleteCalendarEvent(storeId, old.google_event_id);
+            if (old) {
+              await deleteCalendarEvent(storeId, old.google_event_id);
+              // P3: el cambio también libera un hueco → avisar a la lista
+              notificarListaEspera({ storeId, phoneNumberId, accessToken, startIso: old.start_at });
+            }
             textoConfirmacion = `¡Hecho! Te he cambiado la cita: del ${current.rescheduleOldLabel} al ${fmtHuman(startIso)}.`;
           } catch (err) {
             console.error('[WhatsAppCloud] Error cancelando la cita antigua en el cambio', {
@@ -1139,6 +1382,26 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     if (!slots.length) {
+      // P3: con el flag waitlist, ofrecer lista de espera
+      if (premium?.waitlist === true && !franjaTxt) {
+        try {
+          await sendInteractiveButtons({
+            phoneNumberId, accessToken, to: from,
+            bodyText: `No queda hueco ese día. Puedo apuntarte en la lista de espera y avisarte si alguien cancela.`,
+            buttons: [
+              { id: `ca:wl:join:${iso}`, title: 'Apúntame ⏰' },
+              { id: 'ca:wl:no', title: 'No, gracias' }
+            ]
+          });
+          await logMessage({
+            storeId, phone: from, fromMe: true,
+            body: `[botones] Sin huecos el ${iso} [Apúntame ⏰ | No, gracias]`
+          });
+          return;
+        } catch (err) {
+          console.error('[Waitlist] Error ofreciendo lista de espera; fallback a texto', { storeId, err });
+        }
+      }
       await sendAndLog({
         storeId,
         phoneNumberId,
@@ -1269,11 +1532,34 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       });
       return;
     }
-    const lines = citas.map((c) => `- el ${fmtHuman(c.start_at)}`).join('\n');
-    await sendAndLog({
-      storeId, phoneNumberId, accessToken, to: from,
-      text: `Tus próximas citas:\n${lines}\n\n¿Quieres cambiar o cancelar alguna? Dímelo con tus palabras (p. ej. "cancela la de las 16:00").`
-    });
+    // B3: lista interactiva — tocar una cita abre [Cambiar | Cancelar]
+    try {
+      await sendInteractiveList({
+        phoneNumberId, accessToken, to: from,
+        bodyText: citas.length === 1
+          ? 'Esta es tu próxima cita. Tócala si quieres cambiarla o cancelarla:'
+          : `Tienes ${citas.length} citas próximas. Toca una para cambiarla o cancelarla:`,
+        buttonText: 'Ver mis citas',
+        footerText: 'También puedes decírmelo con tus palabras',
+        sections: [{
+          rows: citas.map((c) => ({
+            id: `ca:apt:sel:${c.id}`,
+            title: DateTime.fromISO(c.start_at, { zone }).setLocale('es').toFormat("ccc dd/MM 'a las' HH:mm")
+          }))
+        }]
+      });
+      await logMessage({
+        storeId, phone: from, fromMe: true,
+        body: `[lista] Tus citas: ${citas.map((c) => fmtHuman(c.start_at)).join(' | ')}`
+      });
+    } catch (err) {
+      console.error('[Flujo] Error enviando lista de citas; fallback a texto', { storeId, err });
+      const lines = citas.map((c) => `- el ${fmtHuman(c.start_at)}`).join('\n');
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Tus próximas citas:\n${lines}\n\n¿Quieres cambiar o cancelar alguna? Dímelo con tus palabras (p. ej. "cancela la de las 16:00").`
+      });
+    }
     return;
   }
 
@@ -1524,6 +1810,13 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           provider: interpreted.provider,
           command
         });
+        // B3: avisar si el día de semana escrito no cuadra con la fecha resuelta
+        if (interpreted.date) {
+          const aviso = avisoDiaIncongruente(body, interpreted.date, zone);
+          if (aviso) {
+            await sendAndLog({ storeId, phoneNumberId, accessToken, to: from, text: aviso });
+          }
+        }
         return handleIncomingText({
           storeId,
           phoneNumberId,
