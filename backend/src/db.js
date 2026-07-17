@@ -266,6 +266,27 @@ async function getWhatsappAccountByStoreId(storeId) {
   }
 }
 
+/**
+ * Flags premium de la tienda (doc 09). Lector TOLERANTE y separado de
+ * getStoreConfig a propósito: si la columna premium_features aún no existe
+ * (BD sin migrar) devuelve {} y el bot funciona exactamente como siempre.
+ * Con {} todos los flags cuentan como apagados.
+ */
+async function getPremiumFeatures(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('stores')
+      .select('premium_features')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+    if (error) return {};
+    return data?.premium_features || {};
+  } catch (err) {
+    return {};
+  }
+}
+
 async function getStoreConfig(storeId) {
   try {
     const { data, error } = await supabase
@@ -626,6 +647,7 @@ module.exports = {
   getConfirmedAppointmentByStart,
   getAppointmentsByDate,
   getStoreConfig,
+  getPremiumFeatures,
   getStoreBusinessHours,
   getRecentMessages,
   getMessagesSentToday,

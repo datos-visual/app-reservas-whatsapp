@@ -385,6 +385,15 @@ alter table public.services  enable row level security;
 alter table public.resources enable row level security;
 
 -- =====================================================================
+-- 14. FLAGS PREMIUM POR TIENDA (doc 09 — P1 smart_slots y siguientes)
+--     Añadido por migration_premium_features.sql. OFF por defecto:
+--     con '{}' el comportamiento es idéntico al histórico.
+-- =====================================================================
+
+alter table public.stores
+  add column if not exists premium_features jsonb not null default '{}'::jsonb;
+
+-- =====================================================================
 -- VERIFICACIÓN RÁPIDA tras ejecutar (debe devolver 15 tablas):
 --   select table_name from information_schema.tables
 --   where table_schema='public' order by 1;

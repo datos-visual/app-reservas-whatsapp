@@ -19,6 +19,7 @@ const {
   deleteConversationState,
   getWhatsappAccountByStoreId,
   getStoreConfig,
+  getPremiumFeatures,
   getStoreBusinessHours,
   getUpcomingConfirmedAppointments,
   cancelAppointment,
@@ -287,12 +288,15 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     return;
   }
 
+  // P1 premium: con smart_slots activo, huecos adyacentes a citas primero
+  const premium = await getPremiumFeatures(storeId);
   const slotOptions = {
     zone,
     // B2: la duración es la del SERVICIO elegido, no la de la tienda
     slotDurationMinutes: service.durationMinutes,
     openTime: businessHours?.openTime || '08:00',
-    closeTime: businessHours?.closeTime || '17:00'
+    closeTime: businessHours?.closeTime || '17:00',
+    compactar: premium?.smart_slots === true
   };
   const events = await listEventsForDay(storeId, dateIso, zone);
   const slots = generate30MinSlots(dateIso, events, slotOptions);
@@ -1107,6 +1111,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00'
     };
+
+    // P1 premium: con smart_slots activo, huecos adyacentes a citas primero
+    const premium = await getPremiumFeatures(storeId);
+    slotOptions.compactar = premium?.smart_slots === true;
 
     const events = await listEventsForDay(storeId, iso, zone);
     let slots = generate30MinSlots(iso, events, slotOptions);

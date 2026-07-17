@@ -109,7 +109,11 @@ async function deleteCalendarEvent(storeId, eventId) {
 // Con capacity=1 (default) el comportamiento es idéntico al histórico.
 // ⚠️ capacity>1 requiere ADEMÁS la migración consciente del índice
 // anti doble-reserva (doc 08 §2) — no activar por configuración a la ligera.
-function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1 }) {
+// compactar (P1 premium `smart_slots`, doc 09): con true, los huecos
+// ADYACENTES a citas existentes se ofrecen primero (compacta la agenda,
+// evita horas muertas entre clientes). Solo reordena — nunca oculta huecos.
+// Con false/ausente (default) el orden es el cronológico de siempre.
+function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1, compactar = false }) {
   const tz = zone || config.timezone || 'Europe/Madrid';
   const slotMins = slotDurationMinutes ?? 30;
 
@@ -146,14 +150,27 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
     const overlaps = solapan >= (capacity ?? 1);
 
     if (!overlaps && slotEnd <= end && cursor > now) {
+      // Puntuación de adyacencia (P1): +1 si el hueco empieza justo cuando
+      // termina una cita, +1 si termina justo cuando empieza otra.
+      let adyacencia = 0;
+      for (const r of busyRanges) {
+        if (r.end.toMillis() === cursor.toMillis()) adyacencia++;
+        if (r.start.toMillis() === slotEnd.toMillis()) adyacencia++;
+      }
       slots.push({
         startIso: cursor.toISO(),
         endIso: slotEnd.toISO(),
-        label: cursor.toFormat('HH:mm')
+        label: cursor.toFormat('HH:mm'),
+        adyacencia
       });
     }
 
     cursor = slotEnd;
+  }
+
+  // P1: mayor adyacencia primero; a igualdad, orden cronológico (sort estable)
+  if (compactar) {
+    slots.sort((a, b) => b.adyacencia - a.adyacencia);
   }
 
   return slots;
