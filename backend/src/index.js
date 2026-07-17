@@ -30,6 +30,7 @@ const {
 } = require('./db');
 const {
   listEventsForDay,
+  seleccionarHuecos,
   createCalendarEvent,
   deleteCalendarEvent,
   generate30MinSlots
@@ -288,15 +289,16 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     return;
   }
 
-  // P1 premium: con smart_slots activo, huecos adyacentes a citas primero
+  // P1 premium: smart_slots prioriza en la selección y marca con ⭐ los
+  // huecos adyacentes a citas (orden SIEMPRE cronológico — no desordenar)
   const premium = await getPremiumFeatures(storeId);
+  const smartSlots = premium?.smart_slots === true;
   const slotOptions = {
     zone,
     // B2: la duración es la del SERVICIO elegido, no la de la tienda
     slotDurationMinutes: service.durationMinutes,
     openTime: businessHours?.openTime || '08:00',
-    closeTime: businessHours?.closeTime || '17:00',
-    compactar: premium?.smart_slots === true
+    closeTime: businessHours?.closeTime || '17:00'
   };
   const events = await listEventsForDay(storeId, dateIso, zone);
   const slots = generate30MinSlots(dateIso, events, slotOptions);
@@ -309,11 +311,17 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     return;
   }
 
-  const manana = slots.filter((s) => s.label < '14:00').slice(0, 5);
-  const tarde = slots.filter((s) => s.label >= '14:00').slice(0, 10 - Math.min(manana.length, 5));
+  const manana = seleccionarHuecos(slots.filter((s) => s.label < '14:00'), 5, smartSlots);
+  const tarde = seleccionarHuecos(slots.filter((s) => s.label >= '14:00'), 10 - Math.min(manana.length, 5), smartSlots);
+  const fila = (s) => ({
+    id: `ca:res:slot:${s.label.replace(':', '')}`,
+    title: smartSlots && s.adyacencia > 0 ? `${s.label} ⭐` : s.label,
+    description: smartSlots && s.adyacencia > 0 ? 'Recomendado' : undefined
+  });
   const sections = [];
-  if (manana.length) sections.push({ title: 'Mañana', rows: manana.map((s) => ({ id: `ca:res:slot:${s.label.replace(':', '')}`, title: s.label })) });
-  if (tarde.length) sections.push({ title: 'Tarde', rows: tarde.map((s) => ({ id: `ca:res:slot:${s.label.replace(':', '')}`, title: s.label })) });
+  if (manana.length) sections.push({ title: 'Mañana', rows: manana.map(fila) });
+  if (tarde.length) sections.push({ title: 'Tarde', rows: tarde.map(fila) });
+  const hayEstrella = smartSlots && [...manana, ...tarde].some((s) => s.adyacencia > 0);
 
   try {
     await sendInteractiveList({
@@ -322,7 +330,8 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
       to,
       bodyText: `Huecos para «${service.serviceName}» el ${date.setLocale('es').toFormat('cccc dd/MM')}:`,
       buttonText: 'Elegir hora',
-      sections
+      sections,
+      footerText: hayEstrella ? '⭐ = huecos recomendados' : undefined
     });
     await logMessage({
       storeId, phone: to, fromMe: true,
@@ -1112,9 +1121,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       closeTime: businessHours?.closeTime || '17:00'
     };
 
-    // P1 premium: con smart_slots activo, huecos adyacentes a citas primero
+    // P1 premium: smart_slots prioriza y marca con ⭐ (orden cronológico)
     const premium = await getPremiumFeatures(storeId);
-    slotOptions.compactar = premium?.smart_slots === true;
+    const smartSlots = premium?.smart_slots === true;
 
     const events = await listEventsForDay(storeId, iso, zone);
     let slots = generate30MinSlots(iso, events, slotOptions);
@@ -1141,8 +1150,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
-    const top = slots.slice(0, 8);
-    const lines = top.map((s) => s.label);
+    const top = seleccionarHuecos(slots, 8, smartSlots);
+    const lines = top.map((s) => (smartSlots && s.adyacencia > 0 ? `${s.label} ⭐` : s.label));
+    const leyenda = smartSlots && top.some((s) => s.adyacencia > 0) ? '\n⭐ = huecos recomendados' : '';
 
     await sendAndLog({
       storeId,
@@ -1152,6 +1162,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       text:
         `Huecos disponibles para ${iso}${franjaTxt}:\n` +
         lines.map((l) => `- ${l}`).join('\n') +
+        leyenda +
         '\n\n¿Cuál te viene bien? Dime la hora y te la reservo.'
     });
     return;
@@ -1905,6 +1916,38 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
 });
 
 app.use('/api', authMiddleware);
+
+// --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
+const { getAdminOverview, updateStoreFeatures } = require('./admin');
+
+function requireAdmin(req, res) {
+  if (req.isAdmin) return true;
+  res.status(403).json({ error: 'Solo administrador' });
+  return false;
+}
+
+app.get('/api/admin/overview', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    res.json(await getAdminOverview());
+  } catch (err) {
+    console.error('[Admin] Error en /api/admin/overview', err);
+    res.status(500).json({ error: 'Error obteniendo la vista de administración' });
+  }
+});
+
+app.put('/api/admin/stores/:storeId/features', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const merged = await updateStoreFeatures(String(req.params.storeId), req.body?.flags);
+    if (merged === null) return res.status(404).json({ error: 'Tienda no encontrada' });
+    res.json({ premium_features: merged });
+  } catch (err) {
+    if (err?.code === 'FLAGS_INVALIDOS') return res.status(400).json({ error: err.message });
+    console.error('[Admin] Error guardando flags', { storeId: req.params.storeId, err });
+    res.status(500).json({ error: 'Error guardando flags (¿está aplicada migration_premium_features.sql?)' });
+  }
+});
 
 app.get('/api/whatsapp/status', async (req, res) => {
   try {

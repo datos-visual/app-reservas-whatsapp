@@ -109,11 +109,12 @@ async function deleteCalendarEvent(storeId, eventId) {
 // Con capacity=1 (default) el comportamiento es idéntico al histórico.
 // ⚠️ capacity>1 requiere ADEMÁS la migración consciente del índice
 // anti doble-reserva (doc 08 §2) — no activar por configuración a la ligera.
-// compactar (P1 premium `smart_slots`, doc 09): con true, los huecos
-// ADYACENTES a citas existentes se ofrecen primero (compacta la agenda,
-// evita horas muertas entre clientes). Solo reordena — nunca oculta huecos.
-// Con false/ausente (default) el orden es el cronológico de siempre.
-function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1, compactar = false }) {
+// P1 premium (doc 09): cada hueco lleva su puntuación `adyacencia` (0-2:
+// cuántos lados tocan una cita existente). El orden devuelto es SIEMPRE
+// cronológico — quien muestra la lista decide cómo usar la puntuación
+// (marcar con ⭐, priorizar en la selección…). Lección de UX: reordenar
+// una lista de horas confunde; se marca, no se desordena.
+function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1 }) {
   const tz = zone || config.timezone || 'Europe/Madrid';
   const slotMins = slotDurationMinutes ?? 30;
 
@@ -168,12 +169,20 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
     cursor = slotEnd;
   }
 
-  // P1: mayor adyacencia primero; a igualdad, orden cronológico (sort estable)
-  if (compactar) {
-    slots.sort((a, b) => b.adyacencia - a.adyacencia);
-  }
-
   return slots;
+}
+
+/**
+ * P1 premium: elige hasta `n` huecos PRIORIZANDO los adyacentes a citas
+ * (compacta la agenda) pero devuelve la selección en orden cronológico.
+ * Con smartSlots=false es un slice(0, n) normal — comportamiento histórico.
+ */
+function seleccionarHuecos(slots, n, smartSlots = false) {
+  if (!smartSlots) return slots.slice(0, n);
+  return [...slots]
+    .sort((a, b) => (b.adyacencia || 0) - (a.adyacencia || 0))
+    .slice(0, n)
+    .sort((a, b) => (a.label < b.label ? -1 : 1));
 }
 
 function generate30MinSlots(dateIso, events, options = {}) {
@@ -185,6 +194,7 @@ module.exports = {
   createCalendarEvent,
   deleteCalendarEvent,
   generateSlots,
-  generate30MinSlots
+  generate30MinSlots,
+  seleccionarHuecos
 };
 
