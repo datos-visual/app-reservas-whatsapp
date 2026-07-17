@@ -6,6 +6,7 @@ const config = require('./config');
 const {
   logMessage,
   createOrGetCustomer,
+  getCustomerByPhone,
   createAppointment,
   getConfirmedAppointmentByStart,
   getAppointmentsByDate,
@@ -154,9 +155,14 @@ async function sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to, header
 
     const storeConfig = await getStoreConfig(storeId);
     const nombre = storeConfig?.name ? ` de ${storeConfig.name}` : '';
-    const bodyText =
-      (headerText ? `${headerText}\n\n` : '') +
-      `¡Hola! Soy el asistente${nombre}. ¿Qué necesitas?`;
+
+    // Cliente conocido → saludo personal ("¡Hola de nuevo, Marta!")
+    const customer = await getCustomerByPhone(storeId, to);
+    const saludo = customer?.name
+      ? `¡Hola de nuevo, ${customer.name}! Soy el asistente${nombre}. ¿Qué necesitas?`
+      : `¡Hola! Soy el asistente${nombre}. ¿Qué necesitas?`;
+
+    const bodyText = (headerText ? `${headerText}\n\n` : '') + saludo;
 
     await sendInteractiveButtons({
       phoneNumberId,
@@ -227,28 +233,43 @@ async function sendDateButtons({ storeId, phoneNumberId, accessToken, to, servic
   const storeConfig = await getStoreConfig(storeId);
   const zone = storeConfig?.timezone || 'Europe/Madrid';
   const hoy = DateTime.now().setZone(zone);
-  const manana = hoy.plus({ days: 1 });
+
+  // Mini-calendario: lista nativa con los próximos 9 días + "Otro día".
+  // (WhatsApp no tiene date-picker en mensajes interactivos; el real
+  // existe vía WhatsApp Flows — anotado para B6, complica el alta por tienda.)
+  const rows = [];
+  for (let i = 0; i < 9; i++) {
+    const d = hoy.plus({ days: i }).setLocale('es');
+    const title = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : capitalizar(d.toFormat('cccc dd/MM'));
+    rows.push({
+      id: `ca:res:day:${d.toISODate()}`,
+      title: title.slice(0, 24),
+      description: i <= 1 ? capitalizar(d.toFormat('cccc dd/MM')) : undefined
+    });
+  }
+  rows.push({ id: 'ca:res:day:otro', title: 'Otro día', description: 'Escríbeme la fecha que quieras' });
 
   const precio = service.priceEur != null ? ` · ${Number(service.priceEur)} €` : '';
   try {
-    await sendInteractiveButtons({
+    await sendInteractiveList({
       phoneNumberId,
       accessToken,
       to,
       bodyText: `«${service.serviceName}» (${service.durationMinutes} min${precio}). ¿Para qué día?`,
-      buttons: [
-        { id: `ca:res:day:${hoy.toISODate()}`, title: 'Hoy' },
-        { id: `ca:res:day:${manana.toISODate()}`, title: 'Mañana' },
-        { id: 'ca:res:day:otro', title: 'Otro día' }
-      ]
+      buttonText: 'Elegir día',
+      sections: [{ rows }]
     });
     await logMessage({
       storeId, phone: to, fromMe: true,
-      body: `[botones] «${service.serviceName}»: ¿para qué día? [Hoy | Mañana | Otro día]`
+      body: `[lista] «${service.serviceName}»: ¿para qué día? [Hoy … +8 días | Otro día]`
     });
   } catch (err) {
-    console.error('[Flujo] Error enviando botones de fecha', { storeId, err });
+    console.error('[Flujo] Error enviando lista de fechas', { storeId, err });
   }
+}
+
+function capitalizar(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, dateIso }) {
@@ -946,9 +967,13 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
         // Si era un CAMBIO de cita: cancelar la anterior (mejor tener dos un
         // instante que ninguna: primero se reserva la nueva, luego se anula la vieja)
-        let textoConfirmacion =
-          `¡Hecho! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
-          `queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
+        // Cliente conocido → confirmar indicando a nombre de quién queda
+        // (y dejar la puerta abierta a corregirlo si es para otra persona)
+        let textoConfirmacion = customer?.name
+          ? `¡Hecho, ${customer.name}! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
+            `queda confirmada para el ${fmtHuman(startIso)}, a tu nombre. ¡Te esperamos!`
+          : `¡Hecho! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
+            `queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
 
         // Primera reserva sin nombre → pedirlo (para la agenda del negocio)
         const pedirNombre = !customer?.name;

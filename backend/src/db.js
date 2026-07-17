@@ -70,6 +70,29 @@ async function createOrGetCustomer(storeId, phone) {
   }
 }
 
+/**
+ * Lectura sin efectos: devuelve el customer si existe, null si no.
+ * (createOrGetCustomer crea fila — esto es para saludos/consultas.)
+ */
+async function getCustomerByPhone(storeId, phone) {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('phone', phone)
+      .limit(1)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') {
+      console.error('[DB] Error leyendo customer', { storeId, phone, error });
+    }
+    return data || null;
+  } catch (err) {
+    console.error('[DB] Excepción en getCustomerByPhone', { storeId, phone, err });
+    return null;
+  }
+}
+
 async function createAppointment({ storeId, customerId, start, end, googleEventId, source, serviceId = null, resourceId = null, extra = null }) {
   try {
     const { data, error } = await supabase
@@ -598,6 +621,7 @@ module.exports = {
   supabase,
   logMessage,
   createOrGetCustomer,
+  getCustomerByPhone,
   createAppointment,
   getConfirmedAppointmentByStart,
   getAppointmentsByDate,
