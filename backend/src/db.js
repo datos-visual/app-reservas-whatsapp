@@ -274,14 +274,34 @@ async function getWhatsappAccountByStoreId(storeId) {
  */
 async function getPremiumFeatures(storeId) {
   try {
+    // A2: efectivo = contratado (admin/plan) MENOS desactivado (elección de
+    // la tienda desde su panel). Fallback tolerante si falta alguna columna.
+    let contratado = {};
+    let desactivado = {};
     const { data, error } = await supabase
       .from('stores')
-      .select('premium_features')
+      .select('premium_features, features_disabled')
       .eq('id', storeId)
       .limit(1)
       .maybeSingle();
-    if (error) return {};
-    return data?.premium_features || {};
+    if (!error && data) {
+      contratado = data.premium_features || {};
+      desactivado = data.features_disabled || {};
+    } else {
+      const { data: d2, error: e2 } = await supabase
+        .from('stores')
+        .select('premium_features')
+        .eq('id', storeId)
+        .limit(1)
+        .maybeSingle();
+      if (e2) return {};
+      contratado = d2?.premium_features || {};
+    }
+    const efectivo = { ...contratado };
+    for (const k of Object.keys(desactivado)) {
+      if (desactivado[k]) delete efectivo[k];
+    }
+    return efectivo;
   } catch (err) {
     return {};
   }

@@ -393,6 +393,9 @@ alter table public.resources enable row level security;
 alter table public.stores
   add column if not exists premium_features jsonb not null default '{}'::jsonb;
 
+alter table public.stores
+  add column if not exists features_disabled jsonb not null default '{}'::jsonb;
+
 -- =====================================================================
 -- VERIFICACIÓN RÁPIDA tras ejecutar (debe devolver 15 tablas):
 --   select table_name from information_schema.tables

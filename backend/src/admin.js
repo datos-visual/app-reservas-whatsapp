@@ -151,4 +151,69 @@ async function updateStoreFeatures(storeId, flags) {
   return merged;
 }
 
-module.exports = { getAdminOverview, updateStoreFeatures, PREMIUM_FLAGS };
+/**
+ * A2 — estado de features para el PANEL DE LA TIENDA (dos niveles, doc 10):
+ * contratado (flags del plan; solo admin/Stripe) y desactivado (elección de
+ * la tienda). Un módulo corre si contratado && !desactivado.
+ */
+async function getStoreFeatureState(storeId) {
+  let contratado = {};
+  let desactivado = {};
+  try {
+    const { data, error } = await supabase
+      .from('stores')
+      .select('premium_features, features_disabled')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+    if (!error && data) {
+      contratado = data.premium_features || {};
+      desactivado = data.features_disabled || {};
+    } else if (error) {
+      // BD sin la columna nueva: reintentar solo con la vieja (tolerancia)
+      const { data: d2 } = await supabase
+        .from('stores')
+        .select('premium_features')
+        .eq('id', storeId)
+        .limit(1)
+        .maybeSingle();
+      contratado = d2?.premium_features || {};
+    }
+  } catch (err) {
+    console.warn('[Admin] Excepción en getStoreFeatureState', { storeId, err });
+  }
+  return { contratado, desactivado, disponibles: PREMIUM_FLAGS };
+}
+
+/**
+ * La tienda activa/desactiva un flag QUE YA TIENE CONTRATADO.
+ * Devuelve: 'ok' | 'no_contratado' | 'flag_invalido' | null (tienda no existe).
+ */
+async function setStoreFeatureActive(storeId, flag, activo) {
+  if (!PREMIUM_FLAGS.includes(flag)) return 'flag_invalido';
+
+  const { data: store, error } = await supabase
+    .from('stores')
+    .select('id, premium_features, features_disabled')
+    .eq('id', storeId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!store) return null;
+  if (store.premium_features?.[flag] !== true) return 'no_contratado';
+
+  const desactivado = { ...(store.features_disabled || {}) };
+  if (activo) delete desactivado[flag];
+  else desactivado[flag] = true;
+
+  const { error: upErr } = await supabase
+    .from('stores')
+    .update({ features_disabled: desactivado })
+    .eq('id', storeId);
+  if (upErr) throw upErr;
+
+  console.log('[Admin] Tienda cambió activación de feature', { storeId, flag, activo });
+  return 'ok';
+}
+
+module.exports = { getAdminOverview, updateStoreFeatures, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };

@@ -1918,7 +1918,35 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
 app.use('/api', authMiddleware);
 
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
-const { getAdminOverview, updateStoreFeatures } = require('./admin');
+const { getAdminOverview, updateStoreFeatures, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
+
+// --- A2: la TIENDA activa/desactiva servicios de su plan (doc 10 §3) ---
+app.get('/api/store/features', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.json(await getStoreFeatureState(storeId));
+  } catch (err) {
+    console.error('[API] Error en GET /api/store/features', err);
+    res.status(500).json({ error: 'Error obteniendo servicios' });
+  }
+});
+
+app.put('/api/store/features', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const { flag, activo } = req.body || {};
+    const resultado = await setStoreFeatureActive(storeId, String(flag || ''), activo === true);
+    if (resultado === 'flag_invalido') return res.status(400).json({ error: 'Servicio desconocido' });
+    if (resultado === 'no_contratado') return res.status(403).json({ error: 'Este servicio no está incluido en tu plan' });
+    if (resultado === null) return res.status(404).json({ error: 'Tienda no encontrada' });
+    res.json(await getStoreFeatureState(storeId));
+  } catch (err) {
+    console.error('[API] Error en PUT /api/store/features', err);
+    res.status(500).json({ error: 'Error guardando el cambio (¿migración premium aplicada?)' });
+  }
+});
 
 function requireAdmin(req, res) {
   if (req.isAdmin) return true;
