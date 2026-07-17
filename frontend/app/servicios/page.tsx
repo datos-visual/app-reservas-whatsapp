@@ -106,24 +106,24 @@ export default function ServiciosPage() {
   return (
     <main className="mx-auto max-w-2xl p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Servicios de tu plan</h1>
+        <h1 className="text-2xl font-bold text-white">Servicios de tu plan</h1>
         <button
           onClick={() => router.push('/')}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+          className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
         >
           ← Volver al panel
         </button>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-      {cargando && <p className="text-sm text-gray-500">Cargando…</p>}
+      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {cargando && <p className="text-sm text-slate-400">Cargando…</p>}
 
       {!cargando && state && (
         <>
           {contratados.length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
-              <p className="text-gray-700">Tu plan actual no incluye servicios premium.</p>
-              <p className="mt-1 text-sm text-gray-500">
+            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6 text-center">
+              <p className="text-slate-200">Tu plan actual no incluye servicios premium.</p>
+              <p className="mt-1 text-sm text-slate-400">
                 Si quieres probar alguno, escríbenos y te lo activamos.
               </p>
             </div>
@@ -133,10 +133,10 @@ export default function ServiciosPage() {
                 const activo = state.desactivado[f] !== true;
                 const info = ETIQUETAS[f] || { nombre: f, descripcion: '' };
                 return (
-                  <div key={f} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                  <div key={f} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-4">
                     <div className="pr-4">
-                      <p className="font-medium">{info.nombre}</p>
-                      <p className="text-sm text-gray-500">{info.descripcion}</p>
+                      <p className="font-medium text-white">{info.nombre}</p>
+                      <p className="text-sm text-slate-400">{info.descripcion}</p>
                     </div>
                     <button
                       onClick={() => toggle(f, !activo)}
@@ -144,7 +144,7 @@ export default function ServiciosPage() {
                       className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
                         activo
                           ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                       } ${guardando === f ? 'opacity-50' : ''}`}
                     >
                       {guardando === f ? '…' : activo ? 'Activado' : 'Desactivado'}
@@ -157,19 +157,19 @@ export default function ServiciosPage() {
 
           {noContratados.length > 0 && contratados.length > 0 && (
             <div className="mt-8">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 Disponibles en planes superiores
               </p>
               <div className="space-y-2">
                 {noContratados.map((f) => {
                   const info = ETIQUETAS[f] || { nombre: f, descripcion: '' };
                   return (
-                    <div key={f} className="flex items-center justify-between rounded-lg border border-dashed border-gray-200 p-3 opacity-60">
+                    <div key={f} className="flex items-center justify-between rounded-lg border border-dashed border-slate-700 p-3 opacity-70">
                       <div className="pr-4">
-                        <p className="text-sm font-medium">{info.nombre}</p>
-                        <p className="text-xs text-gray-500">{info.descripcion}</p>
+                        <p className="text-sm font-medium text-slate-200">{info.nombre}</p>
+                        <p className="text-xs text-slate-400">{info.descripcion}</p>
                       </div>
-                      <span className="shrink-0 text-xs text-gray-400">🔒 No incluido</span>
+                      <span className="shrink-0 text-xs text-slate-400">🔒 No incluido</span>
                     </div>
                   );
                 })}

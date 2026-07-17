@@ -105,8 +105,8 @@ export default function AdminPage() {
   if (!entrado) {
     return (
       <main className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-bold mb-2">Backoffice CanalAgenda</h1>
-        <p className="text-sm text-gray-600 mb-6">
+        <h1 className="text-2xl font-bold mb-2 text-white">Backoffice CanalAgenda</h1>
+        <p className="text-sm text-slate-300 mb-6">
           Acceso solo para el administrador. El token no se guarda en el servidor.
         </p>
         <form
@@ -121,7 +121,7 @@ export default function AdminPage() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="ADMIN_TOKEN"
-            className="w-full rounded border border-gray-300 px-3 py-2"
+            className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white placeholder:text-slate-500"
           />
           <button
             type="submit"
@@ -130,7 +130,7 @@ export default function AdminPage() {
           >
             {cargando ? 'Entrando…' : 'Entrar'}
           </button>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
         </form>
       </main>
     );
@@ -142,8 +142,8 @@ export default function AdminPage() {
     <main className="mx-auto max-w-5xl p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Backoffice CanalAgenda</h1>
-          <p className="text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-white">Backoffice CanalAgenda</h1>
+          <p className="text-sm text-slate-300">
             {tiendas.length} tienda(s) ·{' '}
             {totalIncidencias === 0 ? (
               <span className="text-emerald-700">sin incidencias</span>
@@ -156,7 +156,7 @@ export default function AdminPage() {
           <button
             onClick={() => cargar(token)}
             disabled={cargando}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
+            className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
           >
             {cargando ? 'Actualizando…' : 'Actualizar'}
           </button>
@@ -166,29 +166,29 @@ export default function AdminPage() {
               setEntrado(false);
               setToken('');
             }}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+            className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
           >
             Salir
           </button>
         </div>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
       <div className="space-y-4">
         {tiendas.map((t) => (
-          <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div key={t.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="font-semibold">
+                <h2 className="font-semibold text-white">
                   {t.name}{' '}
                   {t.vertical_code && (
-                    <span className="ml-1 rounded bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-600">
+                    <span className="ml-1 rounded bg-slate-800 px-2 py-0.5 text-xs font-normal text-slate-300">
                       {t.vertical_code}
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-gray-500">{t.id}</p>
+                <p className="text-xs text-slate-400">{t.id}</p>
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs">
                 <span className={`rounded px-2 py-0.5 ${t.whatsapp.conectado && t.whatsapp.activo ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
@@ -197,7 +197,7 @@ export default function AdminPage() {
                 <span className={`rounded px-2 py-0.5 ${t.calendar.conectado ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                   Calendar {t.calendar.conectado ? 'OK' : 'sin conectar'}
                 </span>
-                <span className="rounded bg-gray-100 px-2 py-0.5 text-gray-700">
+                <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-300">
                   Citas: {t.citas.ultimos7dias} últ. 7d · {t.citas.proximos7dias} próx. 7d
                 </span>
               </div>
@@ -208,7 +208,7 @@ export default function AdminPage() {
                 {t.incidencias.map((inc, i) => (
                   <li
                     key={i}
-                    className={`rounded px-2 py-1 text-xs ${inc.nivel === 'error' ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'}`}
+                    className={`rounded px-2 py-1 text-xs ${inc.nivel === 'error' ? 'bg-red-900/40 text-red-200' : 'bg-amber-900/40 text-amber-200'}`}
                   >
                     {inc.nivel === 'error' ? '⛔' : '⚠️'} {inc.texto}
                   </li>
@@ -216,8 +216,8 @@ export default function AdminPage() {
               </ul>
             )}
 
-            <div className="mt-4 border-t border-gray-100 pt-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <div className="mt-4 border-t border-slate-800 pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
                 Servicios premium (doc 09)
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -227,7 +227,7 @@ export default function AdminPage() {
                   return (
                     <label
                       key={f.key}
-                      className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${activo ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'} ${ocupado ? 'opacity-50' : ''}`}
+                      className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${activo ? 'border-emerald-500 bg-emerald-900/40 text-emerald-100' : 'border-slate-700 text-slate-200'} ${ocupado ? 'opacity-50' : ''}`}
                     >
                       <input
                         type="checkbox"
