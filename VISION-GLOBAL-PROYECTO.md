@@ -2,11 +2,14 @@
 
 > **Propósito de este documento:** dar a cualquier persona (o conversación de IA)
 > el contexto completo del proyecto: qué es, por qué existe, cómo está construido,
-> qué está hecho y verificado, y qué queda. Actualizado: **14 de julio de 2026**.
+> qué está hecho y verificado, y qué queda. Actualizado: **17 de julio de 2026**.
 > Complementa a `INSTRUCCIONES-PROYECTO.md` (reglas fijas), `GUIA-PASO-A-PASO.md`
-> (plan histórico de saneamiento) y `docs/08-especificacion-guiones-verticales.md`
+> (plan histórico de saneamiento), `docs/08-especificacion-guiones-verticales.md`
 > (especificación vigente del flujo guiado y los verticales — **el plan activo de
-> desarrollo es su orden de bloques B1-B7**). Ante conflicto, INSTRUCCIONES manda.
+> desarrollo es su orden de bloques B1-B7**) y `docs/09-roadmap-premium-peluqueria.md`
+> (mejoras premium evaluadas y su diseño). Ante conflicto, INSTRUCCIONES manda.
+> **Si eres una conversación/modelo nuevo: empieza por el §10 (protocolo de
+> continuidad).**
 
 ---
 
@@ -294,34 +297,55 @@ missed-call (M1-M6) están **construidos, desplegados y probados**:
   bienvenida con botones.
 - ✅ Doc 08 (especificación de flujo guiado y verticales, de la conversación
   paralela de negocio) leído y reconciliado con lo construido.
+- ✅ **B2 completo y probado en real (17-jul):** migración de catálogo
+  (`services`, `resources`, `vertical_code`, columnas en `appointments`) +
+  seed peluquería (7 servicios) + flujo guiado Servicio→Día→Hueco→Confirmar.
+  Verificado: Tinte de 120 min crea evento de 2 h en Calendar con nombre de
+  servicio y cliente. Lección aprendida: **SQL primero, deploy después**
+  (el insert de citas quedó además tolerante a BD sin migrar).
+- ✅ **B2.1/B2.2 (17-jul):** lista de días tipo mini-calendario (Hoy, Mañana
+  y 7 días siguientes + "Otro día"; el date-picker real existe vía WhatsApp
+  Flows — anotado para B6, complica el alta por tienda) y personalización:
+  saludo "¡Hola de nuevo, {nombre}!" y confirmación "a tu nombre" cuando el
+  cliente es conocido (`getCustomerByPhone`, lectura sin efectos).
+- ✅ **Doc 09:** seis ideas premium del fundador evaluadas y diseñadas
+  (compactación de agenda, reactivación por ciclo, lista de espera, modo
+  oferta, ficha de estilo, post-venta) con paquetización y motor proactivo
+  común. NO aprobadas para implementar aún.
 
 **Tienda demo:** `store_id = 0aa6d8d7-7be8-4292-8a6b-cac0a0c917da` (usuario
 panel: piloto1@test.com). **Plantillas Meta:** `canalagenda_missed_call_v2` y
-`canalagenda_reminder_v1` EN REVISIÓN (14-jul); la v1 aprobada no sirve (botón
-de permiso de llamada). **Twilio:** cuenta upgraded, bundle español APROBADO,
-número belga de pruebas pendiente de compra/webhook (España no se vende en
-autoservicio: ticket/número exclusivo para el +34 de producción).
+`canalagenda_reminder_v1` **APROBADAS** (16-jul); activarlas requiere los dos
+UPDATE de `template_status` (+`template_name` a v2 en missed_call_settings) —
+verificar si ya se ejecutaron. La v1 de missed-call NO sirve (botón de permiso
+de llamada). **Twilio:** cuenta upgraded con credenciales Live; España no se
+vende en autoservicio → decisión del fundador: **solicitar número exclusivo
+español y esperar** (módulo de voz aparcado; al retomarlo: SID/token en
+Render, webhook de voz, insert del DID en `store_phone_numbers`).
 
 ---
 
 ## 7. Qué queda por hacer
 
-### 7.1 Desarrollo — plan activo: bloques del doc 08 (orden B2→B7)
-1. **B2 ← SIGUIENTE:** migración de catálogo (`services`, `resources`,
-   `stores.vertical_code`, `appointments.service_id/resource_id/extra`) + seed
-   peluquería + flujo guiado Servicio→Día→Hueco→Confirmar con **duración
-   variable por servicio** (el Tinte de 120 min ocupa 2 h). Guardas de diseño
-   acordadas: la función de disponibilidad nace con parámetro de capacidad
-   (default 1, para B5/talleres) y el índice anti doble-reserva NO se toca
-   hasta la migración consciente de multi-recurso.
-2. **B3:** mapear payloads `ca:apt:*` (la lógica conversacional ya existe).
-3. **B4:** evolucionar R1 al modelo `appointment_reminders` del doc con
-   plantillas 24h/2h que incluyen el SERVICIO (requiere B2).
-4. **B5:** recursos/empleados (capacidad real), paquete taller (franjas,
-   matrícula/avería, rama urgencia), plantilla coche listo.
-5. **B6:** panel de servicios + **configurador guiado de vertical** en el
-   onboarding (pieza de producto, ver §2).
-6. **B7:** post-cita (reseña) y recompra ITV — marketing con opt-out estricto.
+### 7.1 Desarrollo — plan activo: bloques del doc 08 (B2 ✅ · orden B3→B7)
+1. **B3 ← SIGUIENTE:** botones [Cambiar]/[Cancelar] en "Mis citas" con
+   payloads `ca:apt:*` (la lógica conversacional ya existe; es mapear).
+   Mejora fina anotada: avisar si el cliente escribe día de semana y fecha
+   incongruentes ("el martes 22" cuando el 22 es miércoles).
+2. **B4:** evolucionar R1 al modelo `appointment_reminders` del doc con
+   plantillas 24h/2h que incluyen el SERVICIO (B2 ya lo permite).
+3. **B5:** recursos/empleados (capacidad real — `generateSlots` ya acepta
+   `capacity`), paquete taller (franjas, matrícula/avería, rama urgencia),
+   plantilla coche listo. ⚠️ multi-recurso exige la migración consciente del
+   índice anti doble-reserva.
+4. **B6:** panel de servicios + **configurador guiado de vertical** en el
+   onboarding (pieza de producto, ver §2) — aquí encajan el "onboarding
+   conversacional" y el date-picker de WhatsApp Flows (doc 09 §P0).
+5. **B7:** post-cita (reseña) y recompra ITV — implementar sobre el **motor
+   proactivo** del doc 09 §4 (no construir un sistema de envío aparte).
+6. **Premium peluquería (doc 09, intercalable):** P1 compactación de agenda
+   y la infra de flags `premium_features` pueden entrar en cualquier momento
+   (riesgo cero); el resto en el orden del doc 09 §5.
 
 ### 7.2 Operación inmediata (gestiones del fundador)
 1. **Meta:** esperando aprobación de `canalagenda_missed_call_v2` y
@@ -405,3 +429,56 @@ costes:** free tier o céntimos; coste variable acotado por diseño.
 incrementos pequeños con paso de verificación (Definition of Done).
 10. El perfil del dueño del proyecto es no-técnico en infra: las instrucciones
 operativas deben ser paso a paso, con pantallas y comandos exactos.
+
+---
+
+## 10. Protocolo de continuidad (conversación o modelo de IA nuevo)
+
+El proyecto se ha desarrollado íntegramente en conversaciones con IA. Si esta
+conversación cambia de modelo o empieza de cero, **el contexto vive en estos
+documentos, no en la memoria de la conversación**. Protocolo de arranque:
+
+### 10.1 Orden de lectura obligatorio
+1. `INSTRUCCIONES-PROYECTO.md` — reglas inviolables (manda sobre todo).
+2. `VISION-GLOBAL-PROYECTO.md` (este) — qué es, arquitectura, estado, plan.
+3. `docs/08-especificacion-guiones-verticales.md` — plan activo B1-B7.
+4. `docs/09-roadmap-premium-peluqueria.md` — premium evaluado (si aplica).
+5. `database/schema_consolidated.sql` — foto real de la BD (no `schema.sql`).
+6. El código de la zona a tocar, ENTERO, antes de editar.
+
+### 10.2 Método de trabajo que ha funcionado (mantener)
+- Estudiar → proponer plan → **esperar OK del fundador** → incrementos
+  pequeños → verificación (DoD) → el fundador prueba EN REAL por WhatsApp y
+  aporta capturas; sus fallos alimentan la siguiente iteración.
+- Instrucciones operativas para el fundador: numeradas, con el comando o la
+  pantalla exacta, en español. Él ejecuta el SQL en Supabase, los `git push`
+  y las gestiones de consolas (Meta/Twilio/Render/cron-job.org).
+- **Orden sagrado en cambios con BD: migración SQL primero, deploy después.**
+- Migraciones idempotentes + reflejar SIEMPRE en `schema_consolidated.sql`.
+
+### 10.3 Trampas conocidas del entorno (aprendidas a golpes)
+- **Caché del sandbox:** los ficheros MODIFICADOS pueden servirse rancios o
+  truncados en el shell Linux (a veces parsean pero pierden exports). Lo
+  autoritativo es Read/Grep sobre la carpeta de Windows; para probar lógica,
+  copiar a /tmp y testear allí. Un `node --check` solo es concluyente si se
+  verificó que el mount está fresco (grep de un cambio recién hecho).
+- El repo real está en `GIT/app-whatsapp` (la carpeta `APP-RESERVAS-WHATSAPP`
+  raíz es un espejismo casi vacío).
+- Identidad git: SOLO `datos-visual` (credenciales de otro usuario en el
+  Credential Manager de Windows causaron pushes denegados).
+- Meta renombró categorías de plantillas ("Utilidad"→"Servicio"); la opción
+  "Solicitud de permisos de llamada" produce plantillas inservibles aquí.
+- Los webhooks de Meta/Twilio reintentan: cualquier handler nuevo necesita
+  idempotencia desde el primer día.
+- `pip` en el sandbox requiere `--break-system-packages`.
+
+### 10.4 Estado de credenciales y servicios (a 17-jul-2026)
+- Deploy automático: push a `main` → Render (backend y frontend).
+- Cron: cron-job.org cada 15 min → `/internal/missed-calls/dispatch` con
+  cabecera `x-internal-token` (despacha missed-calls + recordatorios + avisos
+  de tokens).
+- NLU: claves Gemini/Mistral en env de Render (`NLU_PROVIDERS`).
+- Pendientes de seguridad del fundador: rotar token GitHub y ADMIN_TOKEN
+  definitivos; sacar `CONFIG/config.txt`, `JSON/` y ZIPs con `.env` de la
+  carpeta compartida.
+- Twilio aparcado esperando número español (§6).
