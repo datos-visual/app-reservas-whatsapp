@@ -37,6 +37,7 @@ const {
 } = require('./calendar');
 const {
   sendTextMessage,
+  sendTemplateMessage,
   verifyWebhook,
   extractIncomingMessages,
   verifySignature,
@@ -411,15 +412,39 @@ async function notificarListaEspera({ storeId, phoneNumberId, accessToken, start
     if (!entry?.customers?.phone) return;
 
     await markWaitlistNotified(entry.id);
+    const telefono = entry.customers.phone;
     const fecha = d.setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
     const saludo = entry.customers.name ? `, ${entry.customers.name}` : '';
-    await sendAndLog({
-      storeId, phoneNumberId, accessToken, to: entry.customers.phone,
-      text:
-        `¡Buenas noticias${saludo}! Se acaba de liberar un hueco el ${fecha}. ` +
-        `Si lo quieres, escríbeme «resérvame el ${d.toFormat('dd/MM')} a las ${d.toFormat('HH:mm')}» y es tuyo — ` +
-        'el primero que confirme se lo queda.'
-    });
+
+    // Dejar preparada la respuesta directa: "sí"/[Lo quiero] → reserva el hueco
+    const offerExpiresAt = Date.now() + 6 * 60 * 60 * 1000;
+    await setConversationState(storeId, telefono, {
+      waitlistOffer: { dateIso: d.toISODate(), time: d.toFormat('HH:mm'), expiresAt: offerExpiresAt }
+    }, offerExpiresAt);
+
+    const texto =
+      `¡Buenas noticias${saludo}! Se acaba de liberar un hueco el ${fecha}. ` +
+      'Si lo quieres, responde "sí" y te lo reservo — el primero que confirme se lo queda.';
+
+    try {
+      // Dentro de la ventana de 24 h: texto libre (gratis)
+      await sendTextMessage({ phoneNumberId, accessToken, to: telefono, text: texto });
+      await logMessage({ storeId, phone: telefono, body: texto, fromMe: true });
+    } catch (errTexto) {
+      // Ventana cerrada (o rechazo) → plantilla canalagenda_waitlist_v1
+      // (categoría MARKETING). Si aún no está aprobada, este envío también
+      // falla y queda registrado — comportamiento previo, sin romper nada.
+      console.log('[Waitlist] Texto libre rechazado; intentando plantilla', { storeId });
+      const negocio = storeConfig?.name || 'tu negocio';
+      await sendTemplateMessage({
+        phoneNumberId, accessToken, to: telefono,
+        templateName: 'canalagenda_waitlist_v1',
+        languageCode: 'es',
+        bodyParams: [negocio, d.setLocale('es').toFormat('cccc dd/MM'), d.toFormat('HH:mm')],
+        buttonPayloads: ['WAITLIST_YES', 'WAITLIST_NO']
+      });
+      await logMessage({ storeId, phone: telefono, body: `[plantilla waitlist] hueco ${fecha}`, fromMe: true });
+    }
     console.log('[Waitlist] Aviso de hueco liberado enviado', { storeId, waitlistId: entry.id, fecha: d.toISODate() });
   } catch (err) {
     console.error('[Waitlist] Error avisando hueco liberado (la cancelación NO se ve afectada)', { storeId, err });
@@ -910,6 +935,17 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       text: 'Perfecto, tu cita se mantiene tal cual.'
     });
     return;
+  }
+
+  // P3.2: oferta de lista de espera pendiente → "sí" reserva el hueco directo
+  const waitlistOffer = pending?.state?.waitlistOffer || null;
+  if (waitlistOffer && /^(si|sí|s|vale|ok|okey|claro|lo quiero|quiero|perfecto|de acuerdo|va)[.!]?$/i.test(lower)) {
+    await deleteConversationState(storeId, from);
+    return handleIncomingText({
+      storeId, phoneNumberId, accessToken, from,
+      body: `CITA ${waitlistOffer.dateIso} ${waitlistOffer.time}`,
+      nluAttempted: true
+    });
   }
 
   // Elección de cita pendiente de cancelar ("la del miércoles", "la segunda", "2")
@@ -1842,6 +1878,37 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
  * Botones del módulo missed-call (payloads de la plantilla). Devuelve true
  * si el payload era conocido y ya se ha respondido; false → tratar como texto.
  */
+/** Botones de la plantilla de LISTA DE ESPERA ([Lo quiero] / [No me interesa]). */
+async function handleWaitlistButton({ storeId, phoneNumberId, accessToken, from, payload }) {
+  const pending = await getConversationState(storeId, from);
+  const offer = pending?.state?.waitlistOffer || null;
+
+  if (payload === 'WAITLIST_YES') {
+    if (!offer) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Ese hueco ya no está disponible (alguien lo cogió antes o pasó el tiempo). Escríbeme y buscamos otro que te encaje.'
+      });
+      return true;
+    }
+    await deleteConversationState(storeId, from);
+    await handleIncomingText({
+      storeId, phoneNumberId, accessToken, from,
+      body: `CITA ${offer.dateIso} ${offer.time}`,
+      nluAttempted: true
+    });
+    return true;
+  }
+
+  // WAITLIST_NO: rechaza ESTE hueco (no es una baja de comunicaciones)
+  await deleteConversationState(storeId, from);
+  await sendAndLog({
+    storeId, phoneNumberId, accessToken, to: from,
+    text: 'De acuerdo, ese hueco queda libre para otra persona. Si quieres que miremos otro día, dímelo.'
+  });
+  return true;
+}
+
 /** Botones de los RECORDATORIOS de cita ([Confirmo] / [Cancelar cita]). */
 async function handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload }) {
   const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
@@ -1998,6 +2065,9 @@ async function processWebhookBody(body, { requestId }) {
         }
         if (!handled && payload.startsWith('REMINDER_')) {
           handled = await handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload });
+        }
+        if (!handled && (payload === 'WAITLIST_YES' || payload === 'WAITLIST_NO')) {
+          handled = await handleWaitlistButton({ storeId, phoneNumberId, accessToken, from, payload });
         }
         if (!handled) {
           handled = await handleMissedCallButton({ storeId, phoneNumberId, accessToken, from, payload });
@@ -2211,7 +2281,7 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
 app.use('/api', authMiddleware);
 
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
-const { getAdminOverview, updateStoreFeatures, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
+const { getAdminOverview, updateStoreFeatures, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
 const catalog = require('./catalog');
 
 // --- B6: catálogo autoservicio de la tienda ---
@@ -2313,6 +2383,16 @@ app.get('/api/admin/overview', async (req, res) => {
   } catch (err) {
     console.error('[Admin] Error en /api/admin/overview', err);
     res.status(500).json({ error: 'Error obteniendo la vista de administración' });
+  }
+});
+
+app.get('/api/admin/stores/:storeId/activity', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    res.json(await getStoreActivity(String(req.params.storeId)));
+  } catch (err) {
+    console.error('[Admin] Error en /api/admin/stores/:id/activity', err);
+    res.status(500).json({ error: 'Error obteniendo la actividad' });
   }
 });
 

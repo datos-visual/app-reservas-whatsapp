@@ -152,6 +152,35 @@ async function updateStoreFeatures(storeId, flags) {
 }
 
 /**
+ * A1.2 — actividad reciente de UNA tienda para diagnóstico desde /admin:
+ * últimos mensajes (conversaciones reales) y próximas citas. Solo admin.
+ */
+async function getStoreActivity(storeId) {
+  const [msgs, citas] = await Promise.all([
+    (async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('phone, content, from_me, created_at')
+        .eq('store_id', storeId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      return error ? [] : (data || []);
+    })(),
+    (async () => {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('id, start_at, end_at, status, source, customers ( phone, name )')
+        .eq('store_id', storeId)
+        .gte('start_at', new Date().toISOString())
+        .order('start_at', { ascending: true })
+        .limit(10);
+      return error ? [] : (data || []);
+    })()
+  ]);
+  return { mensajes: msgs, citas };
+}
+
+/**
  * A2 — estado de features para el PANEL DE LA TIENDA (dos niveles, doc 10):
  * contratado (flags del plan; solo admin/Stripe) y desactivado (elección de
  * la tienda). Un módulo corre si contratado && !desactivado.
@@ -216,4 +245,4 @@ async function setStoreFeatureActive(storeId, flag, activo) {
   return 'ok';
 }
 
-module.exports = { getAdminOverview, updateStoreFeatures, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };
+module.exports = { getAdminOverview, updateStoreFeatures, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };

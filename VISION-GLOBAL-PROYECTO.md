@@ -346,6 +346,19 @@ missed-call (M1-M6) están **construidos, desplegados y probados**:
   **`/onboarding/vertical`** tras crear la tienda (elige peluquería/taller/
   vacío y copia la semilla EDITABLE). Validación testada en /tmp.
   Pendiente de B6: date-picker por WhatsApp Flows y pulido del configurador.
+- ✅ **P3.2 (19-jul):** el aviso de lista de espera intenta texto libre y,
+  si Meta lo rechaza (ventana 24 h cerrada), cae a la plantilla
+  `canalagenda_waitlist_v1` (payloads WAITLIST_YES/NO) — en cuanto Meta la
+  apruebe funcionará solo, sin tocar código. Estado `waitlistOffer` (6 h):
+  responder "sí" o [Lo quiero] reserva el hueco directamente vía CITA.
+- ✅ **A3 (19-jul):** "Ver actividad" por tienda en `/admin` (últimos 30
+  mensajes + próximas 10 citas) y **`docs/runbook-incidencias.md`** —
+  síntoma→causa→solución de todo lo aprendido (leerlo ante cualquier fallo).
+- 📤 **Plantillas enviadas a Meta el 19-jul:** `canalagenda_reminder_v2`
+  (Servicio, 4 variables con servicio), `canalagenda_waitlist_v1`
+  (Meta la forzó a MARKETING) y `canalagenda_reactivacion_v1` (Marketing).
+  Al aprobar: reminder_v2 requiere B4 (código nuevo); waitlist_v1 funciona
+  sola (P3.2 ya la usa); reactivacion_v1 espera al motor proactivo (P2).
 
 **Tienda demo:** `store_id = 0aa6d8d7-7be8-4292-8a6b-cac0a0c917da` (usuario
 panel: piloto1@test.com). **Plantillas Meta:** `canalagenda_missed_call_v2` y

@@ -41,6 +41,7 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState<string | null>(null);
+  const [actividad, setActividad] = useState<Record<string, { mensajes: any[]; citas: any[] } | null>>({});
 
   useEffect(() => {
     const t = sessionStorage.getItem('ca_admin_token');
@@ -76,6 +77,26 @@ export default function AdminPage() {
       setError('No se pudo conectar con el backend.');
     } finally {
       setCargando(false);
+    }
+  }
+
+  async function toggleActividad(storeId: string) {
+    if (actividad[storeId]) {
+      setActividad((a) => ({ ...a, [storeId]: null }));
+      return;
+    }
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/stores/${storeId}/activity`, {
+        headers: { 'x-admin-token': token }
+      });
+      if (!r.ok) {
+        setError('No se pudo cargar la actividad.');
+        return;
+      }
+      const data = await r.json();
+      setActividad((a) => ({ ...a, [storeId]: data }));
+    } catch {
+      setError('No se pudo conectar con el backend.');
     }
   }
 
@@ -215,6 +236,44 @@ export default function AdminPage() {
                 ))}
               </ul>
             )}
+
+            <div className="mt-3">
+              <button
+                onClick={() => toggleActividad(t.id)}
+                className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                {actividad[t.id] ? 'Ocultar actividad' : 'Ver actividad'}
+              </button>
+              {actividad[t.id] && (
+                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Próximas citas</p>
+                    {actividad[t.id]!.citas.length === 0 && <p className="text-xs text-slate-500">Ninguna.</p>}
+                    <ul className="space-y-1">
+                      {actividad[t.id]!.citas.map((c: any) => (
+                        <li key={c.id} className="rounded bg-slate-800/60 px-2 py-1 text-xs text-slate-300">
+                          {new Date(c.start_at).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          {' — '}{c.customers?.name || c.customers?.phone || '¿?'}
+                          <span className="ml-1 text-slate-500">({c.status})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Últimos mensajes</p>
+                    {actividad[t.id]!.mensajes.length === 0 && <p className="text-xs text-slate-500">Ninguno.</p>}
+                    <ul className="max-h-64 space-y-1 overflow-y-auto">
+                      {actividad[t.id]!.mensajes.map((m: any, i: number) => (
+                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-slate-800/60 text-slate-400' : 'bg-blue-900/30 text-slate-200'}`}>
+                          <span className="text-slate-500">{m.from_me ? '🤖' : '👤'} </span>
+                          {String(m.content).slice(0, 120)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="mt-4 border-t border-slate-800 pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
