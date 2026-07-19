@@ -1,6 +1,11 @@
 # 09 — Roadmap Premium (vertical peluquería) y motor proactivo
 
-> **Estado:** evaluado y diseñado, NO aprobado para implementar (17-jul-2026).
+> **Estado (17-jul-2026, cierre):** P1 ✅ CONSTRUIDO (v2: selección
+> inteligente + ⭐, orden siempre cronológico — reordenar confundía) ·
+> P3 ✅ CONSTRUIDO (`waitlist.js` + `migration_waitlist.sql`) · infra de
+> flags ✅ (premium_features + features_disabled, backoffice /admin y
+> panel /servicios, doc 10) · P2/P4/P5/P6 diseñados, pendientes (P2 y P6
+> bloqueados por plantillas Meta de marketing + consentimiento).
 > Ideas del fundador valoradas una a una. Cualquier conversación futura que
 > implemente algo de aquí debe respetar los **principios inviolables** del §1
 > y el orden recomendado del §5. Complementa al doc 08 (bloques B1-B7): nada
@@ -194,10 +199,16 @@ Tablas nuevas: `proactive_messages`, `reactivation_candidates`, `waitlist`,
 
 ## 5. Orden recomendado de implementación
 
-1. **P1** `smart_slots` (horas, riesgo cero, demo vendedora) — puede ir ya.
-2. Infra de flags `premium_features` + panel de activación (base de todo).
-3. **P3** lista de espera (módulo aislado, plantilla utility).
-4. **Motor proactivo** + consentimiento marketing (§4).
+1. ~~**P1** `smart_slots`~~ ✅ hecho (17-jul, v2 con ⭐).
+2. ~~Infra de flags + paneles de activación~~ ✅ hecho (doc 10).
+3. ~~**P3** lista de espera~~ ✅ hecho (17-jul; el aviso al liberarse hueco
+   sale como texto libre — si la ventana de 24 h del cliente está cerrada,
+   Meta lo rechaza; mejora prevista: plantilla `canalagenda_waitlist_v1`,
+   enviada a aprobación el 19-jul — Meta solo la aceptó como categoría
+   **MARKETING**, no Servicio: al implementarla, respetar opt-outs y contar
+   su coste como marketing; el código debe ser agnóstico a la categoría).
+4. **Motor proactivo** + consentimiento marketing (§4) ← SIGUIENTE del plan
+   premium (antes: el fundador crea y aprueba la plantilla marketing).
 5. **P2** reactivación (la estrella; requiere 4).
 6. **P6** post-servicio (barato tras 5).
 7. **P5** ficha de estilo (storage + panel).
