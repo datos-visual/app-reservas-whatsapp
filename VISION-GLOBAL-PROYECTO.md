@@ -311,7 +311,41 @@ missed-call (M1-M6) están **construidos, desplegados y probados**:
 - ✅ **Doc 09:** seis ideas premium del fundador evaluadas y diseñadas
   (compactación de agenda, reactivación por ciclo, lista de espera, modo
   oferta, ficha de estilo, post-venta) con paquetización y motor proactivo
-  común. NO aprobadas para implementar aún.
+  común.
+- ✅ **P1 `smart_slots` (17-jul, v2 tras feedback):** los huecos se listan
+  SIEMPRE en orden cronológico; el flag prioriza en la selección y marca con
+  ⭐ + leyenda los huecos adyacentes a citas. Sin incentivos por elegirlos
+  (decisión: medir adopción primero). Testeado en /tmp y en real.
+- ✅ **A1 backoffice `/admin` (doc 10):** vista de TODAS las tiendas con
+  salud, incidencias derivadas automáticamente y toggles de los 6 flags
+  premium. ADMIN_TOKEN tecleado a mano (solo sessionStorage). Probado en
+  real (detectó "Store demo 2: WhatsApp sin conectar").
+- ✅ **A2 `/servicios`:** dos niveles — contratado (admin/plan, columna
+  `premium_features`) vs activado (tienda, columna `features_disabled`);
+  efectivo = contratado MENOS desactivado. La tienda gestiona lo suyo, nunca
+  se autoactiva lo no contratado (403). Botón "Servicios" en el dashboard.
+- ✅ **B3 (17-jul):** "Mis citas" es lista interactiva → botones [Cambiar
+  hora | Cancelar cita | Nada] por cita (payloads `ca:apt:*` validados
+  contra las citas del propio cliente); cancelación con botones Sí/No que
+  reutilizan el circuito SI/NO. Aviso de día incongruente ("el martes 22"
+  cuando el 22 es miércoles) en flujo guiado y NLU.
+- ✅ **P3 lista de espera (flag `waitlist`):** sin huecos → [Apúntame ⏰]
+  (dedupe 1/cliente/día por índice parcial); al cancelarse o cambiarse una
+  cita se avisa al PRIMERO en espera de ese día (hook fire-and-forget que
+  jamás afecta a la cancelación); el hueco NO se bloquea. Módulo
+  `waitlist.js` + `migration_waitlist.sql`.
+- ✅ **Panel desplegado en Render (17-jul):** el servicio
+  `app-whatsapp-frontend` (repo principal, root `frontend`) llevaba 10 días
+  en Failed deploy por falta de variables `NEXT_PUBLIC_*`; añadidas y
+  funcionando. Páginas nuevas en tema oscuro del panel.
+- ✅ **B6 núcleo (19-jul):** catálogo autoservicio — `catalog.js` +
+  API `GET/POST/PUT /api/services`, `GET /api/verticals`,
+  `POST /api/store/vertical` (semilla idempotente por nombre); página
+  **`/catalogo`** del panel (editar nombre/duración/precio/descripción/
+  visible + crear servicios, botón "Catálogo" en el dashboard); paso
+  **`/onboarding/vertical`** tras crear la tienda (elige peluquería/taller/
+  vacío y copia la semilla EDITABLE). Validación testada en /tmp.
+  Pendiente de B6: date-picker por WhatsApp Flows y pulido del configurador.
 
 **Tienda demo:** `store_id = 0aa6d8d7-7be8-4292-8a6b-cac0a0c917da` (usuario
 panel: piloto1@test.com). **Plantillas Meta:** `canalagenda_missed_call_v2` y
@@ -327,25 +361,28 @@ Render, webhook de voz, insert del DID en `store_phone_numbers`).
 
 ## 7. Qué queda por hacer
 
-### 7.1 Desarrollo — plan activo: bloques del doc 08 (B2 ✅ · orden B3→B7)
-1. **B3 ← SIGUIENTE:** botones [Cambiar]/[Cancelar] en "Mis citas" con
-   payloads `ca:apt:*` (la lógica conversacional ya existe; es mapear).
-   Mejora fina anotada: avisar si el cliente escribe día de semana y fecha
-   incongruentes ("el martes 22" cuando el 22 es miércoles).
-2. **B4:** evolucionar R1 al modelo `appointment_reminders` del doc con
-   plantillas 24h/2h que incluyen el SERVICIO (B2 ya lo permite).
-3. **B5:** recursos/empleados (capacidad real — `generateSlots` ya acepta
-   `capacity`), paquete taller (franjas, matrícula/avería, rama urgencia),
-   plantilla coche listo. ⚠️ multi-recurso exige la migración consciente del
-   índice anti doble-reserva.
-4. **B6:** panel de servicios + **configurador guiado de vertical** en el
-   onboarding (pieza de producto, ver §2) — aquí encajan el "onboarding
-   conversacional" y el date-picker de WhatsApp Flows (doc 09 §P0).
-5. **B7:** post-cita (reseña) y recompra ITV — implementar sobre el **motor
-   proactivo** del doc 09 §4 (no construir un sistema de envío aparte).
-6. **Premium peluquería (doc 09, intercalable):** P1 compactación de agenda
-   y la infra de flags `premium_features` pueden entrar en cualquier momento
-   (riesgo cero); el resto en el orden del doc 09 §5.
+### 7.1 Desarrollo — plan activo (B2 ✅ B3 ✅ P1 ✅ P3 ✅ A1/A2 ✅)
+1. **Verificaciones del fundador ← ANTES DE SEGUIR:** prueba real de B3
+   (mis citas con botones), de P3 (apuntarse + aviso al cancelar) y del
+   **recordatorio R1** (cita a ~5 h → plantilla [Confirmo]/[Cancelar cita]),
+   que sigue sin probarse en real.
+2. **B4 (bloqueado por plantilla Meta):** recordatorios con nombre del
+   SERVICIO exigen plantilla nueva con variable extra → el fundador debe
+   crearla y esperar aprobación antes de codificar contra ella.
+3. **Motor proactivo + P2 reactivación (doc 09 §4):** requiere plantilla
+   MARKETING aprobada + consentimiento (`customers.marketing_consent_at`).
+   No construir a ciegas: plantilla primero.
+4. **B5:** recursos/empleados (capacidad real — `generateSlots` ya acepta
+   `capacity`), paquete taller. ⚠️ multi-recurso exige la migración
+   consciente del índice anti doble-reserva.
+5. **B6:** núcleo ✅ HECHO 19-jul (catálogo editable `/catalogo` +
+   `/onboarding/vertical` con semilla). Queda: pulido del configurador,
+   onboarding conversacional (híbrido con botones, sin LLM libre) y el
+   date-picker de WhatsApp Flows (doc 09 §P0). ⚠️ Probar en real: registro
+   nuevo → vertical → catálogo → reservar por WhatsApp un servicio creado
+   a mano desde el panel.
+6. **B7 / P6 / P5 / P4:** sobre el motor proactivo, en el orden del doc 09
+   §5 (Modo Oferta SIEMPRE el último y con cupos).
 
 ### 7.2 Operación inmediata (gestiones del fundador)
 1. **Meta:** esperando aprobación de `canalagenda_missed_call_v2` y
@@ -401,14 +438,23 @@ GIT/app-whatsapp/                      ← repo principal (main → deploy Rende
 │   ├── nlu.js            Intérprete de lenguaje natural (Gemini+Mistral, cascada)
 │   ├── reminders.js      Recordatorios anti no-show 24h/2h (R1)
 │   ├── missedCall.js     Módulo missed-call completo (motor, métricas, optout)
+│   ├── admin.js          Backoffice A1/A2: overview global, flags, estado
+│   │                     contratado/activado (única excepción multi-tienda)
+│   ├── waitlist.js       P3: lista de espera (alta, primero en cola, avisado)
+│   ├── verticals.js      Semillas de servicios por vertical (peluquería, taller)
 │   ├── onboarding.js     Alta de tienda, conexiones, tests, tokens caducidad
 │   └── providers/twilioVoice.js  Interfaz proveedor de voz
-├── frontend/             Panel Next.js (login, register, onboarding/, dashboard)
+├── frontend/             Panel Next.js (login, register, onboarding/, dashboard,
+│                         admin/ backoffice, servicios/ toggles de la tienda)
 ├── database/
-│   ├── schema_consolidated.sql   ★ FUENTE DE VERDAD de la BD
-│   └── migration_*.sql           histórico aplicado (idempotentes)
+│   ├── schema_consolidated.sql   ★ FUENTE DE VERDAD de la BD (16 tablas)
+│   └── migration_*.sql           histórico aplicado (idempotentes; últimas:
+│                                 catalogo_servicios, premium_features, waitlist)
+├── scripts/seed_demo_peluqueria.sql  seed de 7 servicios de la tienda demo
 ├── docs/                 00-07 + onboarding-desvio-llamadas.md (cliente final)
-│   └── 08-especificacion-guiones-verticales.md  ★ PLAN ACTIVO (bloques B1-B7)
+│   ├── 08-especificacion-guiones-verticales.md  ★ PLAN ACTIVO (bloques B1-B7)
+│   ├── 09-roadmap-premium-peluqueria.md  ★ premium evaluado (P1/P3 hechos)
+│   └── 10-backoffice-administracion.md   ★ backoffice y niveles de control
 ├── INSTRUCCIONES-PROYECTO.md     ★ reglas inviolables + DoD
 ├── GUIA-PASO-A-PASO.md           ★ plan histórico de saneamiento (completado)
 └── VISION-GLOBAL-PROYECTO.md     ★ este documento
@@ -472,13 +518,39 @@ documentos, no en la memoria de la conversación**. Protocolo de arranque:
   idempotencia desde el primer día.
 - `pip` en el sandbox requiere `--break-system-packages`.
 
-### 10.4 Estado de credenciales y servicios (a 17-jul-2026)
-- Deploy automático: push a `main` → Render (backend y frontend).
+### 10.4 Estado de credenciales y servicios (a 17-jul-2026, tarde)
+- Render, 3 servicios: `app-whatsapp-backend` (Node, repo principal),
+  **`app-whatsapp-frontend` = EL PANEL** (repo principal, Root Directory
+  `frontend`, con `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_SUPABASE_URL`/
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` configuradas el 17-jul) y la landing
+  (repo separado `frontend-app-whatsapp` — ¡no confundir!, no tiene /login).
+  Deploy automático con cada push a `main`.
+- Rutas del panel: `/login` `/` (dashboard) `/servicios` (tienda) `/admin`
+  (backoffice; pide ADMIN_TOKEN a mano, vive en Render backend → Environment).
+- CORS: `DASHBOARD_ORIGIN` (backend) es lista separada por comas y debe
+  incluir la URL del panel.
 - Cron: cron-job.org cada 15 min → `/internal/missed-calls/dispatch` con
   cabecera `x-internal-token` (despacha missed-calls + recordatorios + avisos
   de tokens).
 - NLU: claves Gemini/Mistral en env de Render (`NLU_PROVIDERS`).
+- Usuario demo del panel: piloto1@test.com (email FICTICIO: el "password
+  recovery" no funciona; para resetear su contraseña, SQL:
+  `update auth.users set encrypted_password = extensions.crypt('NUEVA',
+  extensions.gen_salt('bf')) where email = 'piloto1@test.com';`).
+- Plantillas Meta APROBADAS: `canalagenda_missed_call_v2` y
+  `canalagenda_reminder_v1` (verificar si los UPDATE de activación en
+  missed_call_settings/reminder_settings ya se ejecutaron).
 - Pendientes de seguridad del fundador: rotar token GitHub y ADMIN_TOKEN
   definitivos; sacar `CONFIG/config.txt`, `JSON/` y ZIPs con `.env` de la
   carpeta compartida.
 - Twilio aparcado esperando número español (§6).
+
+### 10.5 Pruebas reales pendientes al cierre del 17-jul
+1. B3: `mis citas` → tocar cita → [Cambiar|Cancelar|Nada] → cancelar con Sí/No.
+2. Aviso de fecha: "el martes 22 de julio" → "el 22/07 cae en miércoles".
+3. P3: activar flag waitlist en `/admin` → día lleno → [Apúntame ⏰] →
+   cancelar una cita de ese día desde otro número → llega el aviso.
+4. R1 recordatorio: cita a ~5 h vista → en ≤15 min plantilla con botones
+   [Confirmo]/[Cancelar cita] (NUNCA probado en real todavía).
+5. P1: huecos con ⭐ y leyenda; apagar el flag en `/servicios` y ver
+   desaparecer las ⭐ (circuito comercial completo).

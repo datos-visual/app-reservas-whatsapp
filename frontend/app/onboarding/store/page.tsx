@@ -55,7 +55,8 @@ export default function OnboardingStorePage() {
         setError(body?.error || 'No se pudo crear el negocio.');
         return;
       }
-      router.replace('/onboarding/calendar');
+      // B6: tienda nueva → elegir sector (carga el catálogo semilla)
+      router.replace('/onboarding/vertical');
     } catch {
       setError('Error inesperado. Inténtalo de nuevo.');
     } finally {

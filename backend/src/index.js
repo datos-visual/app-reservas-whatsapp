@@ -2212,6 +2212,65 @@ app.use('/api', authMiddleware);
 
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
 const { getAdminOverview, updateStoreFeatures, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
+const catalog = require('./catalog');
+
+// --- B6: catálogo autoservicio de la tienda ---
+app.get('/api/services', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.json({ services: await catalog.listServices(storeId) });
+  } catch (err) {
+    console.error('[API] Error en GET /api/services', err);
+    res.status(500).json({ error: 'Error listando servicios (¿migración del catálogo aplicada?)' });
+  }
+});
+
+app.post('/api/services', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.status(201).json(await catalog.createService(storeId, req.body || {}));
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error en POST /api/services', err);
+    res.status(500).json({ error: 'Error creando el servicio' });
+  }
+});
+
+app.put('/api/services/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const updated = await catalog.updateService(storeId, id, req.body || {});
+    if (!updated) return res.status(404).json({ error: 'Servicio no encontrado' });
+    res.json(updated);
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error en PUT /api/services/:id', err);
+    res.status(500).json({ error: 'Error guardando el servicio' });
+  }
+});
+
+app.get('/api/verticals', async (req, res) => {
+  res.json({ verticals: catalog.listVerticals() });
+});
+
+app.post('/api/store/vertical', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const code = String(req.body?.vertical_code || '').trim();
+    if (!code) return res.status(400).json({ error: 'Falta vertical_code' });
+    res.json(await catalog.setVertical(storeId, code));
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error en POST /api/store/vertical', err);
+    res.status(500).json({ error: 'Error asignando el vertical' });
+  }
+});
 
 // --- A2: la TIENDA activa/desactiva servicios de su plan (doc 10 §3) ---
 app.get('/api/store/features', async (req, res) => {
