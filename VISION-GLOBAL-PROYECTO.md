@@ -558,12 +558,27 @@ documentos, no en la memoria de la conversación**. Protocolo de arranque:
   carpeta compartida.
 - Twilio aparcado esperando número español (§6).
 
-### 10.5 Pruebas reales pendientes al cierre del 17-jul
-1. B3: `mis citas` → tocar cita → [Cambiar|Cancelar|Nada] → cancelar con Sí/No.
-2. Aviso de fecha: "el martes 22 de julio" → "el 22/07 cae en miércoles".
-3. P3: activar flag waitlist en `/admin` → día lleno → [Apúntame ⏰] →
-   cancelar una cita de ese día desde otro número → llega el aviso.
-4. R1 recordatorio: cita a ~5 h vista → en ≤15 min plantilla con botones
-   [Confirmo]/[Cancelar cita] (NUNCA probado en real todavía).
-5. P1: huecos con ⭐ y leyenda; apagar el flag en `/servicios` y ver
-   desaparecer las ⭐ (circuito comercial completo).
+### 10.5 Estado de las pruebas reales (actualizado 28-jul-2026)
+1. ✅ **R1 recordatorio VERIFICADO (28-jul):** cita a 33 min → plantilla
+   recibida con botones. ⚠️ El 2º botón dice "Confirmar cita" en lugar de
+   "Cancelar cita" (texto mal escrito AL CREAR la plantilla en Meta; el
+   código manda las acciones por posición y funciona bien). Corregir en
+   WhatsApp Manager y revisar los botones de `reminder_v2`.
+2. ✅ **Flujo guiado B2/B6 verificado (27 y 28-jul):** saludo con nombre,
+   catálogo con precios, mini-calendario, confirmación "a tu nombre".
+3. ⏳ B3: `mis citas` → tocar cita → [Cambiar|Cancelar|Nada] → cancelar Sí/No.
+4. ⏳ Aviso de fecha incongruente ("el martes 22" → "el 22/07 es miércoles").
+5. ⏳ P3 lista de espera: activar flag en `/admin` → día lleno →
+   [Apúntame ⏰] → cancelar una cita de ese día → llega el aviso.
+6. ⏳ P1: huecos con ⭐; apagar el flag en `/servicios` y ver desaparecer las ⭐.
+
+### 10.6 INCIDENTE 28-jul-2026 — el planificador estaba muerto
+El cron de cron-job.org se había **autodesactivado** tras errores HTTP
+repetidos: semanas sin recordatorios ni despacho, **sin ningún error visible**
+(nadie llamaba al backend). Se detectó al probar R1. Arreglado reactivándolo,
+y se añadió un **segundo despachador redundante en GitHub Actions**
+(`.github/workflows/cron-despachador.yml`, requiere el secreto
+`INTERNAL_CRON_TOKEN` en GitHub). Detalle y comprobación rápida en
+`docs/runbook-incidencias.md` §5.0. **Lección:** lo que no se vigila, se cae
+en silencio — antes de vender, `/admin` debe mostrar "última ejecución del
+cron: hace X min" (pendiente).

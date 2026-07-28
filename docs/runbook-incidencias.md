@@ -44,6 +44,24 @@ elige vertical en el onboarding, o `scripts/seed_demo_peluqueria.sql` (demo).
 
 ## 5. Recordatorios o missed-call no se envían
 
+### 5.0 ANTES DE NADA: ¿está vivo el planificador? (incidente real 28-jul-2026)
+El cron externo de cron-job.org **se autodesactivó** tras varios errores HTTP
+seguidos y estuvo semanas sin ejecutarse **en silencio**: cero recordatorios,
+cero despacho de llamadas, cero avisos de tokens, y ningún error en los logs
+del backend (porque nadie lo llamaba). Comprobación en 30 segundos:
+cron-job.org → Panel → debe poner **"1 cronjob habilitado"** y en *Next Runs*
+una próxima ejecución. Si pone 0 habilitados o aparece en *Failed Cronjobs*:
+editar el cronjob, volver a **habilitarlo** y **Guardar** (la ejecución de
+prueba NO lo reactiva). Un 429 puntual en la prueba manual suele ser Render
+frenando mientras el servicio despierta: espera 3 min y repite.
+**Red de seguridad añadida:** `.github/workflows/cron-despachador.yml` —
+segundo despachador en GitHub Actions cada 15 min, que despierta al backend
+antes, reintenta y avisa por email si falla. Requiere el secreto
+`INTERNAL_CRON_TOKEN` en GitHub. El endpoint es idempotente: que lo llamen
+dos planificadores no duplica envíos.
+
+### 5.1 Descartes del motor
+
 Orden de descartes del motor (los logs dicen cuál corta): módulo
 enabled → `template_status='approved'` → ventana temporal → opt-out →
 horario silencioso (21-9h, encola) → cupo mensual → cuenta WhatsApp →
@@ -58,8 +76,16 @@ dedupe. El desglose de descartes está en las métricas M5
 - Si Meta recategoriza a Marketing (pasó con `canalagenda_waitlist_v1`):
   aceptar — el código es agnóstico; solo cambia el coste por envío.
 - Aviso "podría rechazarse" al enviar: mandarla igual; suele aprobar.
-- Tras aprobar: poner `template_status='approved'` (+ `template_name` si es
-  versión nueva) en la tabla de settings del módulo, o el motor no envía.
+- Tras aprobar: marcarla desde **`/admin`** → tarjeta de la tienda → "Módulos
+  con plantilla de Meta" → [Plantilla aprobada ✓] y [Activado]. (Ya no hace
+  falta SQL; el endpoint hace upsert, así que sirve para tiendas antiguas.)
+- ⚠️ **El TEXTO de los botones se fija en Meta, no en el código.** Nosotros
+  enviamos las acciones por POSICIÓN (1ª = confirmar, 2ª = cancelar). Si al
+  crear la plantilla se escribe mal el texto (pasó en `reminder_v1`: el
+  segundo botón decía "Confirmar cita" en vez de "Cancelar cita"), el botón
+  hace lo correcto pero confunde al cliente. Se corrige editando la plantilla
+  en WhatsApp Manager. Sin riesgo de cancelaciones accidentales: el flujo
+  siempre pregunta "¿Seguro? SI/NO" antes de cancelar.
 
 ## 7. Flags premium no hacen efecto
 
