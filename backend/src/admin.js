@@ -152,6 +152,52 @@ async function updateStoreFeatures(storeId, flags) {
 }
 
 /**
+ * A1.3 — activar/desactivar los módulos con plantilla (recordatorios y
+ * llamada perdida) SIN SQL: marcar la plantilla aprobada cuando Meta la
+ * apruebe y encender el módulo. Upsert: funciona aunque la tienda sea
+ * antigua y no tenga ficha todavía.
+ */
+const TABLAS_MODULO = {
+  recordatorios: 'reminder_settings',
+  missed_call: 'missed_call_settings'
+};
+
+async function updateModuleSettings(storeId, modulo, { templateStatus, enabled, templateName } = {}) {
+  const tabla = TABLAS_MODULO[modulo];
+  if (!tabla) {
+    const e = new Error(`Módulo desconocido: ${modulo}. Válidos: ${Object.keys(TABLAS_MODULO).join(', ')}`);
+    e.code = 'VALIDACION';
+    throw e;
+  }
+  const fila = { store_id: storeId };
+  if (templateStatus !== undefined) {
+    if (!['pending', 'approved', 'rejected'].includes(templateStatus)) {
+      const e = new Error('Estado de plantilla inválido');
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    fila.template_status = templateStatus;
+  }
+  if (enabled !== undefined) fila.enabled = enabled === true;
+  if (templateName) fila.template_name = String(templateName).trim().slice(0, 100);
+  if (Object.keys(fila).length === 1) {
+    const e = new Error('Nada que cambiar');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+
+  const { data, error } = await supabase
+    .from(tabla)
+    .upsert(fila, { onConflict: 'store_id' })
+    .select('*')
+    .single();
+  if (error) throw error;
+
+  console.log('[Admin] Módulo actualizado', { storeId, modulo, cambios: Object.keys(fila) });
+  return data;
+}
+
+/**
  * A1.2 — actividad reciente de UNA tienda para diagnóstico desde /admin:
  * últimos mensajes (conversaciones reales) y próximas citas. Solo admin.
  */
@@ -245,4 +291,4 @@ async function setStoreFeatureActive(storeId, flag, activo) {
   return 'ok';
 }
 
-module.exports = { getAdminOverview, updateStoreFeatures, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };
+module.exports = { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };

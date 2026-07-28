@@ -1,0 +1,54 @@
+# Despachador de respaldo de CanalAgenda.
+#
+# Por qué existe: el cron externo (cron-job.org) se autodesactivó tras varios
+# fallos HTTP y estuvo semanas sin ejecutarse EN SILENCIO — sin recordatorios,
+# sin despacho de llamadas perdidas y sin avisos de tokens. Este flujo corre en
+# la infraestructura de GitHub (gratis para repos públicos y con minutos de
+# sobra en privados), reintenta, despierta antes al backend (el plan gratuito
+# de Render duerme el servicio) y GitHub avisa por email si falla.
+#
+# El endpoint es idempotente y barato: que lo llamen dos planificadores a la
+# vez no duplica envíos (dedupe por tabla + marcas de recordatorio enviado).
+#
+# REQUISITO: crear el secreto INTERNAL_CRON_TOKEN en
+# GitHub → Settings → Secrets and variables → Actions → New repository secret,
+# con el MISMO valor que la variable INTERNAL_CRON_TOKEN de Render.
+
+name: Despachador CanalAgenda
+
+on:
+  schedule:
+    # Cada 15 minutos. Ojo: GitHub puede retrasar los cron unos minutos si hay
+    # carga; las ventanas de recordatorio (horas) toleran ese desfase de sobra.
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}   # botón "Run workflow" para lanzarlo a mano
+
+concurrency:
+  group: despachador
+  cancel-in-progress: false
+
+jobs:
+  despachar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Despertar el backend (Render gratuito tarda hasta ~60 s)
+        run: |
+          curl -s -o /dev/null -w "health -> %{http_code}\n" \
+            --max-time 90 --retry 3 --retry-all-errors --retry-delay 10 \
+            https://app-whatsapp-backend.onrender.com/health || true
+
+      - name: Llamar al despachador
+        run: |
+          codigo=$(curl -s -o respuesta.json -w "%{http_code}" -X POST \
+            -H "x-internal-token: ${{ secrets.INTERNAL_CRON_TOKEN }}" \
+            --max-time 120 --retry 3 --retry-all-errors --retry-delay 15 \
+            https://app-whatsapp-backend.onrender.com/internal/missed-calls/dispatch)
+          echo "HTTP $codigo"
+          echo "--- respuesta ---"
+          cat respuesta.json || true
+          echo
+          if [ "$codigo" != "200" ]; then
+            echo "::error::El despachador respondió $codigo (revisa INTERNAL_CRON_TOKEN y el estado de Render)"
+            exit 1
+          fi

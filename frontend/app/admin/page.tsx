@@ -80,6 +80,26 @@ export default function AdminPage() {
     }
   }
 
+  async function cambiarModulo(storeId: string, modulo: 'recordatorios' | 'missed_call', cambios: Record<string, unknown>) {
+    setGuardando(storeId + modulo);
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/stores/${storeId}/modules/${modulo}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify(cambios)
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        setError(e.error || 'No se pudo actualizar el módulo.');
+        return;
+      }
+      await cargar(token); // refresca el estado real de todas las tarjetas
+      setError('');
+    } finally {
+      setGuardando(null);
+    }
+  }
+
   async function toggleActividad(storeId: string) {
     if (actividad[storeId]) {
       setActividad((a) => ({ ...a, [storeId]: null }));
@@ -236,6 +256,45 @@ export default function AdminPage() {
                 ))}
               </ul>
             )}
+
+            <div className="mt-4 border-t border-slate-800 pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                Módulos con plantilla de Meta
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {([
+                  { key: 'recordatorios' as const, label: 'Recordatorios', datos: t.modulos.recordatorios },
+                  { key: 'missed_call' as const, label: 'Llamada perdida', datos: t.modulos.missed_call }
+                ]).map((m) => (
+                  <div key={m.key} className="rounded border border-slate-700 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-200">{m.label}</span>
+                      <span className={`text-xs ${m.datos?.template_status === 'approved' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {m.datos ? (m.datos.template_status || 'sin estado') : 'sin ficha'}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {m.datos?.template_status !== 'approved' && (
+                        <button
+                          onClick={() => cambiarModulo(t.id, m.key, { template_status: 'approved' })}
+                          disabled={guardando === t.id + m.key}
+                          className="rounded bg-emerald-700 px-2 py-1 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"
+                        >
+                          Plantilla aprobada ✓
+                        </button>
+                      )}
+                      <button
+                        onClick={() => cambiarModulo(t.id, m.key, { enabled: !(m.datos?.enabled) })}
+                        disabled={guardando === t.id + m.key}
+                        className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${m.datos?.enabled ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-700 text-slate-300'}`}
+                      >
+                        {m.datos?.enabled ? 'Activado' : 'Desactivado'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="mt-3">
               <button

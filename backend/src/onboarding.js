@@ -58,8 +58,57 @@ async function createStoreWithOwner({ userId, name, timezone, appointmentDuratio
     console.error('[Onboarding] Error creando horario por defecto', { storeId: store.id, hoursError });
   }
 
+  await crearFichasDeModulos(store);
+
   console.log('[Onboarding] Tienda creada', { storeId: store.id, userId });
   return store;
+}
+
+/**
+ * Fichas de configuración de los módulos con avisos (recordatorios y
+ * llamadas perdidas). SIN ellas el motor ignora la tienda en silencio —
+ * una tienda nueva nunca enviaría recordatorios. Se crean APAGADAS y con
+ * la plantilla en 'pending': no se envía nada hasta que el admin marque
+ * la plantilla aprobada desde /admin. Nunca bloquea el alta.
+ */
+async function crearFichasDeModulos(store) {
+  const fichas = [
+    { tabla: 'reminder_settings', fila: { store_id: store.id, enabled: false, template_status: 'pending' } },
+    { tabla: 'missed_call_settings', fila: { store_id: store.id, enabled: false, template_status: 'pending', business_name: store.name } }
+  ];
+
+  for (const { tabla, fila } of fichas) {
+    try {
+      const { error } = await supabase.from(tabla).insert(fila);
+      if (error && error.code !== '23505') {
+        console.error(`[Onboarding] No se pudo crear la ficha de ${tabla}`, { storeId: store.id, message: error.message });
+      }
+    } catch (err) {
+      console.error(`[Onboarding] Excepción creando la ficha de ${tabla}`, { storeId: store.id, err });
+    }
+  }
+}
+
+/**
+ * Repara tiendas creadas ANTES de que existiera crearFichasDeModulos:
+ * crea las fichas que falten. Idempotente (23505 = ya existía).
+ */
+async function repararFichasDeModulos() {
+  const { data: stores, error } = await supabase.from('stores').select('id, name');
+  if (error) throw error;
+  let creadas = 0;
+  for (const store of stores || []) {
+    const antes = await Promise.all([
+      supabase.from('reminder_settings').select('store_id').eq('store_id', store.id).maybeSingle(),
+      supabase.from('missed_call_settings').select('store_id').eq('store_id', store.id).maybeSingle()
+    ]);
+    if (!antes[0].data || !antes[1].data) {
+      await crearFichasDeModulos(store);
+      creadas += 1;
+    }
+  }
+  console.log('[Onboarding] Fichas de módulos reparadas', { tiendasTocadas: creadas });
+  return { tiendas: (stores || []).length, reparadas: creadas };
 }
 
 /** Vista de la tienda + estado derivado del onboarding. NUNCA expone tokens. */
@@ -253,6 +302,7 @@ function tokenExpiryWarning(tokenExpiresAt, warnDays = 7) {
 
 module.exports = {
   createStoreWithOwner,
+  repararFichasDeModulos,
   getStoreOverview,
   upsertCalendarConnection,
   upsertWhatsappAccount,

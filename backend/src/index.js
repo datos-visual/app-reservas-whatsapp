@@ -2281,7 +2281,7 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
 app.use('/api', authMiddleware);
 
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
-const { getAdminOverview, updateStoreFeatures, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
+const { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
 const catalog = require('./catalog');
 
 // --- B6: catálogo autoservicio de la tienda ---
@@ -2383,6 +2383,38 @@ app.get('/api/admin/overview', async (req, res) => {
   } catch (err) {
     console.error('[Admin] Error en /api/admin/overview', err);
     res.status(500).json({ error: 'Error obteniendo la vista de administración' });
+  }
+});
+
+app.put('/api/admin/stores/:storeId/modules/:modulo', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const actualizado = await updateModuleSettings(
+      String(req.params.storeId),
+      String(req.params.modulo),
+      {
+        templateStatus: req.body?.template_status,
+        enabled: req.body?.enabled,
+        templateName: req.body?.template_name
+      }
+    );
+    res.json(actualizado);
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[Admin] Error actualizando módulo', { storeId: req.params.storeId, err });
+    res.status(500).json({ error: 'Error actualizando el módulo' });
+  }
+});
+
+// Repara tiendas antiguas sin fichas de módulos (idempotente, seguro)
+app.post('/api/admin/reparar-fichas', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { repararFichasDeModulos } = require('./onboarding');
+    res.json(await repararFichasDeModulos());
+  } catch (err) {
+    console.error('[Admin] Error reparando fichas', err);
+    res.status(500).json({ error: 'Error reparando fichas' });
   }
 });
 
