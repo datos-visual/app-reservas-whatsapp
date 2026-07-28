@@ -427,7 +427,27 @@ Elegir vertical 1 (talleres o peluquería) → B2-B6 mínimos + configurador →
 no-shows, llamadas recuperadas, € estimados) → convertir a 19-29 €/mes →
 caso de éxito con cifras.
 
-### 7.5 Fase 2 técnica (cuando el negocio valide)
+### 7.5 Puntos de vigilancia del mercado (revisar cada pocos meses)
+
+1. **WhatsApp Business Calling API (Meta, doc actualizada 26-jun-2026).**
+   Llamadas de voz VoIP *dentro de WhatsApp*, sobre el mismo número de la
+   empresa; en beta limitada (disponibilidad en España sin confirmar a
+   28-jul-2026). **NO sustituye al módulo missed-call:** el nuestro captura
+   llamadas al teléfono NORMAL del negocio (PSTN) vía desvío de operadora;
+   Calling solo existe si el cliente pulsa "llamar" desde el chat.
+   **Qué vigilar:** si Meta emite webhook de *llamada de WhatsApp no
+   contestada*, se podría replicar el valor del módulo **sin Twilio, sin DID
+   y sin coste de telefonía** — sería un cambio estratégico importante.
+   **Por qué NO ahora:** beta, y atender llamadas reales exige infraestructura
+   de voz en tiempo real (choca con la regla de costes). Decisión 28-jul-2026:
+   *vigilar, no construir*.
+2. **Precios de plantillas de Meta:** cambiaron el **1 de julio de 2026** y
+   España está entre los países afectados. ⚠️ Las cifras del
+   `INFORME-VIABILIDAD-CANALAGENDA.docx` y los cupos por plan (doc 09 §3) se
+   calcularon con las tarifas anteriores: **verificar precios actuales de
+   marketing y servicio en España antes de fijar precios de venta.** Pendiente.
+
+### 7.6 Fase 2 técnica (cuando el negocio valide)
 Embedded Signup de Meta (elimina la pantalla manual de WhatsApp) · OAuth
 Google Calendar · SMTP + confirmación de email · cifrado de tokens · migrar
 DIDs a Telnyx si el volumen lo justifica · bundles ISV de Twilio por tienda ·
