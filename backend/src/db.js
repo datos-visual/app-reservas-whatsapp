@@ -451,24 +451,30 @@ async function listBusinessHours(storeId) {
   });
 }
 
-/** Sustituye el horario semanal completo (7 filas) de una tienda. */
+/**
+ * Guarda el horario semanal completo (7 días).
+ * UPSERT por (store_id, weekday) — NUNCA borrar y volver a insertar: si la
+ * inserción fallase, la tienda se quedaría sin horario y, con la regla
+ * fail-safe, el bot dejaría de dar citas. Así el peor caso es "no cambió".
+ */
 async function replaceBusinessHours(storeId, filas) {
-  const { error: delError } = await supabase
-    .from('store_business_hours')
-    .delete()
-    .eq('store_id', storeId);
-  if (delError) throw delError;
-
   const rows = filas.map((f) => ({
     store_id: storeId,
     weekday: f.weekday,
     is_closed: f.is_closed,
     open_time: f.is_closed ? null : f.open_time,
-    close_time: f.is_closed ? null : f.close_time
+    close_time: f.is_closed ? null : f.close_time,
+    updated_at: new Date().toISOString()
   }));
-  const { error } = await supabase.from('store_business_hours').insert(rows);
-  if (error) throw error;
-  console.log('[DB] Horario semanal actualizado', { storeId });
+
+  const { error } = await supabase
+    .from('store_business_hours')
+    .upsert(rows, { onConflict: 'store_id,weekday' });
+  if (error) {
+    console.error('[DB] Error guardando el horario semanal', { storeId, message: error.message });
+    throw error;
+  }
+  console.log('[DB] Horario semanal actualizado', { storeId, dias: rows.length });
   return listBusinessHours(storeId);
 }
 
