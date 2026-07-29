@@ -28,6 +28,17 @@ exacto en logs (`[DB] Error`/`[WhatsAppCloud] Error creando cita`). Si es
 puente (por diseño). Solución: la tienda crea servicios en `/catalogo`, o
 elige vertical en el onboarding, o `scripts/seed_demo_peluqueria.sql` (demo).
 
+## 3.bis El bot ofrece huecos en días u horas que no toca
+
+Desde el 28-jul-2026 la regla es **fail-safe: un día sin horario configurado
+se considera CERRADO** (antes se asumía "abierto 08:00-17:00", y una tienda
+con el horario a medias daba citas los sábados a las 8 de la mañana).
+Consecuencia: si el bot no ofrece NADA ningún día, lo primero es mirar
+`/admin` — saldrá la incidencia *"Sin horario configurado"*. Solución: entrar
+en el panel de esa tienda → **Horarios** → ajustar y **Guardar** (guarda
+siempre los 7 días). Los horarios reales mandan sobre cualquier valor por
+defecto del código.
+
 ## 4. El panel web falla
 
 - **404 en /login** y se ve "Inicio · Precios · Solicitar acceso" → estás en

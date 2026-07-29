@@ -411,7 +411,16 @@ async function getDayHours(storeId, dateIso) {
   const dt = DateTime.fromISO(dateIso);
   const weekday = dt.weekday === 7 ? 0 : dt.weekday; // 0 = domingo
   const horario = await getStoreBusinessHours(storeId, weekday);
-  if (!horario) return { isClosed: false, motivo: null, openTime: null, closeTime: null };
+
+  // SEGURIDAD: sin horario configurado para ese día ⇒ CERRADO.
+  // Antes se asumía "abierto 08:00-17:00", y eso hacía que una tienda con el
+  // horario a medias diera citas en días que no abre (bug real 28-jul-2026).
+  // El panel /horarios siempre guarda los 7 días, así que esto solo afecta a
+  // tiendas que nunca lo han configurado (se avisa como incidencia en /admin).
+  if (!horario) {
+    console.warn('[DB] Día sin horario configurado — se considera cerrado', { storeId, dateIso, weekday });
+    return { isClosed: true, motivo: null, openTime: null, closeTime: null };
+  }
   return {
     isClosed: !!horario.isClosed,
     motivo: null,

@@ -37,12 +37,13 @@ function indexBy(arr, key = 'store_id') {
  * el problema antes de que la tienda llame.
  */
 async function getAdminOverview() {
-  const [stores, was, cals, mcs, rems] = await Promise.all([
+  const [stores, was, cals, mcs, rems, horarios] = await Promise.all([
     fetchAll('stores', '*'),
     fetchAll('whatsapp_accounts', 'store_id, is_active, phone_number_id, token_expires_at'),
     fetchAll('calendar_connections', 'store_id, google_calendar_id'),
     fetchAll('missed_call_settings', 'store_id, enabled, template_status'),
-    fetchAll('reminder_settings', 'store_id, enabled, template_status')
+    fetchAll('reminder_settings', 'store_id, enabled, template_status'),
+    fetchAll('store_business_hours', 'store_id, weekday, is_closed')
   ]);
 
   // Citas ±7 días de todas las tiendas en una sola query; conteo en memoria
@@ -76,6 +77,17 @@ async function getAdminOverview() {
 
     // Incidencias derivadas (en orden de gravedad)
     const incidencias = [];
+
+    // Sin horario = el bot NO da citas (desde 28-jul se falla en seguro)
+    const diasConHorario = horarios.filter((h) => h.store_id === s.id).length;
+    const diasAbiertos = horarios.filter((h) => h.store_id === s.id && !h.is_closed).length;
+    if (diasConHorario === 0) {
+      incidencias.push({ nivel: 'error', texto: 'Sin horario configurado: el bot NO ofrecerá citas' });
+    } else if (diasConHorario < 7) {
+      incidencias.push({ nivel: 'aviso', texto: `Horario incompleto (${diasConHorario}/7 días): los días sin configurar se tratan como cerrados` });
+    } else if (diasAbiertos === 0) {
+      incidencias.push({ nivel: 'aviso', texto: 'Todos los días marcados como cerrados' });
+    }
     if (!wa) incidencias.push({ nivel: 'error', texto: 'WhatsApp sin conectar' });
     else if (wa.is_active === false) incidencias.push({ nivel: 'error', texto: 'Cuenta WhatsApp desactivada' });
     if (wa?.token_expires_at) {

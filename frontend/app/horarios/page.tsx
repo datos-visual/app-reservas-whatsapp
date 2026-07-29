@@ -157,7 +157,19 @@ export default function HorariosPage() {
                       <input
                         type="checkbox"
                         checked={!d.is_closed}
-                        onChange={(e) => editarDia(weekday, { is_closed: !e.target.checked })}
+                        onChange={(e) =>
+                          editarDia(
+                            weekday,
+                            e.target.checked
+                              ? {
+                                  // al abrir un día, fijar horas reales (no solo visuales)
+                                  is_closed: false,
+                                  open_time: d.open_time || '09:00',
+                                  close_time: d.close_time || '19:00'
+                                }
+                              : { is_closed: true }
+                          )
+                        }
                       />
                       Abierto
                     </label>
