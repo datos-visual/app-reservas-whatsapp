@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { DateTime } = require('luxon');
 const config = require('./config');
 
 if (!config.supabaseUrl || !config.supabaseServiceKey) {
@@ -369,6 +370,136 @@ async function getStoreBusinessHours(storeId, weekday) {
   }
 }
 
+/**
+ * Cierre puntual (vacaciones/festivo) que cubra esa fecha, o null.
+ * TOLERANTE: si la tabla aún no existe, devuelve null y todo sigue igual.
+ */
+async function getStoreClosure(storeId, dateIso) {
+  try {
+    const { data, error } = await supabase
+      .from('store_closures')
+      .select('id, start_date, end_date, reason')
+      .eq('store_id', storeId)
+      .lte('start_date', dateIso)
+      .gte('end_date', dateIso)
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return data || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * ÚNICA fuente de verdad de "¿abre la tienda ese día y a qué horas?".
+ * Combina el horario semanal con los cierres puntuales. La usan TODOS los
+ * caminos que ofrecen o validan huecos, para que no se escape ninguno.
+ * Devuelve { isClosed, motivo, openTime, closeTime }.
+ */
+async function getDayHours(storeId, dateIso) {
+  const cierre = await getStoreClosure(storeId, dateIso);
+  if (cierre) {
+    return {
+      isClosed: true,
+      motivo: cierre.reason || null,
+      openTime: null,
+      closeTime: null
+    };
+  }
+
+  const dt = DateTime.fromISO(dateIso);
+  const weekday = dt.weekday === 7 ? 0 : dt.weekday; // 0 = domingo
+  const horario = await getStoreBusinessHours(storeId, weekday);
+  if (!horario) return { isClosed: false, motivo: null, openTime: null, closeTime: null };
+  return {
+    isClosed: !!horario.isClosed,
+    motivo: null,
+    openTime: horario.openTime || null,
+    closeTime: horario.closeTime || null
+  };
+}
+
+/** Horario semanal completo (7 filas) para el panel. */
+async function listBusinessHours(storeId) {
+  const { data, error } = await supabase
+    .from('store_business_hours')
+    .select('weekday, is_closed, open_time, close_time')
+    .eq('store_id', storeId)
+    .order('weekday', { ascending: true });
+  if (error) throw error;
+
+  const porDia = new Map((data || []).map((r) => [r.weekday, r]));
+  // Siempre 7 filas, aunque falten en la BD (tienda antigua o incompleta)
+  return [0, 1, 2, 3, 4, 5, 6].map((weekday) => {
+    const r = porDia.get(weekday);
+    return {
+      weekday,
+      is_closed: r ? !!r.is_closed : true,
+      open_time: r?.open_time ? String(r.open_time).slice(0, 5) : null,
+      close_time: r?.close_time ? String(r.close_time).slice(0, 5) : null
+    };
+  });
+}
+
+/** Sustituye el horario semanal completo (7 filas) de una tienda. */
+async function replaceBusinessHours(storeId, filas) {
+  const { error: delError } = await supabase
+    .from('store_business_hours')
+    .delete()
+    .eq('store_id', storeId);
+  if (delError) throw delError;
+
+  const rows = filas.map((f) => ({
+    store_id: storeId,
+    weekday: f.weekday,
+    is_closed: f.is_closed,
+    open_time: f.is_closed ? null : f.open_time,
+    close_time: f.is_closed ? null : f.close_time
+  }));
+  const { error } = await supabase.from('store_business_hours').insert(rows);
+  if (error) throw error;
+  console.log('[DB] Horario semanal actualizado', { storeId });
+  return listBusinessHours(storeId);
+}
+
+/** Cierres futuros (y el actual) de la tienda. */
+async function listClosures(storeId) {
+  const hoy = DateTime.now().toISODate();
+  const { data, error } = await supabase
+    .from('store_closures')
+    .select('*')
+    .eq('store_id', storeId)
+    .gte('end_date', hoy)
+    .order('start_date', { ascending: true })
+    .limit(50);
+  if (error) throw error;
+  return data || [];
+}
+
+async function createClosure(storeId, { startDate, endDate, reason }) {
+  const { data, error } = await supabase
+    .from('store_closures')
+    .insert({ store_id: storeId, start_date: startDate, end_date: endDate, reason: reason || null })
+    .select('*')
+    .single();
+  if (error) throw error;
+  console.log('[DB] Cierre creado', { storeId, startDate, endDate });
+  return data;
+}
+
+async function deleteClosure(storeId, id) {
+  const { data, error } = await supabase
+    .from('store_closures')
+    .delete()
+    .eq('store_id', storeId)   // nunca borrar el cierre de otra tienda
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
 async function getCalendarConnectionByStoreId(storeId) {
   try {
     const { data, error } = await supabase
@@ -669,6 +800,13 @@ module.exports = {
   getStoreConfig,
   getPremiumFeatures,
   getStoreBusinessHours,
+  getDayHours,
+  getStoreClosure,
+  listBusinessHours,
+  replaceBusinessHours,
+  listClosures,
+  createClosure,
+  deleteClosure,
   getRecentMessages,
   getMessagesSentToday,
   getWhatsappAccountByPhoneNumberId,

@@ -21,6 +21,12 @@ const {
   getStoreConfig,
   getPremiumFeatures,
   getStoreBusinessHours,
+  getDayHours,
+  listBusinessHours,
+  replaceBusinessHours,
+  listClosures,
+  createClosure,
+  deleteClosure,
   getUpcomingConfirmedAppointments,
   cancelAppointment,
   getRecentConversation,
@@ -306,13 +312,15 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
   const storeConfig = await getStoreConfig(storeId);
   const zone = storeConfig?.timezone || 'Europe/Madrid';
   const date = DateTime.fromISO(dateIso, { zone });
-  const weekday = date.weekday === 7 ? 0 : date.weekday;
-  const businessHours = await getStoreBusinessHours(storeId, weekday);
+  // Horario semanal + vacaciones/cierres puntuales (bloque 1, doc 12)
+  const businessHours = await getDayHours(storeId, dateIso);
 
   if (businessHours?.isClosed) {
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to,
-      text: 'Ese día estamos cerrados. ¿Te va bien otro?'
+      text: businessHours.motivo
+        ? `Ese día estamos cerrados (${businessHours.motivo}). ¿Te va bien otro?`
+        : 'Ese día estamos cerrados. ¿Te va bien otro?'
     });
     return;
   }
@@ -553,8 +561,14 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     const storeConfig = await getStoreConfig(storeId);
     const zone = storeConfig?.timezone || 'Europe/Madrid';
     const date = DateTime.fromISO(d.dateIso, { zone });
-    const weekday = date.weekday === 7 ? 0 : date.weekday;
-    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    const businessHours = await getDayHours(storeId, d.dateIso);
+    if (businessHours?.isClosed) {
+      await sendWelcomeMenu({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: 'Ese día ha pasado a estar cerrado. Elige otro, por favor.'
+      });
+      return true;
+    }
     const slotOptions = {
       zone,
       slotDurationMinutes: d.durationMinutes,
@@ -843,12 +857,13 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
-    const weekday = dateTime.weekday === 7 ? 0 : dateTime.weekday;
-    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    const businessHours = await getDayHours(storeId, dateTime.toISODate());
     if (businessHours?.isClosed) {
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: 'Ese día está cerrado. ¿Te va bien otro?'
+        text: businessHours.motivo
+          ? `Ese día está cerrado (${businessHours.motivo}). ¿Te va bien otro?`
+          : 'Ese día está cerrado. ¿Te va bien otro?'
       });
       return;
     }
@@ -1168,8 +1183,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const endIso = current.endIso;
 
     const dayDt = DateTime.fromISO(startIso, { zone });
-    const weekday = dayDt.weekday === 7 ? 0 : dayDt.weekday;
-    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    const businessHours = await getDayHours(storeId, dayDt.toISODate());
 
     if (businessHours?.isClosed) {
       await deleteConversationState(storeId, from);
@@ -1178,7 +1192,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'La tienda está cerrada ese día.'
+        text: businessHours.motivo
+          ? `La tienda está cerrada ese día (${businessHours.motivo}).`
+          : 'La tienda está cerrada ese día.'
       });
       return;
     }
@@ -1378,8 +1394,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     const iso = date.toISODate();
-    const weekday = date.weekday === 7 ? 0 : date.weekday;
-    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    const businessHours = await getDayHours(storeId, iso);
 
     if (businessHours?.isClosed) {
       await sendAndLog({
@@ -1387,7 +1402,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'La tienda está cerrada ese día.'
+        text: businessHours.motivo
+          ? `La tienda está cerrada ese día (${businessHours.motivo}).`
+          : 'La tienda está cerrada ese día.'
       });
       return;
     }
@@ -1497,8 +1514,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
-    const weekday = dateTime.weekday === 7 ? 0 : dateTime.weekday;
-    const businessHours = await getStoreBusinessHours(storeId, weekday);
+    const businessHours = await getDayHours(storeId, dateTime.toISODate());
 
     if (businessHours?.isClosed) {
       await sendAndLog({
@@ -1506,7 +1522,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'La tienda está cerrada ese día.'
+        text: businessHours.motivo
+          ? `La tienda está cerrada ese día (${businessHours.motivo}).`
+          : 'La tienda está cerrada ese día.'
       });
       return;
     }
@@ -2283,6 +2301,113 @@ app.use('/api', authMiddleware);
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
 const { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
 const catalog = require('./catalog');
+
+// --- Bloque 1 (doc 12): horario semanal y cierres/vacaciones ---
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const HORA_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function validarHorario(filas) {
+  if (!Array.isArray(filas) || filas.length !== 7) {
+    const e = new Error('Se esperan los 7 días de la semana.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+  return filas.map((f) => {
+    const weekday = parseInt(f.weekday, 10);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      const e = new Error('Día de la semana inválido.');
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    const cerrado = f.is_closed === true;
+    if (cerrado) return { weekday, is_closed: true, open_time: null, close_time: null };
+
+    const open = String(f.open_time || '').slice(0, 5);
+    const close = String(f.close_time || '').slice(0, 5);
+    if (!HORA_RE.test(open) || !HORA_RE.test(close)) {
+      const e = new Error(`Horas inválidas en ${DIAS[weekday]} (formato HH:MM).`);
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    if (open >= close) {
+      const e = new Error(`En ${DIAS[weekday]} la hora de cierre debe ser posterior a la de apertura.`);
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    return { weekday, is_closed: false, open_time: open, close_time: close };
+  });
+}
+
+app.get('/api/business-hours', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.json({ hours: await listBusinessHours(storeId) });
+  } catch (err) {
+    console.error('[API] Error en GET /api/business-hours', err);
+    res.status(500).json({ error: 'Error leyendo el horario' });
+  }
+});
+
+app.put('/api/business-hours', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const filas = validarHorario(req.body?.hours);
+    res.json({ hours: await replaceBusinessHours(storeId, filas) });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error en PUT /api/business-hours', err);
+    res.status(500).json({ error: 'Error guardando el horario' });
+  }
+});
+
+app.get('/api/closures', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.json({ closures: await listClosures(storeId) });
+  } catch (err) {
+    console.error('[API] Error en GET /api/closures', err);
+    res.status(500).json({ error: 'Error leyendo los cierres (¿migración aplicada?)' });
+  }
+});
+
+app.post('/api/closures', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const startDate = String(req.body?.start_date || '').slice(0, 10);
+    const endDate = String(req.body?.end_date || startDate).slice(0, 10);
+    const fechaRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (!fechaRe.test(startDate) || !fechaRe.test(endDate)) {
+      return res.status(400).json({ error: 'Fechas inválidas (formato AAAA-MM-DD).' });
+    }
+    if (endDate < startDate) {
+      return res.status(400).json({ error: 'La fecha de fin no puede ser anterior a la de inicio.' });
+    }
+    const reason = req.body?.reason ? String(req.body.reason).trim().slice(0, 80) : null;
+    res.status(201).json(await createClosure(storeId, { startDate, endDate, reason }));
+  } catch (err) {
+    console.error('[API] Error en POST /api/closures', err);
+    res.status(500).json({ error: 'Error creando el cierre' });
+  }
+});
+
+app.delete('/api/closures/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const borrado = await deleteClosure(storeId, id);
+    if (!borrado) return res.status(404).json({ error: 'Cierre no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[API] Error en DELETE /api/closures/:id', err);
+    res.status(500).json({ error: 'Error borrando el cierre' });
+  }
+});
 
 // --- B6: catálogo autoservicio de la tienda ---
 app.get('/api/services', async (req, res) => {

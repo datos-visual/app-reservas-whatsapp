@@ -144,6 +144,12 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-400">{session.user?.email}</span>
             <button
+              onClick={() => router.push('/horarios')}
+              className="inline-flex items-center rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
+            >
+              Horarios
+            </button>
+            <button
               onClick={() => router.push('/catalogo')}
               className="inline-flex items-center rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 transition"
             >

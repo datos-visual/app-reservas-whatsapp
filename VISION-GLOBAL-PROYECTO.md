@@ -374,6 +374,14 @@ Render, webhook de voz, insert del DID en `store_phone_numbers`).
 
 ## 7. Qué queda por hacer
 
+> **★ Backlog completo y priorizado: `docs/12-backlog-producto.md` (28-jul).**
+> Recoge lo que falta para pasar de "funciona" a "vendible": horarios y citas
+> manuales desde el panel (bloque 1, crítico), equipo con turnos/ausencias/
+> habilidades y disponibilidad real (bloque 2 = B5 ampliado, incluye un cambio
+> arquitectónico: la ocupación por profesional pasa a calcularse desde NUESTRA
+> BD, no desde Calendar), textos del bot personalizables por tienda (bloque 3),
+> y producto/negocio: métricas, ficha de cliente, Stripe, RGPD (bloque 4).
+
 ### 7.1 Desarrollo — plan activo (B2 ✅ B3 ✅ P1 ✅ P3 ✅ A1/A2 ✅)
 1. **Verificaciones del fundador ← ANTES DE SEGUIR:** prueba real de B3
    (mis citas con botones), de P3 (apuntarse + aviso al cancelar) y del
