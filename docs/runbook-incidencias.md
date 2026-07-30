@@ -50,8 +50,25 @@ defecto del código.
   añadir la URL del panel a `DASHBOARD_ORIGIN` (backend, lista por comas).
 - **Texto invisible / sin contraste** → el panel usa tema oscuro global:
   toda página nueva debe usar clases slate + `text-white`, no tarjetas blancas.
-- **Login de piloto1 olvidado** → email ficticio, sin recovery. SQL:
-  `update auth.users set encrypted_password = extensions.crypt('NUEVA', extensions.gen_salt('bf')) where email='piloto1@test.com';`
+- **Contraseña olvidada de un usuario de prueba** (emails ficticios: la
+  recuperación por correo NO funciona). El `update` de `auth.users` con
+  `crypt()` es frágil. **Vía fiable:** Supabase → Authentication → Users →
+  **Add user → Create new user** (email + contraseña + ✅ *Auto Confirm
+  User*), y luego vincularlo a la tienda:
+  ```sql
+  insert into store_users (store_id, user_id, role)
+  select '<STORE_ID>', id, 'owner' from auth.users where email = '<EMAIL>';
+  ```
+- ⚠️ **"He configurado el panel y el bot no se enteró"** (incidente real
+  30-jul-2026): había varios usuarios de prueba, cada uno dueño de una tienda
+  distinta, y se estaba editando la tienda equivocada. Los logs lo cantan
+  (`[DB] Horario semanal actualizado { storeId: ... }`). Comprobación rápida:
+  el **título del panel muestra el nombre del negocio** que estás gestionando;
+  y esta consulta dice quién es dueño de qué:
+  ```sql
+  select u.email, s.name from store_users su
+  join auth.users u on u.id = su.user_id join stores s on s.id = su.store_id;
+  ```
 
 ## 5. Recordatorios o missed-call no se envían
 

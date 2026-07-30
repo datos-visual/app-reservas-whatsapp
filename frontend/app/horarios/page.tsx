@@ -22,6 +22,7 @@ export default function HorariosPage() {
   const router = useRouter();
   const [dias, setDias] = useState<Dia[]>([]);
   const [configurado, setConfigurado] = useState(true);
+  const [negocio, setNegocio] = useState<string | null>(null);
   const [cierres, setCierres] = useState<Cierre[]>([]);
   const [nuevo, setNuevo] = useState({ start_date: '', end_date: '', reason: '' });
   const [error, setError] = useState('');
@@ -43,7 +44,12 @@ export default function HorariosPage() {
   async function cargar() {
     setCargando(true);
     try {
-      const [rh, rc] = await Promise.all([apiFetch('/api/business-hours'), apiFetch('/api/closures')]);
+      const [rh, rc, rs] = await Promise.all([
+        apiFetch('/api/business-hours'),
+        apiFetch('/api/closures'),
+        apiFetch('/api/store/status')
+      ]);
+      if (rs.ok) setNegocio((await rs.json().catch(() => null))?.store?.name || null);
       if (rh.status === 403) {
         router.replace('/onboarding/store');
         return;
@@ -132,7 +138,14 @@ export default function HorariosPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Horarios y vacaciones</h1>
           <p className="text-sm text-slate-400">
-            Lo que pongas aquí es lo que el asistente ofrece por WhatsApp. Se aplica al instante.
+            {negocio ? (
+              <>
+                Negocio: <span className="font-medium text-slate-200">{negocio}</span> · lo que pongas
+                aquí es lo que el asistente ofrece por WhatsApp.
+              </>
+            ) : (
+              'Lo que pongas aquí es lo que el asistente ofrece por WhatsApp. Se aplica al instante.'
+            )}
           </p>
         </div>
         <button

@@ -44,6 +44,8 @@ export default function DashboardPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  // Qué negocio se está gestionando: imprescindible con varias tiendas
+  const [storeName, setStoreName] = useState<string | null>(null);
 
   // Sesión: carga inicial + suscripción a cambios (login/logout/refresh de token)
   useEffect(() => {
@@ -72,11 +74,17 @@ export default function DashboardPage() {
         Authorization: `Bearer ${session.access_token}`
       };
 
-      const [statusRes, appRes, msgRes] = await Promise.all([
+      const [statusRes, appRes, msgRes, storeRes] = await Promise.all([
         fetch(`${API_BASE}/api/whatsapp/status`, { headers }),
         fetch(`${API_BASE}/api/appointments`, { headers }),
-        fetch(`${API_BASE}/api/messages?limit=50`, { headers })
+        fetch(`${API_BASE}/api/messages?limit=50`, { headers }),
+        fetch(`${API_BASE}/api/store/status`, { headers })
       ]);
+
+      if (storeRes.ok) {
+        const body = await storeRes.json().catch(() => null);
+        setStoreName(body?.store?.name || null);
+      }
 
       if (!statusRes.ok || !appRes.ok || !msgRes.ok) {
         if (statusRes.status === 401 || appRes.status === 401 || msgRes.status === 401) {
@@ -134,10 +142,12 @@ export default function DashboardPage() {
       <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">
-            Dashboard Citas WhatsApp
+            {storeName || 'Dashboard Citas WhatsApp'}
           </h1>
           <p className="mt-1 text-sm text-slate-300">
-            Vista rápida de estado del bot, citas de hoy y últimos mensajes.
+            {storeName
+              ? 'Estado del bot, citas de hoy y últimos mensajes de este negocio.'
+              : 'Vista rápida de estado del bot, citas de hoy y últimos mensajes.'}
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">
