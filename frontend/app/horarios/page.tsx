@@ -21,6 +21,7 @@ const inputCls =
 export default function HorariosPage() {
   const router = useRouter();
   const [dias, setDias] = useState<Dia[]>([]);
+  const [configurado, setConfigurado] = useState(true);
   const [cierres, setCierres] = useState<Cierre[]>([]);
   const [nuevo, setNuevo] = useState({ start_date: '', end_date: '', reason: '' });
   const [error, setError] = useState('');
@@ -47,8 +48,11 @@ export default function HorariosPage() {
         router.replace('/onboarding/store');
         return;
       }
-      if (rh.ok) setDias((await rh.json()).hours || []);
-      else setError('No se pudo cargar el horario.');
+      if (rh.ok) {
+        const body = await rh.json();
+        setDias(body.hours || []);
+        setConfigurado(body.configured !== false);
+      } else setError('No se pudo cargar el horario.');
       if (rc.ok) setCierres((await rc.json()).closures || []);
     } catch {
       setError('No se pudo conectar con el servidor.');
@@ -75,6 +79,7 @@ export default function HorariosPage() {
         return;
       }
       setDias(body.hours || []);
+      setConfigurado(true);
       setAviso('Horario guardado ✓');
       setTimeout(() => setAviso(''), 2500);
     } finally {
@@ -137,6 +142,14 @@ export default function HorariosPage() {
           ← Volver al panel
         </button>
       </div>
+
+      {!cargando && !configurado && (
+        <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-900/30 p-3 text-sm text-amber-200">
+          ⚠️ <strong>Tu horario todavía no está guardado</strong>, así que el asistente no está
+          dando citas. Los días de abajo son una propuesta: revísalos y pulsa
+          <strong> Guardar horario</strong>.
+        </div>
+      )}
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {aviso && <p className="mb-4 text-sm text-emerald-400">{aviso}</p>}

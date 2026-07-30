@@ -22,6 +22,7 @@ const {
   getPremiumFeatures,
   getStoreBusinessHours,
   getDayHours,
+  hasBusinessHours,
   listBusinessHours,
   replaceBusinessHours,
   listClosures,
@@ -2342,7 +2343,13 @@ app.get('/api/business-hours', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    res.json({ hours: await listBusinessHours(storeId) });
+    const [hours, configured] = await Promise.all([
+      listBusinessHours(storeId),
+      hasBusinessHours(storeId)
+    ]);
+    // configured=false ⇒ los 7 días son propuestas, NO están guardados:
+    // el bot no dará citas hasta que la tienda pulse Guardar.
+    res.json({ hours, configured });
   } catch (err) {
     console.error('[API] Error en GET /api/business-hours', err);
     res.status(500).json({ error: 'Error leyendo el horario' });

@@ -429,6 +429,16 @@ async function getDayHours(storeId, dateIso) {
   };
 }
 
+/** ¿Tiene la tienda su horario guardado en BD? (sin él, el bot no da citas) */
+async function hasBusinessHours(storeId) {
+  const { count, error } = await supabase
+    .from('store_business_hours')
+    .select('weekday', { count: 'exact', head: true })
+    .eq('store_id', storeId);
+  if (error) return false;
+  return (count || 0) > 0;
+}
+
 /** Horario semanal completo (7 filas) para el panel. */
 async function listBusinessHours(storeId) {
   const { data, error } = await supabase
@@ -817,6 +827,7 @@ module.exports = {
   getStoreBusinessHours,
   getDayHours,
   getStoreClosure,
+  hasBusinessHours,
   listBusinessHours,
   replaceBusinessHours,
   listClosures,
