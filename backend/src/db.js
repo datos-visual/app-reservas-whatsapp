@@ -716,16 +716,53 @@ async function getServiceById(storeId, serviceId) {
 }
 
 /** Guarda el nombre del cliente (se pide al confirmar su primera reserva). */
-async function updateCustomerName(storeId, phone, name) {
+async function updateCustomerName(storeId, phone, name, source = 'cliente') {
   try {
-    const { error } = await supabase
+    const patch = { name, updated_at: new Date().toISOString(), name_source: source };
+    let { error } = await supabase
       .from('customers')
-      .update({ name, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('store_id', storeId)
       .eq('phone', phone);
+
+    // Tolerancia: BD sin la columna name_source (migración no aplicada)
+    if (error && /name_source/i.test(error.message || '')) {
+      delete patch.name_source;
+      ({ error } = await supabase
+        .from('customers')
+        .update(patch)
+        .eq('store_id', storeId)
+        .eq('phone', phone));
+    }
     if (error) console.error('[DB] Error guardando nombre de cliente', { storeId, phone, error });
   } catch (err) {
     console.error('[DB] Excepción en updateCustomerName', { storeId, phone, err });
+  }
+}
+
+/**
+ * N8 — Nombre propuesto por el perfil de WhatsApp: SOLO se guarda si el
+ * cliente existe y todavía no tiene nombre. Nunca pisa un nombre que la
+ * persona (o el negocio) haya dado: ese es el criterio de confianza.
+ * Devuelve el nombre guardado o null si no se tocó nada.
+ */
+async function setCustomerNameFromProfile(storeId, phone, profileName) {
+  try {
+    const { data } = await supabase
+      .from('customers')
+      .select('id, name')
+      .eq('store_id', storeId)
+      .eq('phone', phone)
+      .limit(1)
+      .maybeSingle();
+    if (!data || data.name) return null;
+
+    await updateCustomerName(storeId, phone, profileName, 'perfil_whatsapp');
+    console.log('[DB] Nombre tomado del perfil de WhatsApp', { storeId, phone, profileName });
+    return profileName;
+  } catch (err) {
+    console.error('[DB] Excepción en setCustomerNameFromProfile', { storeId, phone, err });
+    return null;
   }
 }
 
@@ -847,6 +884,7 @@ module.exports = {
   cancelAppointment,
   getRecentConversation,
   updateCustomerName,
+  setCustomerNameFromProfile,
   getActiveServices,
   getServiceById
 };

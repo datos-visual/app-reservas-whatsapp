@@ -85,6 +85,11 @@ create table if not exists public.customers (
   updated_at  timestamptz not null default now()
 );
 
+-- N8: origen del nombre (perfil_whatsapp | cliente | negocio).
+-- Los datos de clientes son SIEMPRE por tienda: un mismo teléfono en dos
+-- negocios son dos fichas independientes y NO se comparte nada entre ellas.
+alter table public.customers add column if not exists name_source text;
+
 create unique index if not exists customers_store_phone_unique
   on public.customers (store_id, phone);
 create index if not exists customers_store_id_idx

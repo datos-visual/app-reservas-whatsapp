@@ -157,6 +157,15 @@ function extractIncomingMessages(body) {
         const metadata = value.metadata || {};
         const phoneNumberId = metadata.phone_number_id;
 
+        // Nombre del perfil de WhatsApp de quien escribe (N8). Meta lo manda
+        // en cada webhook, gratis: value.contacts[].profile.name, indexado
+        // por wa_id. Se usa como propuesta de nombre para clientes nuevos.
+        const perfiles = new Map();
+        for (const c of value.contacts || []) {
+          const nombre = c?.profile?.name ? String(c.profile.name).trim() : null;
+          if (c?.wa_id && nombre) perfiles.set(c.wa_id, nombre);
+        }
+
         const messages = value.messages || [];
         for (const m of messages) {
           const from = m.from;
@@ -199,7 +208,8 @@ function extractIncomingMessages(body) {
             body: bodyText,
             messageId,
             kind,
-            payload
+            payload,
+            profileName: perfiles.get(from) || null
           });
         }
       }

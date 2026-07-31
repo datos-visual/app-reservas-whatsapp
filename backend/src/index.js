@@ -32,6 +32,7 @@ const {
   cancelAppointment,
   getRecentConversation,
   updateCustomerName,
+  setCustomerNameFromProfile,
   getActiveServices,
   getServiceById
 } = require('./db');
@@ -281,6 +282,37 @@ async function sendDateButtons({ storeId, phoneNumberId, accessToken, to, servic
 
 function capitalizar(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/**
+ * N8 — ¿El nombre del perfil de WhatsApp sirve como nombre de persona?
+ * Ante la duda, NO: preferimos preguntar a apuntar a alguien como "🌸✨" o
+ * "Peluquería Lucía S.L.". Devuelve el nombre limpio o null.
+ *
+ * No detecta motes (nadie puede: "Mami" es un nombre válido de perfil), por
+ * eso el nombre tomado del perfil SIEMPRE se propone al cliente para que lo
+ * corrija si quiere — nunca se le impone en silencio.
+ */
+function nombreDePersona(raw) {
+  if (!raw) return null;
+
+  // Quitar emojis y símbolos decorativos, y espacios repetidos
+  const limpio = String(raw)
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}]/gu, '')
+    .replace(/[|*_~`<>{}[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (limpio.length < 2 || limpio.length > 40) return null;
+  if (/\d/.test(limpio)) return null;                    // "Ana 2", "Taller 24h"
+  if (!/[a-zA-ZáéíóúüñçÁÉÍÓÚÜÑÇ]/.test(limpio)) return null;
+  if (limpio.split(' ').length > 4) return null;          // frases, no nombres
+
+  // Descartar nombres claramente de negocio (no de la persona que escribe)
+  const negocio = /\b(s\.?l\.?|s\.?a\.?|c\.?b\.?|peluquer[ií]a|barber|taller|cl[ií]nica|centro|tienda|shop|store|salon|sal[óo]n|estudio|spa)\b/i;
+  if (negocio.test(limpio)) return null;
+
+  return limpio;
 }
 
 /**
@@ -1057,6 +1089,25 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
   }
 
+  // N8: corrección EXPLÍCITA del nombre en cualquier momento
+  // ("me llamo Marta", "soy Marta", "a nombre de Marta"). Solo con fórmula
+  // explícita: así un "gracias" nunca se confunde con un nombre.
+  const correccion = body.trim().match(
+    /^(?:me\s+llamo|mi\s+nombre\s+es|soy|ll[áa]mame|ap[úu]ntame\s+como|a\s+nombre\s+de|pon(?:lo)?\s+a\s+nombre\s+de)\s+(.{2,40})$/i
+  );
+  if (correccion && !pending?.state?.pendingName) {
+    const nuevo = nombreDePersona(correccion[1]);
+    if (nuevo) {
+      const nombre = capitalizar(nuevo);
+      await updateCustomerName(storeId, from, nombre, 'cliente');
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `¡Anotado, ${nombre}! A partir de ahora te llamaré así.`
+      });
+      return;
+    }
+  }
+
   // ¿Estamos esperando el NOMBRE del cliente (tras su primera reserva)?
   const pendingName = pending?.state?.pendingName || null;
   if (pendingName) {
@@ -1280,8 +1331,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           : `¡Hecho! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
             `queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
 
-        // Primera reserva sin nombre → pedirlo (para la agenda del negocio)
+        // Primera reserva sin nombre → pedirlo (para la agenda del negocio).
+        // N8: si el nombre lo tomamos del perfil de WhatsApp, no preguntamos:
+        // lo proponemos en la confirmación y dejamos corregirlo.
         const pedirNombre = !customer?.name;
+        const nombreDelPerfil = !pedirNombre && customer?.name_source === 'perfil_whatsapp';
         if (current.rescheduleOfId) {
           try {
             const old = await cancelAppointment(storeId, current.rescheduleOfId);
@@ -1303,6 +1357,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
         if (pedirNombre) {
           textoConfirmacion += '\n\nPor cierto, ¿a nombre de quién pongo la cita?';
+        } else if (nombreDelPerfil) {
+          // Nombre tomado del perfil: se propone, no se impone
+          textoConfirmacion += '\n\nTe he apuntado con el nombre de tu WhatsApp. Si prefieres otro, dime "me llamo..." y lo cambio.';
         }
 
         await sendAndLog({
@@ -2014,7 +2071,7 @@ async function handleMissedCallButton({ storeId, phoneNumberId, accessToken, fro
 async function processWebhookBody(body, { requestId }) {
   const incoming = extractIncomingMessages(body);
   for (const msg of incoming) {
-    const { phoneNumberId, from, body: textBody, messageId, kind, payload } = msg;
+    const { phoneNumberId, from, body: textBody, messageId, kind, payload, profileName } = msg;
 
     try {
       const storeContext = await resolveStoreContextByPhoneNumberId(phoneNumberId);
@@ -2062,6 +2119,15 @@ async function processWebhookBody(body, { requestId }) {
       // Atribución missed-call: cualquier respuesta reciente a una plantilla
       // cuenta como conversación iniciada (si no la hay, no afecta filas).
       markConversationIfRecent(storeId, from).catch(() => {});
+
+      // N8: si el cliente ya existe pero aún no tiene nombre, tomar el del
+      // perfil de WhatsApp (solo si parece un nombre de persona). Nunca pisa
+      // un nombre dado por la persona o por el negocio. Es por tienda: los
+      // datos NO se comparten entre negocios distintos.
+      const nombrePerfil = nombreDePersona(profileName);
+      if (nombrePerfil) {
+        await setCustomerNameFromProfile(storeId, from, nombrePerfil).catch(() => {});
+      }
 
       // Ratelimit por usuario antes de responder
       const sentToday = await getMessagesSentToday(storeId, from);
