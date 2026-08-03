@@ -2382,6 +2382,70 @@ app.use('/api', authMiddleware);
 const { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
 const catalog = require('./catalog');
 
+// --- Bloque 1.3/1.4 (doc 12): agenda del día y citas manuales ---
+const agenda = require('./agenda');
+
+app.get('/api/agenda', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const fecha = req.query.date ? String(req.query.date) : DateTime.now().toISODate();
+    res.json(await agenda.agendaDelDia(storeId, fecha));
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error en GET /api/agenda', err);
+    res.status(500).json({ error: 'Error obteniendo la agenda' });
+  }
+});
+
+app.post('/api/appointments', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const { telefono, nombre, service_id: serviceId, fecha, hora, avisar } = req.body || {};
+    const { cita, aviso } = await agenda.crearCitaManual(storeId, {
+      telefono, nombre, serviceId, fecha, hora, avisar: avisar !== false
+    });
+    res.status(201).json({ id: cita.id, start_at: cita.start_at, aviso });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    if (err?.code === 'CALENDAR_NOT_CONFIGURED') {
+      return res.status(400).json({ error: 'Conecta primero Google Calendar para poder crear citas.' });
+    }
+    console.error('[API] Error creando cita manual', err);
+    res.status(500).json({ error: 'Error creando la cita' });
+  }
+});
+
+app.delete('/api/appointments/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const avisar = req.query.avisar !== 'false';
+    const r = await agenda.cancelarCitaManual(storeId, id, { avisar });
+    if (!r) return res.status(404).json({ error: 'Cita no encontrada' });
+
+    // La cancelación libera un hueco: avisar a la lista de espera (P3)
+    if (r.cita?.start_at) {
+      const cuenta = await getWhatsappAccountByStoreId(storeId);
+      if (cuenta?.access_token) {
+        notificarListaEspera({
+          storeId,
+          phoneNumberId: cuenta.phone_number_id,
+          accessToken: cuenta.access_token,
+          startIso: r.cita.start_at
+        });
+      }
+    }
+    res.json({ ok: true, aviso: r.aviso });
+  } catch (err) {
+    console.error('[API] Error cancelando cita', err);
+    res.status(500).json({ error: 'Error cancelando la cita' });
+  }
+});
+
 // --- Bloque 1 (doc 12): horario semanal y cierres/vacaciones ---
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const HORA_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;

@@ -10,6 +10,60 @@
 
 ---
 
+## 0.bis — LA FOTO COMPLETA (léela antes de vender la primera alta)
+
+El formulario del backoffice (`/admin` → ＋ Alta de tienda) resuelve **solo
+nuestra parte**: tienda, usuario, catálogo, horarios y conexiones. El grueso
+del trabajo está en **cuentas ajenas** (Meta y Google) y ahí no hay atajo en
+Fase 1. Reparto realista:
+
+| Quién | Qué | Tiempo |
+|---|---|---|
+| Cliente (antes) | Conseguir un número que NO tenga WhatsApp normal activo | 1-2 días |
+| Cliente (antes) | Tener/crear cuenta de Meta Business y cuenta de Google | 10 min |
+| **Tú + cliente** | Añadir el número a WhatsApp y verificarlo por SMS | 15 min |
+| **Tú** | Token permanente (usuario del sistema) | 10 min |
+| **Tú** | ⚠️ **Configurar el WEBHOOK de esa cuenta hacia nuestro backend y suscribir "messages"** | 10 min |
+| **Tú** | Crear las plantillas y **esperar aprobación** | 24-72 h |
+| **Tú/Cliente** | ⚠️ **Método de pago en Meta** (sin él, las plantillas fuera de 24 h no salen) | 10 min |
+| Cliente | Compartir el calendario con la cuenta de servicio y darte el ID | 10 min |
+| **Tú** | Alta en el backoffice + conexiones + prueba en vivo | 20 min |
+| **Tú** | Aviso de privacidad y contrato de encargado del tratamiento firmado | 15 min |
+
+**Total realista: dos sesiones de 45 minutos separadas por 1-3 días** (la
+espera de Meta). Prometer "en una llamada lo dejamos" es arriesgado: promete
+"en 48-72 horas lo tienes funcionando".
+
+### Lo que MÁS se olvida (y rompe el alta)
+
+1. **El webhook por cuenta de WhatsApp.** Cada WABA nueva debe apuntar a
+   nuestro backend y estar suscrita al campo `messages`. Sin eso el bot no
+   recibe NADA y todo lo demás parece bien configurado. Es el fallo nº 1.
+2. **El método de pago en Meta.** Los mensajes dentro de la ventana de 24 h
+   son gratis, pero recordatorios y avisos son plantillas y **se cobran**.
+   Sin tarjeta asociada, fallan en silencio. Decide quién paga (ver §0.ter).
+3. **Verificación del negocio en Meta.** Necesaria para subir límites y para
+   el nombre visible. Puede pedir documentación fiscal y tardar días.
+4. **El número pierde el WhatsApp normal.** Si la peluquería usa ese número
+   para hablar con clientas a mano, se queda sin él. Es la conversación
+   incómoda que hay que tener ANTES de firmar nada.
+5. **Formar a la clienta**: enseñarle su panel (catálogo, horarios, citas) y
+   dejarle claro a quién llamar si algo falla (a ti).
+
+## 0.ter — Decisión de modelo (afecta a costes y a tu margen)
+
+- **Modelo A — cada peluquería con su propia cuenta de Meta** (el actual):
+  el número, la cuenta y **la factura de Meta son suyos**. Tú no asumes coste
+  variable de mensajería; a cambio, cada alta lleva su trabajo manual y sus
+  plantillas propias. Es lo correcto para Fase 1 y protege tu margen.
+- **Modelo B — Embedded Signup** (Fase 2): el cliente conecta su cuenta con
+  tres clics desde tu web. Requiere que Meta te apruebe como *Tech Provider*
+  (App Review, semanas). Es lo que hará el alta escalable, pero **no antes de
+  tener los primeros pilotos funcionando**.
+
+**Regla práctica:** con este guion puedes dar de alta unas 10 tiendas sin
+morir. A partir de ahí, o Embedded Signup o contratas a alguien para las altas.
+
 ## 0. Antes de la llamada — lo que pides al cliente (por WhatsApp, 2 días antes)
 
 Mensaje tipo para enviarle:
