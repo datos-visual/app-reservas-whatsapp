@@ -23,7 +23,6 @@ export default function HorariosPage() {
   const router = useRouter();
   const [dias, setDias] = useState<Dia[]>([]);
   const [configurado, setConfigurado] = useState(true);
-  const [negocio, setNegocio] = useState<string | null>(null);
   const [cierres, setCierres] = useState<Cierre[]>([]);
   const [nuevo, setNuevo] = useState({ start_date: '', end_date: '', reason: '' });
   const [error, setError] = useState('');
@@ -45,12 +44,10 @@ export default function HorariosPage() {
   async function cargar() {
     setCargando(true);
     try {
-      const [rh, rc, rs] = await Promise.all([
+      const [rh, rc] = await Promise.all([
         apiFetch('/api/business-hours'),
-        apiFetch('/api/closures'),
-        apiFetch('/api/store/status')
+        apiFetch('/api/closures')
       ]);
-      if (rs.ok) setNegocio((await rs.json().catch(() => null))?.store?.name || null);
       if (rh.status === 403) {
         router.replace('/onboarding/store');
         return;
