@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '../../lib/api';
 import { supabase } from '../../lib/supabaseClient';
+import AppShell from '../../components/AppShell';
+import { IconAviso, IconCheck } from '../../components/icons';
 
 type Dia = { weekday: number; is_closed: boolean; open_time: string | null; close_time: string | null };
 type Cierre = { id: number; start_date: string; end_date: string; reason: string | null };
@@ -15,8 +17,7 @@ type Cierre = { id: number; start_date: string; end_date: string; reason: string
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const ORDEN = [1, 2, 3, 4, 5, 6, 0]; // lunes → domingo
 
-const inputCls =
-  'rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none';
+const inputCls = 'ca-input w-auto';
 
 export default function HorariosPage() {
   const router = useRouter();
@@ -133,53 +134,36 @@ export default function HorariosPage() {
     new Date(iso + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Horarios y vacaciones</h1>
-          <p className="text-sm text-slate-400">
-            {negocio ? (
-              <>
-                Negocio: <span className="font-medium text-slate-200">{negocio}</span> · lo que pongas
-                aquí es lo que el asistente ofrece por WhatsApp.
-              </>
-            ) : (
-              'Lo que pongas aquí es lo que el asistente ofrece por WhatsApp. Se aplica al instante.'
-            )}
-          </p>
-        </div>
-        <button
-          onClick={() => router.push('/')}
-          className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          ← Volver al panel
-        </button>
-      </div>
-
+    <AppShell
+      titulo="Horarios y vacaciones"
+      descripcion="Lo que pongas aquí es lo que el asistente ofrece por WhatsApp. Se aplica al instante."
+    >
       {!cargando && !configurado && (
-        <div className="mb-4 rounded-lg border border-amber-600/50 bg-amber-900/30 p-3 text-sm text-amber-200">
-          ⚠️ <strong>Tu horario todavía no está guardado</strong>, así que el asistente no está
-          dando citas. Los días de abajo son una propuesta: revísalos y pulsa
-          <strong> Guardar horario</strong>.
+        <div className="ca-alert-warn mb-4 flex items-start gap-2">
+          <IconAviso />
+          <span>
+            <strong>Tu horario todavía no está guardado</strong>, así que el asistente no está
+            dando citas. Los días de abajo son una propuesta: revísalos y pulsa <strong>Guardar horario</strong>.
+          </span>
         </div>
       )}
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-      {aviso && <p className="mb-4 text-sm text-emerald-400">{aviso}</p>}
-      {cargando && <p className="text-sm text-slate-400">Cargando…</p>}
+      {error && <p className="ca-alert-error mb-4">{error}</p>}
+      {aviso && <p className="ca-alert-ok mb-4 flex items-center gap-2"><IconCheck />{aviso}</p>}
+      {cargando && <p className="ca-hint">Cargando…</p>}
 
       {!cargando && (
         <>
-          <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Horario semanal</p>
+          <section className="ca-card-p">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Horario semanal</p>
             <div className="space-y-2">
               {ORDEN.map((weekday) => {
                 const d = dias.find((x) => x.weekday === weekday);
                 if (!d) return null;
                 return (
-                  <div key={weekday} className="flex flex-wrap items-center gap-3 rounded border border-slate-800 px-3 py-2">
-                    <span className="w-24 text-sm text-slate-200">{NOMBRES[weekday]}</span>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+                  <div key={weekday} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e6e4de] px-3 py-2">
+                    <span className="w-24 text-sm text-slate-700">{NOMBRES[weekday]}</span>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-500">
                       <input
                         type="checkbox"
                         checked={!d.is_closed}
@@ -220,14 +204,14 @@ export default function HorariosPage() {
             <button
               onClick={guardarHorario}
               disabled={guardando}
-              className="mt-4 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="mt-4 ca-btn-primary"
             >
               {guardando ? 'Guardando…' : 'Guardar horario'}
             </button>
           </section>
 
-          <section className="mt-6 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+          <section className="mt-6 ca-card-p">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
               Vacaciones y días cerrados
             </p>
             <p className="mb-3 text-xs text-slate-500">
@@ -239,14 +223,14 @@ export default function HorariosPage() {
             )}
             <ul className="mb-4 space-y-2">
               {cierres.map((c) => (
-                <li key={c.id} className="flex items-center justify-between rounded border border-slate-800 px-3 py-2 text-sm">
-                  <span className="text-slate-200">
+                <li key={c.id} className="flex items-center justify-between rounded-lg border border-[#e6e4de] px-3 py-2 text-sm">
+                  <span className="text-slate-700">
                     {c.start_date === c.end_date ? fmt(c.start_date) : `${fmt(c.start_date)} → ${fmt(c.end_date)}`}
-                    {c.reason && <span className="ml-2 text-slate-400">({c.reason})</span>}
+                    {c.reason && <span className="ml-2 text-slate-500">({c.reason})</span>}
                   </span>
                   <button
                     onClick={() => borrarCierre(c.id)}
-                    className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                    className="ca-btn-ghost ca-btn-sm"
                   >
                     Quitar
                   </button>
@@ -256,21 +240,21 @@ export default function HorariosPage() {
 
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs text-slate-400">Desde</label>
+                <label className="mb-1 block text-xs text-slate-500">Desde</label>
                 <input
                   type="date" className={inputCls} value={nuevo.start_date}
                   onChange={(e) => setNuevo({ ...nuevo, start_date: e.target.value })}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-400">Hasta (opcional)</label>
+                <label className="mb-1 block text-xs text-slate-500">Hasta (opcional)</label>
                 <input
                   type="date" className={inputCls} value={nuevo.end_date}
                   onChange={(e) => setNuevo({ ...nuevo, end_date: e.target.value })}
                 />
               </div>
               <div className="grow">
-                <label className="mb-1 block text-xs text-slate-400">Motivo (opcional)</label>
+                <label className="mb-1 block text-xs text-slate-500">Motivo (opcional)</label>
                 <input
                   className={`${inputCls} w-full`} placeholder="Vacaciones, festivo local…"
                   value={nuevo.reason}
@@ -280,7 +264,7 @@ export default function HorariosPage() {
               <button
                 onClick={crearCierre}
                 disabled={guardando}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+                className="ca-btn-primary"
               >
                 Añadir
               </button>
@@ -288,6 +272,6 @@ export default function HorariosPage() {
           </section>
         </>
       )}
-    </main>
+    </AppShell>
   );
 }

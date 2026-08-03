@@ -54,9 +54,9 @@ export default function OnboardingVerticalPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="w-full max-w-lg rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h1 className="mb-1 text-xl font-semibold text-white">¿Cuál es tu sector?</h1>
-        <p className="mb-6 text-sm text-slate-400">
+      <div className="w-full max-w-lg rounded-xl border border-[#e6e4de] bg-white p-6">
+        <h1 className="mb-1 ca-h2">¿Cuál es tu sector?</h1>
+        <p className="mb-6 text-sm text-slate-500">
           Te preparamos un catálogo de servicios típico de tu gremio — luego
           podrás editarlo, cambiar precios y duraciones desde tu panel.
         </p>
@@ -68,12 +68,12 @@ export default function OnboardingVerticalPage() {
               onClick={() => setElegido(v.code)}
               className={`w-full rounded-lg border p-4 text-left transition ${
                 elegido === v.code
-                  ? 'border-blue-500 bg-blue-500/10'
-                  : 'border-slate-700 hover:border-slate-500'
+                  ? 'border-[#0f7a4f] bg-[#ecf7f1]'
+                  : 'border-[#d9d7d0] hover:border-slate-500'
               }`}
             >
-              <p className="font-medium text-white">{v.label}</p>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="font-medium text-slate-900">{v.label}</p>
+              <p className="mt-1 text-xs text-slate-500">
                 Incluye: {v.services.slice(0, 4).join(', ')}
                 {v.services.length > 4 ? ` y ${v.services.length - 4} más` : ''}
               </p>
@@ -84,23 +84,23 @@ export default function OnboardingVerticalPage() {
             onClick={() => setElegido('ninguno')}
             className={`w-full rounded-lg border border-dashed p-4 text-left transition ${
               elegido === 'ninguno'
-                ? 'border-blue-500 bg-blue-500/10'
-                : 'border-slate-700 hover:border-slate-500'
+                ? 'border-[#0f7a4f] bg-[#ecf7f1]'
+                : 'border-[#d9d7d0] hover:border-slate-500'
             }`}
           >
-            <p className="font-medium text-slate-200">Otro sector / empezar sin catálogo</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="font-medium text-slate-700">Otro sector / empezar sin catálogo</p>
+            <p className="mt-1 text-xs text-slate-500">
               Podrás crear tus servicios a mano desde el panel.
             </p>
           </button>
         </div>
 
-        {error && <p className="mt-4 text-xs text-amber-400">{error}</p>}
+        {error && <p className="mt-4 text-xs text-amber-700">{error}</p>}
 
         <button
           onClick={() => elegido && continuar(elegido)}
           disabled={!elegido || loading}
-          className="mt-6 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-600 disabled:opacity-60"
+          className="mt-6 w-full ca-btn-primary"
         >
           {loading ? 'Guardando…' : 'Continuar'}
         </button>

@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '../../lib/api';
 import { supabase } from '../../lib/supabaseClient';
+import AppShell from '../../components/AppShell';
 
 type Servicio = {
   id: number;
@@ -20,7 +21,7 @@ type Servicio = {
 };
 
 const inputCls =
-  'w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none';
+  'w-full ca-input focus:border-[#0f7a4f] focus:outline-none';
 
 export default function CatalogoPage() {
   const router = useRouter();
@@ -129,25 +130,13 @@ export default function CatalogoPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Catálogo de servicios</h1>
-          <p className="text-sm text-slate-400">
-            Lo que ofreces al reservar por WhatsApp. Los cambios se aplican al instante.
-          </p>
-        </div>
-        <button
-          onClick={() => router.push('/')}
-          className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          ← Volver al panel
-        </button>
-      </div>
-
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-      {aviso && <p className="mb-4 text-sm text-emerald-400">{aviso}</p>}
-      {cargando && <p className="text-sm text-slate-400">Cargando…</p>}
+    <AppShell
+      titulo="Servicios que ofreces"
+      descripcion="Lo que ven tus clientas al reservar por WhatsApp. Los cambios se aplican al instante."
+    >
+      {error && <p className="ca-alert-error mb-4">{error}</p>}
+      {aviso && <p className="ca-alert-ok mb-4">{aviso}</p>}
+      {cargando && <p className="ca-hint">Cargando…</p>}
 
       {!cargando && (
         <>
@@ -159,15 +148,15 @@ export default function CatalogoPage() {
               return (
                 <div
                   key={s.id}
-                  className={`rounded-lg border p-4 ${v.is_active ? 'border-slate-800 bg-slate-900/60' : 'border-slate-800 bg-slate-900/30 opacity-70'}`}
+                  className={`rounded-lg border p-4 ${v.is_active ? 'border-[#e6e4de] bg-white' : 'border-[#e6e4de] bg-slate-50 opacity-70'}`}
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
                     <div className="sm:col-span-4">
-                      <label className="mb-1 block text-xs text-slate-400">Servicio</label>
+                      <label className="mb-1 block text-xs text-slate-500">Servicio</label>
                       <input className={inputCls} value={v.name} onChange={(ev) => editar(s.id, 'name', ev.target.value)} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-slate-400">Minutos</label>
+                      <label className="mb-1 block text-xs text-slate-500">Minutos</label>
                       <input
                         className={inputCls} type="number" min={5} max={480} step={5}
                         value={v.duration_minutes}
@@ -175,7 +164,7 @@ export default function CatalogoPage() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-slate-400">Precio €</label>
+                      <label className="mb-1 block text-xs text-slate-500">Precio €</label>
                       <input
                         className={inputCls} type="number" min={0} step={0.5}
                         value={v.price_eur ?? ''}
@@ -184,7 +173,7 @@ export default function CatalogoPage() {
                       />
                     </div>
                     <div className="sm:col-span-4">
-                      <label className="mb-1 block text-xs text-slate-400">Descripción</label>
+                      <label className="mb-1 block text-xs text-slate-500">Descripción</label>
                       <input
                         className={inputCls} value={v.description ?? ''}
                         onChange={(ev) => editar(s.id, 'description', ev.target.value)}
@@ -192,7 +181,7 @@ export default function CatalogoPage() {
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                       <input
                         type="checkbox" checked={v.is_active}
                         onChange={(ev) => editar(s.id, 'is_active', ev.target.checked)}
@@ -203,7 +192,7 @@ export default function CatalogoPage() {
                       <button
                         onClick={() => guardar(s.id)}
                         disabled={guardando === s.id}
-                        className="rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                        className="ca-btn-primary"
                       >
                         {guardando === s.id ? 'Guardando…' : 'Guardar cambios'}
                       </button>
@@ -213,14 +202,14 @@ export default function CatalogoPage() {
               );
             })}
             {servicios.length === 0 && (
-              <p className="rounded-lg border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
+              <p className="rounded-lg border border-dashed border-[#d9d7d0] p-6 text-center text-sm text-slate-500">
                 Aún no tienes servicios. Crea el primero aquí abajo. 👇
               </p>
             )}
           </div>
 
-          <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">Añadir servicio</p>
+          <div className="mt-8 ca-card-p">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Añadir servicio</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
               <div className="sm:col-span-4">
                 <input
@@ -251,13 +240,13 @@ export default function CatalogoPage() {
             <button
               onClick={crear}
               disabled={guardando === 'nuevo'}
-              className="mt-3 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-600 disabled:opacity-60"
+              className="mt-3 ca-btn-primary"
             >
               {guardando === 'nuevo' ? 'Creando…' : 'Añadir servicio'}
             </button>
           </div>
         </>
       )}
-    </main>
+    </AppShell>
   );
 }

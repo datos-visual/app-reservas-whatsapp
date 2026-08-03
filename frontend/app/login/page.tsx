@@ -41,15 +41,15 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h1 className="mb-1 text-xl font-semibold text-white">CanalAgenda</h1>
-        <p className="mb-6 text-sm text-slate-400">
+      <div className="w-full max-w-sm rounded-xl border border-[#e6e4de] bg-white p-6">
+        <h1 className="mb-1 ca-h2">CanalAgenda</h1>
+        <p className="mb-6 text-sm text-slate-500">
           Accede al panel de tu negocio.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs text-slate-400" htmlFor="email">
+            <label className="mb-1 block text-xs text-slate-500" htmlFor="email">
               Email
             </label>
             <input
@@ -59,11 +59,11 @@ export default function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+              className="ca-input"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-400" htmlFor="password">
+            <label className="mb-1 block text-xs text-slate-500" htmlFor="password">
               Contraseña
             </label>
             <input
@@ -73,16 +73,16 @@ export default function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+              className="ca-input"
             />
           </div>
 
-          {error && <p className="text-xs text-amber-400">{error}</p>}
+          {error && <p className="text-xs text-amber-700">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-600 disabled:opacity-60"
+            className="w-full ca-btn-primary"
           >
             {loading ? 'Entrando…' : 'Entrar'}
           </button>

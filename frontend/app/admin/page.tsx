@@ -207,8 +207,8 @@ export default function AdminPage() {
   if (!entrado) {
     return (
       <main className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-bold mb-2 text-white">Backoffice CanalAgenda</h1>
-        <p className="text-sm text-slate-300 mb-6">
+        <h1 className="text-2xl font-bold mb-2 text-slate-900">Backoffice CanalAgenda</h1>
+        <p className="text-sm text-slate-700 mb-6">
           Acceso solo para el administrador. El token no se guarda en el servidor.
         </p>
         <form
@@ -223,16 +223,16 @@ export default function AdminPage() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="ADMIN_TOKEN"
-            className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white placeholder:text-slate-500"
+            className="w-full rounded border border-[#d9d7d0] bg-slate-900 px-3 py-2 text-slate-900 placeholder:text-slate-500"
           />
           <button
             type="submit"
             disabled={cargando}
-            className="w-full rounded bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="w-full rounded bg-emerald-600 px-4 py-2 font-medium text-slate-900 hover:bg-emerald-700 disabled:opacity-50"
           >
             {cargando ? 'Entrando…' : 'Entrar'}
           </button>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
       </main>
     );
@@ -244,8 +244,8 @@ export default function AdminPage() {
     <main className="mx-auto max-w-5xl p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Backoffice CanalAgenda</h1>
-          <p className="text-sm text-slate-300">
+          <h1 className="ca-h1">Backoffice CanalAgenda</h1>
+          <p className="text-sm text-slate-700">
             {tiendas.length} tienda(s) ·{' '}
             {totalIncidencias === 0 ? (
               <span className="text-emerald-700">sin incidencias</span>
@@ -257,14 +257,14 @@ export default function AdminPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setAltaAbierta((v) => !v)}
-            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-emerald-700"
           >
             {altaAbierta ? 'Cerrar alta' : '＋ Alta de tienda'}
           </button>
           <button
             onClick={() => cargar(token)}
             disabled={cargando}
-            className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            className="rounded border border-[#d9d7d0] px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             {cargando ? 'Actualizando…' : 'Actualizar'}
           </button>
@@ -274,14 +274,14 @@ export default function AdminPage() {
               setEntrado(false);
               setToken('');
             }}
-            className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+            className="rounded border border-[#d9d7d0] px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
           >
             Salir
           </button>
         </div>
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
       {resumen && (
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
@@ -293,29 +293,29 @@ export default function AdminPage() {
             ['Próximos 7 días', resumen.citas_proximos_7dias],
             ['Clientes', resumen.clientes_totales]
           ].map(([etiqueta, valor]) => (
-            <div key={String(etiqueta)} className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
-              <p className="text-xs text-slate-400">{etiqueta}</p>
-              <p className="text-xl font-semibold text-white">{valor ?? '—'}</p>
+            <div key={String(etiqueta)} className="ca-card px-3 py-2">
+              <p className="text-xs text-slate-500">{etiqueta}</p>
+              <p className="ca-h2">{valor ?? '—'}</p>
             </div>
           ))}
         </div>
       )}
 
       {altaAbierta && (
-        <div className="mb-5 rounded-lg border border-emerald-700/60 bg-slate-900/60 p-4">
-          <p className="mb-1 text-sm font-medium text-white">Alta de una peluquería nueva</p>
-          <p className="mb-3 text-xs text-slate-400">
+        <div className="mb-5 rounded-lg border border-emerald-200 bg-white p-4">
+          <p className="mb-1 text-sm font-medium text-slate-900">Alta de una peluquería nueva</p>
+          <p className="mb-3 text-xs text-slate-500">
             Crea el negocio, su usuario del panel y su catálogo inicial. Después conecta
             Calendar y WhatsApp desde la tarjeta de la tienda, sin salir de aquí.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <input
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              className="ca-input"
               placeholder="Nombre del negocio *" value={alta.name}
               onChange={(e) => setAlta({ ...alta, name: e.target.value })}
             />
             <select
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              className="ca-input"
               value={alta.vertical_code} onChange={(e) => setAlta({ ...alta, vertical_code: e.target.value })}
             >
               <option value="peluqueria">Peluquería (catálogo incluido)</option>
@@ -323,23 +323,23 @@ export default function AdminPage() {
               <option value="ninguno">Sin catálogo inicial</option>
             </select>
             <input
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              className="ca-input"
               placeholder="Teléfono del negocio" value={alta.business_phone}
               onChange={(e) => setAlta({ ...alta, business_phone: e.target.value })}
             />
             <input
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              className="ca-input"
               placeholder="Email para su panel" value={alta.owner_email}
               onChange={(e) => setAlta({ ...alta, owner_email: e.target.value })}
             />
             <input
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              className="ca-input"
               placeholder="Contraseña del panel (mín. 6)" value={alta.owner_password}
               onChange={(e) => setAlta({ ...alta, owner_password: e.target.value })}
             />
             <button
               onClick={crearTienda} disabled={guardando === 'alta'}
-              className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-emerald-700 disabled:opacity-50"
             >
               {guardando === 'alta' ? 'Creando…' : 'Crear tienda'}
             </button>
@@ -349,18 +349,18 @@ export default function AdminPage() {
 
       <div className="space-y-4">
         {tiendas.map((t) => (
-          <div key={t.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          <div key={t.id} className="ca-card-p">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="font-semibold text-white">
+                <h2 className="font-semibold text-slate-900">
                   {t.name}{' '}
                   {t.vertical_code && (
-                    <span className="ml-1 rounded bg-slate-800 px-2 py-0.5 text-xs font-normal text-slate-300">
+                    <span className="ml-1 rounded bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-700">
                       {t.vertical_code}
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-slate-400">{t.id}</p>
+                <p className="text-xs text-slate-500">{t.id}</p>
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs">
                 <span className={`rounded px-2 py-0.5 ${t.whatsapp.conectado && t.whatsapp.activo ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
@@ -369,7 +369,7 @@ export default function AdminPage() {
                 <span className={`rounded px-2 py-0.5 ${t.calendar.conectado ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
                   Calendar {t.calendar.conectado ? 'OK' : 'sin conectar'}
                 </span>
-                <span className="rounded bg-slate-800 px-2 py-0.5 text-slate-300">
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">
                   Citas: {t.citas.ultimos7dias} últ. 7d · {t.citas.proximos7dias} próx. 7d
                 </span>
               </div>
@@ -380,7 +380,7 @@ export default function AdminPage() {
                 {t.incidencias.map((inc, i) => (
                   <li
                     key={i}
-                    className={`rounded px-2 py-1 text-xs ${inc.nivel === 'error' ? 'bg-red-900/40 text-red-200' : 'bg-amber-900/40 text-amber-200'}`}
+                    className={`rounded px-2 py-1 text-xs ${inc.nivel === 'error' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}
                   >
                     {inc.nivel === 'error' ? '⛔' : '⚠️'} {inc.texto}
                   </li>
@@ -388,8 +388,8 @@ export default function AdminPage() {
               </ul>
             )}
 
-            <div className="mt-4 border-t border-slate-800 pt-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+            <div className="mt-4 border-t border-[#e6e4de] pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 Módulos con plantilla de Meta
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -397,10 +397,10 @@ export default function AdminPage() {
                   { key: 'recordatorios' as const, label: 'Recordatorios', datos: t.modulos.recordatorios },
                   { key: 'missed_call' as const, label: 'Llamada perdida', datos: t.modulos.missed_call }
                 ]).map((m) => (
-                  <div key={m.key} className="rounded border border-slate-700 px-3 py-2 text-sm">
+                  <div key={m.key} className="rounded border border-[#d9d7d0] px-3 py-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-200">{m.label}</span>
-                      <span className={`text-xs ${m.datos?.template_status === 'approved' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      <span className="text-slate-700">{m.label}</span>
+                      <span className={`text-xs ${m.datos?.template_status === 'approved' ? 'text-emerald-700' : 'text-amber-700'}`}>
                         {m.datos ? (m.datos.template_status || 'sin estado') : 'sin ficha'}
                       </span>
                     </div>
@@ -409,7 +409,7 @@ export default function AdminPage() {
                         <button
                           onClick={() => cambiarModulo(t.id, m.key, { template_status: 'approved' })}
                           disabled={guardando === t.id + m.key}
-                          className="rounded bg-emerald-700 px-2 py-1 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"
+                          className="rounded bg-emerald-700 px-2 py-1 text-xs text-slate-900 hover:bg-emerald-600 disabled:opacity-50"
                         >
                           Plantilla aprobada ✓
                         </button>
@@ -417,7 +417,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => cambiarModulo(t.id, m.key, { enabled: !(m.datos?.enabled) })}
                         disabled={guardando === t.id + m.key}
-                        className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${m.datos?.enabled ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-700 text-slate-300'}`}
+                        className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${m.datos?.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}
                       >
                         {m.datos?.enabled ? 'Activado' : 'Desactivado'}
                       </button>
@@ -430,23 +430,23 @@ export default function AdminPage() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => setConexiones((c) => ({ ...c, [t.id]: !c[t.id] }))}
-                className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                className="ca-btn-ghost ca-btn-sm"
               >
                 {conexiones[t.id] ? 'Ocultar conexiones' : 'Conectar Calendar / WhatsApp'}
               </button>
             </div>
 
             {conexiones[t.id] && (
-              <div className="mt-3 grid grid-cols-1 gap-4 rounded border border-slate-800 p-3 md:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-4 rounded-lg border border-[#e6e4de] p-3 md:grid-cols-2">
                 <div>
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Google Calendar</p>
-                  <p className="mb-2 text-xs text-slate-400">
+                  <p className="mb-2 text-xs text-slate-500">
                     El negocio comparte su calendario con{' '}
-                    <span className="text-slate-300">calendar-reservas@whatsapp-reservas-489313.iam.gserviceaccount.com</span>{' '}
+                    <span className="text-slate-700">calendar-reservas@whatsapp-reservas-489313.iam.gserviceaccount.com</span>{' '}
                     (permiso: hacer cambios) y te pasa el ID.
                   </p>
                   <input
-                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    className="ca-input mb-2"
                     placeholder="ID del calendario"
                     value={conex[t.id]?.cal || ''}
                     onChange={(e) => setConex((c) => ({ ...c, [t.id]: { ...(c[t.id] || { cal: '', pnid: '', token: '', waba: '', msg: '' }), cal: e.target.value } }))}
@@ -454,13 +454,13 @@ export default function AdminPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => accionConexion(t.id, 'calendar', { google_calendar_id: conex[t.id]?.cal })}
-                      className="rounded bg-slate-700 px-3 py-1 text-xs text-white hover:bg-slate-600"
+                      className="ca-btn-ghost ca-btn-sm"
                     >
                       Guardar
                     </button>
                     <button
                       onClick={() => accionConexion(t.id, 'calendar/test')}
-                      className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                      className="ca-btn-ghost ca-btn-sm"
                     >
                       Probar conexión
                     </button>
@@ -470,14 +470,14 @@ export default function AdminPage() {
                 <div>
                   <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">WhatsApp (Meta)</p>
                   <input
-                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    className="ca-input mb-2"
                     placeholder="phone_number_id"
                     value={conex[t.id]?.pnid || ''}
                     onChange={(e) => setConex((c) => ({ ...c, [t.id]: { ...(c[t.id] || { cal: '', pnid: '', token: '', waba: '', msg: '' }), pnid: e.target.value } }))}
                   />
                   <input
                     type="password"
-                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    className="ca-input mb-2"
                     placeholder="Token de acceso (no se muestra después)"
                     value={conex[t.id]?.token || ''}
                     onChange={(e) => setConex((c) => ({ ...c, [t.id]: { ...(c[t.id] || { cal: '', pnid: '', token: '', waba: '', msg: '' }), token: e.target.value } }))}
@@ -485,13 +485,13 @@ export default function AdminPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => accionConexion(t.id, 'whatsapp', { phone_number_id: conex[t.id]?.pnid, access_token: conex[t.id]?.token })}
-                      className="rounded bg-slate-700 px-3 py-1 text-xs text-white hover:bg-slate-600"
+                      className="ca-btn-ghost ca-btn-sm"
                     >
                       Guardar
                     </button>
                     <button
                       onClick={() => accionConexion(t.id, 'whatsapp/test')}
-                      className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                      className="ca-btn-ghost ca-btn-sm"
                     >
                       Probar conexión
                     </button>
@@ -499,7 +499,7 @@ export default function AdminPage() {
                 </div>
 
                 {conex[t.id]?.msg && (
-                  <p className={`md:col-span-2 text-xs ${conex[t.id].msg.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <p className={`md:col-span-2 text-xs ${conex[t.id].msg.startsWith('✓') ? 'text-emerald-700' : 'text-amber-700'}`}>
                     {conex[t.id].msg}
                   </p>
                 )}
@@ -509,7 +509,7 @@ export default function AdminPage() {
             <div className="mt-3">
               <button
                 onClick={() => toggleActividad(t.id)}
-                className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                className="ca-btn-ghost ca-btn-sm"
               >
                 {actividad[t.id] ? 'Ocultar actividad' : 'Ver actividad'}
               </button>
@@ -520,7 +520,7 @@ export default function AdminPage() {
                     {actividad[t.id]!.citas.length === 0 && <p className="text-xs text-slate-500">Ninguna.</p>}
                     <ul className="space-y-1">
                       {actividad[t.id]!.citas.map((c: any) => (
-                        <li key={c.id} className="rounded bg-slate-800/60 px-2 py-1 text-xs text-slate-300">
+                        <li key={c.id} className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
                           {new Date(c.start_at).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           {' — '}{c.customers?.name || c.customers?.phone || '¿?'}
                           <span className="ml-1 text-slate-500">({c.status})</span>
@@ -533,7 +533,7 @@ export default function AdminPage() {
                     {actividad[t.id]!.mensajes.length === 0 && <p className="text-xs text-slate-500">Ninguno.</p>}
                     <ul className="max-h-64 space-y-1 overflow-y-auto">
                       {actividad[t.id]!.mensajes.map((m: any, i: number) => (
-                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-slate-800/60 text-slate-400' : 'bg-blue-900/30 text-slate-200'}`}>
+                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-slate-100 text-slate-500' : 'bg-blue-900/30 text-slate-700'}`}>
                           <span className="text-slate-500">{m.from_me ? '🤖' : '👤'} </span>
                           {String(m.content).slice(0, 120)}
                         </li>
@@ -544,8 +544,8 @@ export default function AdminPage() {
               )}
             </div>
 
-            <div className="mt-4 border-t border-slate-800 pt-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+            <div className="mt-4 border-t border-[#e6e4de] pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
                 Servicios premium (doc 09)
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -555,7 +555,7 @@ export default function AdminPage() {
                   return (
                     <label
                       key={f.key}
-                      className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${activo ? 'border-emerald-500 bg-emerald-900/40 text-emerald-100' : 'border-slate-700 text-slate-200'} ${ocupado ? 'opacity-50' : ''}`}
+                      className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${activo ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[#d9d7d0] text-slate-700'} ${ocupado ? 'opacity-50' : ''}`}
                     >
                       <input
                         type="checkbox"

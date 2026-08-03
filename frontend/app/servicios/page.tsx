@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { apiFetch } from '../../lib/api';
+import AppShell from '../../components/AppShell';
 
 type FeatureState = {
   contratado: Record<string, boolean>;
@@ -104,26 +105,19 @@ export default function ServiciosPage() {
   const noContratados = state ? state.disponibles.filter((f) => state.contratado[f] !== true) : [];
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Servicios de tu plan</h1>
-        <button
-          onClick={() => router.push('/')}
-          className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          ← Volver al panel
-        </button>
-      </div>
-
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-      {cargando && <p className="text-sm text-slate-400">Cargando…</p>}
+    <AppShell
+      titulo="Mi plan"
+      descripcion="Los servicios que tienes contratados. Puedes apagar el que no quieras usar."
+    >
+      {error && <p className="ca-alert-error mb-4">{error}</p>}
+      {cargando && <p className="text-sm text-slate-500">Cargando…</p>}
 
       {!cargando && state && (
         <>
           {contratados.length === 0 ? (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6 text-center">
-              <p className="text-slate-200">Tu plan actual no incluye servicios premium.</p>
-              <p className="mt-1 text-sm text-slate-400">
+            <div className="ca-card-p text-center">
+              <p className="text-slate-700">Tu plan actual no incluye servicios premium.</p>
+              <p className="mt-1 text-sm text-slate-500">
                 Si quieres probar alguno, escríbenos y te lo activamos.
               </p>
             </div>
@@ -133,18 +127,18 @@ export default function ServiciosPage() {
                 const activo = state.desactivado[f] !== true;
                 const info = ETIQUETAS[f] || { nombre: f, descripcion: '' };
                 return (
-                  <div key={f} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+                  <div key={f} className="flex items-center justify-between ca-card-p">
                     <div className="pr-4">
-                      <p className="font-medium text-white">{info.nombre}</p>
-                      <p className="text-sm text-slate-400">{info.descripcion}</p>
+                      <p className="font-medium text-slate-900">{info.nombre}</p>
+                      <p className="text-sm text-slate-500">{info.descripcion}</p>
                     </div>
                     <button
                       onClick={() => toggle(f, !activo)}
                       disabled={guardando === f}
                       className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
                         activo
-                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          ? 'bg-[#0f7a4f] text-white hover:bg-[#0c6642]'
+                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                       } ${guardando === f ? 'opacity-50' : ''}`}
                     >
                       {guardando === f ? '…' : activo ? 'Activado' : 'Desactivado'}
@@ -164,12 +158,12 @@ export default function ServiciosPage() {
                 {noContratados.map((f) => {
                   const info = ETIQUETAS[f] || { nombre: f, descripcion: '' };
                   return (
-                    <div key={f} className="flex items-center justify-between rounded-lg border border-dashed border-slate-700 p-3 opacity-70">
+                    <div key={f} className="flex items-center justify-between rounded-lg border border-dashed border-[#d9d7d0] p-3 opacity-70">
                       <div className="pr-4">
-                        <p className="text-sm font-medium text-slate-200">{info.nombre}</p>
-                        <p className="text-xs text-slate-400">{info.descripcion}</p>
+                        <p className="text-sm font-medium text-slate-700">{info.nombre}</p>
+                        <p className="text-xs text-slate-500">{info.descripcion}</p>
                       </div>
-                      <span className="shrink-0 text-xs text-slate-400">🔒 No incluido</span>
+                      <span className="shrink-0 text-xs text-slate-500">🔒 No incluido</span>
                     </div>
                   );
                 })}
@@ -178,6 +172,6 @@ export default function ServiciosPage() {
           )}
         </>
       )}
-    </main>
+    </AppShell>
   );
 }
