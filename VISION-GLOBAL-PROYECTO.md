@@ -2,7 +2,7 @@
 
 > **Propósito de este documento:** dar a cualquier persona (o conversación de IA)
 > el contexto completo del proyecto: qué es, por qué existe, cómo está construido,
-> qué está hecho y verificado, y qué queda. Actualizado: **17 de julio de 2026**.
+> qué está hecho y verificado, y qué queda. Actualizado: **3 de agosto de 2026**.
 > Complementa a `INSTRUCCIONES-PROYECTO.md` (reglas fijas), `GUIA-PASO-A-PASO.md`
 > (plan histórico de saneamiento), `docs/08-especificacion-guiones-verticales.md`
 > (especificación vigente del flujo guiado y los verticales — **el plan activo de
@@ -354,6 +354,37 @@ missed-call (M1-M6) están **construidos, desplegados y probados**:
 - ✅ **A3 (19-jul):** "Ver actividad" por tienda en `/admin` (últimos 30
   mensajes + próximas 10 citas) y **`docs/runbook-incidencias.md`** —
   síntoma→causa→solución de todo lo aprendido (leerlo ante cualquier fallo).
+- ✅ **Bloque 1 completo (28-jul → 3-ago):** la tienda ya no depende del
+  admin para su día a día — **horarios y vacaciones** editables (`/horarios`,
+  con `getDayHours` como única fuente de verdad y regla *fail-safe*: día sin
+  horario configurado = CERRADO), y **agenda con citas manuales**
+  (`/agenda` + `agenda.js`): apuntar las que entran por teléfono pasando por
+  las MISMAS garantías que el bot, cancelar avisando a la clienta por
+  WhatsApp y aviso automático a la lista de espera al liberarse el hueco.
+- ✅ **N8 nombre desde el perfil de WhatsApp (verificado 30-jul):** el nombre
+  se toma del perfil si parece de persona (heurística probada con 13 casos),
+  se propone en la confirmación y se corrige diciendo "me llamo…". Nunca pisa
+  un nombre dado por la persona o el negocio. Columna `customers.name_source`.
+  **Decisión de privacidad escrita:** los clientes son de CADA tienda; el
+  mismo teléfono en dos negocios son dos fichas y no se comparte nada.
+- ✅ **Backoffice completo (3-ago):** alta de tienda de punta a punta desde
+  `/admin` (negocio + usuario del panel con contraseña + catálogo del sector),
+  conexión de Calendar y WhatsApp por tienda (los endpoints ya aceptaban
+  `?store_id=` en modo admin), activación de plantillas y módulos sin SQL,
+  actividad por tienda y **estadísticas agregadas**.
+- ✅ **Rediseño de usabilidad (3-ago):** tema CLARO con sistema propio
+  (`globals.css`: `ca-card`, `ca-btn-*`, `ca-input`, `ca-badge-*`),
+  `components/AppShell.tsx` con **el nombre del negocio siempre visible** y
+  navegación por pestañas con iconos SVG propios (`components/icons.tsx`).
+  ⚠️ El build de Render usa `noUnusedLocals`: **cualquier variable sin usar
+  rompe el despliegue** (pasó con `negocio` en horarios). Verificar con
+  `./node_modules/.bin/tsc --noEmit` antes de cada push del frontend.
+- 🔨 **B5.1 EN CURSO (3-ago) — equipo con nombres, turnos y ausencias:**
+  `migration_equipo.sql` (turnos, ausencias, `resources.units` y la
+  **migración consciente del índice anti doble-reserva**), `equipo.js`
+  (disponibilidad por persona y reparto equilibrado), integración en los 6
+  caminos de huecos, API `/api/equipo` y pantalla `/equipo`.
+  **Pendiente de que el fundador ejecute la migración y lo pruebe.**
 - 📤 **Plantillas enviadas a Meta el 19-jul:** `canalagenda_reminder_v2`
   (Servicio, 4 variables con servicio), `canalagenda_waitlist_v1`
   (Meta la forzó a MARKETING) y `canalagenda_reactivacion_v1` (Marketing).
@@ -586,6 +617,16 @@ documentos, no en la memoria de la conversación**. Protocolo de arranque:
   carpeta compartida.
 - Twilio aparcado esperando número español (§6).
 
+### 10.4.bis Acceso al panel (3-ago-2026)
+Usuario operativo: **jm@canalagenda.local**, vinculado a **Store demo**
+(`0aa6d8d7-…`), que es la tienda con el número real de WhatsApp. `piloto1`
+(misma tienda, contraseña perdida) y `piloto2` (Tienda Prueba Onboarding)
+quedan como históricos. **Incidente aprendido:** se estuvo configurando la
+tienda equivocada durante media sesión; por eso el panel muestra ahora el
+nombre del negocio en la cabecera. Para crear usuarios: Supabase →
+Authentication → **Add user** (con *Auto Confirm*) + `insert` en
+`store_users`, o directamente el alta desde `/admin`.
+
 ### 10.5 Estado de las pruebas reales (actualizado 28-jul-2026)
 1. ✅ **R1 recordatorio VERIFICADO (28-jul):** cita a 33 min → plantilla
    recibida con botones. ⚠️ El 2º botón dice "Confirmar cita" en lugar de
@@ -599,6 +640,40 @@ documentos, no en la memoria de la conversación**. Protocolo de arranque:
 5. ⏳ P3 lista de espera: activar flag en `/admin` → día lleno →
    [Apúntame ⏰] → cancelar una cita de ese día → llega el aviso.
 6. ⏳ P1: huecos con ⭐; apagar el flag en `/servicios` y ver desaparecer las ⭐.
+
+### 10.55 Estado exacto al 3-ago-2026 (retomar por aquí)
+
+**Migraciones que el fundador debe ejecutar (en orden) si no lo ha hecho:**
+1. `migration_horarios_cierres.sql` — vacaciones/cierres (¡el log mostró que
+   faltaba: `Could not find the table public.store_closures`!).
+2. `migration_nombre_perfil.sql` — `customers.name_source` (ya ejecutada).
+3. `migration_equipo.sql` — turnos, ausencias y **la migración consciente del
+   índice anti doble-reserva**. ⚠️ Leerla entera antes: contiene la vuelta atrás.
+
+**B5 — plan acordado con el fundador (3-ago), decisiones cerradas:**
+- Modelo: **personas con NOMBRE** (no un simple contador), porque desbloquea
+  turnos individuales, vacaciones por persona, "pido cita con Laura" y la
+  reactivación premium.
+- **Entrega 1 (hecha, sin probar): personas + turnos + ausencias.** Regla de
+  compatibilidad: tienda SIN equipo dado de alta ⇒ comportamiento idéntico al
+  actual (una cita a la vez, disponibilidad desde Calendar).
+- **Entrega 2 (pendiente): aparatos con unidades.** Un servicio puede exigir
+  además un equipo limitado (1 lavacabezas, 2 sillones de color): tabla
+  `service_resources` + contar unidades libres. `resources.units` ya existe.
+- **Entrega 3 (pendiente): elegir profesional** al reservar ("¿con quién?").
+- **Fuera de alcance consciente:** modelar las FASES de un servicio (el tinte
+  ocupa a la persona 20 min y luego solo el sillón 30 min). Es lo que hacen
+  los sistemas profesionales para exprimir la agenda; se valorará como
+  funcionalidad premium, nunca antes de tener pilotos.
+
+**Cómo se calcula ahora la disponibilidad** (importante para no romperlo):
+`generate30MinSlots` genera los huecos por horario y duración, y
+`equipo.filtrarHuecosPorEquipo()` los filtra dejando solo aquellos con al
+menos una persona **de turno, sin ausencia y sin cita solapando**. Está
+aplicado en los 6 caminos (flujo guiado, revalidación al elegir hora,
+confirmación SI, DISPONIBLE, CITA directa, cambio de cita) y en las citas
+manuales del panel. Al confirmar, `equipo.elegirPersonaLibre()` asigna a la
+persona con menos carga ese día.
 
 ### 10.6 INCIDENTE 28-jul-2026 — el planificador estaba muerto
 El cron de cron-job.org se había **autodesactivado** tras errores HTTP

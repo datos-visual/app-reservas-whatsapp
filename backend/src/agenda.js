@@ -24,6 +24,7 @@ const {
 } = require('./db');
 const { listEventsForDay, generate30MinSlots, createCalendarEvent, deleteCalendarEvent } = require('./calendar');
 const { sendTextMessage } = require('./whatsappCloud');
+const equipo = require('./equipo');
 
 function errorValidacion(mensaje) {
   const e = new Error(mensaje);
@@ -133,12 +134,12 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
 
   // 3) ¿Cabe y está libre? (mismo cálculo que el bot: Calendar + horario)
   const eventos = await listEventsForDay(storeId, inicio.toISO(), zone);
-  const huecos = generate30MinSlots(inicio.toISO(), eventos, {
+  const huecos = await equipo.filtrarHuecosPorEquipo(storeId, fecha, generate30MinSlots(inicio.toISO(), eventos, {
     zone,
     slotDurationMinutes: duracion,
     openTime: horario.openTime || '08:00',
     closeTime: horario.closeTime || '17:00'
-  });
+  }), zone);
   if (!huecos.some((h) => h.label === inicio.toFormat('HH:mm'))) {
     throw errorValidacion(`A las ${inicio.toFormat('HH:mm')} no cabe ${servicio ? `«${servicio.name}» (${duracion} min)` : `una cita de ${duracion} min`}: está ocupado o fuera de horario.`);
   }
@@ -173,7 +174,8 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
       end: fin.toISO(),
       googleEventId: evento.id,
       source: 'admin',
-      serviceId: servicio?.id ?? null
+      serviceId: servicio?.id ?? null,
+      resourceId: await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone)
     });
   } catch (err) {
     await deleteCalendarEvent(storeId, evento.id);   // no dejar basura en Calendar

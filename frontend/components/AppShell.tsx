@@ -9,11 +9,12 @@ import { ReactNode, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import { apiFetch } from '../lib/api';
-import { IconAgenda, IconReloj, IconTijeras, IconEstrella, IconCasa, IconSalir } from './icons';
+import { IconAgenda, IconReloj, IconTijeras, IconEstrella, IconCasa, IconSalir, IconPersonas } from './icons';
 
 const NAV = [
   { href: '/', label: 'Inicio', Icon: IconCasa },
   { href: '/agenda', label: 'Agenda', Icon: IconAgenda },
+  { href: '/equipo', label: 'Equipo', Icon: IconPersonas },
   { href: '/catalogo', label: 'Servicios', Icon: IconTijeras },
   { href: '/horarios', label: 'Horarios', Icon: IconReloj },
   { href: '/servicios', label: 'Mi plan', Icon: IconEstrella }

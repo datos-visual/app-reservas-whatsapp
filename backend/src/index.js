@@ -55,6 +55,7 @@ const {
 const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('./providers/twilioVoice');
 const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
 const { joinWaitlist, getFirstWaitingForDate, markWaitlistNotified } = require('./waitlist');
+const equipo = require('./equipo');
 const {
   REMINDER_PAYLOADS,
   dispatchReminders,
@@ -370,7 +371,11 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     closeTime: businessHours?.closeTime || '17:00'
   };
   const events = await listEventsForDay(storeId, dateIso, zone);
-  const slots = generate30MinSlots(dateIso, events, slotOptions);
+  // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
+  // (quién está de turno y libre). Sin equipo, todo sigue igual que antes.
+  const slots = await equipo.filtrarHuecosPorEquipo(
+    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone
+  );
 
   if (!slots.length) {
     const fechaTxt = date.setLocale('es').toFormat('cccc dd/MM');
@@ -609,7 +614,9 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       closeTime: businessHours?.closeTime || '17:00'
     };
     const events = await listEventsForDay(storeId, d.dateIso, zone);
-    const slots = generate30MinSlots(d.dateIso, events, slotOptions);
+    const slots = await equipo.filtrarHuecosPorEquipo(
+      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone
+    );
     const match = slots.find((s) => s.label === timeLabel);
 
     if (!match) {
@@ -908,7 +915,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       closeTime: businessHours?.closeTime || '17:00'
     };
     const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
-    const slots = generate30MinSlots(dateTime.toISO(), events, slotOptions);
+    const slots = await equipo.filtrarHuecosPorEquipo(
+      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone
+    );
     const slotMatch = slots.find((s) => s.label === normalizedTime);
 
     if (!slotMatch) {
@@ -1260,7 +1269,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     };
 
     const events = await listEventsForDay(storeId, startIso, zone);
-    const slots = generate30MinSlots(startIso, events, slotOptions);
+    const slots = await equipo.filtrarHuecosPorEquipo(
+      storeId, DateTime.fromISO(startIso, { zone }).toISODate(),
+      generate30MinSlots(startIso, events, slotOptions), zone
+    );
     const startDt = DateTime.fromISO(startIso, { zone });
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
 
@@ -1316,6 +1328,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       }, zone);
 
       try {
+        // B5.1: si hay equipo, asignar a la persona libre con menos carga
+        const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone);
+
         const appointment = await createAppointment({
           storeId,
           customerId: customer.id,
@@ -1323,7 +1338,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           end: endIso,
           googleEventId: calendarEvent.id,
           source: 'whatsapp',
-          serviceId: current.serviceId ?? null
+          serviceId: current.serviceId ?? null,
+          resourceId: personaAsignada
         });
 
         await deleteConversationState(storeId, from);
@@ -1489,7 +1505,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const smartSlots = premium?.smart_slots === true;
 
     const events = await listEventsForDay(storeId, iso, zone);
-    let slots = generate30MinSlots(iso, events, slotOptions);
+    let slots = await equipo.filtrarHuecosPorEquipo(
+      storeId, iso, generate30MinSlots(iso, events, slotOptions), zone
+    );
 
     // Franja horaria (viene del NLU: "por la tarde" → TARDE)
     let franjaTxt = '';
@@ -1605,7 +1623,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     };
 
     const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
-    const slots = generate30MinSlots(dateTime.toISO(), events, slotOptions);
+    const slots = await equipo.filtrarHuecosPorEquipo(
+      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone
+    );
     const match = slots.find((s) => s.label === normalizedTime);
 
     if (!match) {
@@ -2381,6 +2401,83 @@ app.use('/api', authMiddleware);
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
 const { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
 const catalog = require('./catalog');
+
+// --- B5.1: equipo (personas, turnos y ausencias) ---
+app.get('/api/equipo', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.json(await equipo.equipoCompleto(storeId));
+  } catch (err) {
+    console.error('[API] Error en GET /api/equipo', err);
+    res.status(500).json({ error: 'Error leyendo el equipo (¿migración de equipo aplicada?)' });
+  }
+});
+
+app.post('/api/equipo', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.status(201).json(await equipo.crearPersona(storeId, { nombre: req.body?.nombre }));
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error creando persona', err);
+    res.status(500).json({ error: 'Error añadiendo a la persona' });
+  }
+});
+
+app.put('/api/equipo/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+
+    if (Array.isArray(req.body?.turnos)) {
+      await equipo.guardarTurnos(storeId, id, req.body.turnos);
+    }
+    const actualizada = await equipo.actualizarPersona(storeId, id, {
+      nombre: req.body?.nombre, is_active: req.body?.is_active
+    });
+    res.json(actualizada || { ok: true });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error actualizando persona', err);
+    res.status(500).json({ error: 'Error guardando los cambios' });
+  }
+});
+
+app.post('/api/equipo/:id/ausencias', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    const fechaRe = /^\d{4}-\d{2}-\d{2}$/;
+    const { start_date: ini, end_date: fin, reason } = req.body || {};
+    if (!Number.isInteger(id) || !fechaRe.test(String(ini || ''))) {
+      return res.status(400).json({ error: 'Indica una fecha de inicio válida.' });
+    }
+    res.status(201).json(await equipo.crearAusencia(storeId, id, { startDate: ini, endDate: fin, reason }));
+  } catch (err) {
+    console.error('[API] Error creando ausencia', err);
+    res.status(500).json({ error: 'Error guardando la ausencia' });
+  }
+});
+
+app.delete('/api/equipo/ausencias/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const borrada = await equipo.borrarAusencia(storeId, id);
+    if (!borrada) return res.status(404).json({ error: 'Ausencia no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[API] Error borrando ausencia', err);
+    res.status(500).json({ error: 'Error borrando la ausencia' });
+  }
+});
 
 // --- Bloque 1.3/1.4 (doc 12): agenda del día y citas manuales ---
 const agenda = require('./agenda');
