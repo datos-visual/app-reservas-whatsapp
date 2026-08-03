@@ -19,6 +19,7 @@ type Cita = {
   cliente: string | null;
   telefono: string | null;
   servicio: string | null;
+  profesional: string | null;
 };
 type Agenda = {
   fecha: string;
@@ -201,13 +202,16 @@ export default function AgendaPage() {
                           {c.cliente || 'Sin nombre'}
                           {c.servicio && <span className="ml-2 font-normal text-slate-600">· {c.servicio}</span>}
                         </p>
-                        <p className="text-sm text-slate-500">
+                        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
                           {c.telefono}
-                          <span className="ml-2">
-                            {c.source === 'admin'
-                              ? <span className="ca-badge-mute">apuntada por ti</span>
-                              : <span className="ca-badge-ok">por WhatsApp</span>}
-                          </span>
+                          {c.profesional
+                            ? <span className="ca-badge bg-[#ecf7f1] text-[#0f7a4f] ring-1 ring-[#0f7a4f]/20">
+                                con {c.profesional}
+                              </span>
+                            : <span className="ca-badge-warn">sin asignar</span>}
+                          {c.source === 'admin'
+                            ? <span className="ca-badge-mute">apuntada por ti</span>
+                            : <span className="ca-badge-ok">por WhatsApp</span>}
                         </p>
                       </div>
                     </div>

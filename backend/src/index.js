@@ -1291,23 +1291,30 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text:
-          'Ese hueco acaba de reservarse. Envía DISPONIBLE ' +
-          current.datePart +
-          ' para ver otros horarios.'
+        text: 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
       });
       return;
     }
 
-    const existingConfirmed = await getConfirmedAppointmentByStart(storeId, startIso);
-    if (existingConfirmed) {
+    // ¿Quién atenderá? Con equipo, la protección es "queda alguien libre";
+    // sin equipo, la de siempre: "no hay ninguna cita a esa hora".
+    // (Antes se preguntaba siempre lo segundo, y con dos peluqueras eso
+    //  rechazaba la segunda cita de la misma hora — bug real 3-ago-2026.)
+    const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone);
+    const conEquipo = (await equipo.listarPersonas(storeId)).length > 0;
+
+    const ocupado = conEquipo
+      ? !personaAsignada
+      : !!(await getConfirmedAppointmentByStart(storeId, startIso));
+
+    if (ocupado) {
       await deleteConversationState(storeId, from);
       await sendAndLog({
         storeId,
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'Ese hueco acaba de reservarse y ya no está disponible.'
+        text: 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
       });
       return;
     }
@@ -1336,9 +1343,6 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       }, zone);
 
       try {
-        // B5.1: si hay equipo, asignar a la persona libre con menos carga
-        const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone);
-
         const appointment = await createAppointment({
           storeId,
           customerId: customer.id,

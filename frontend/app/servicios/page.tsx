@@ -40,6 +40,10 @@ const ETIQUETAS: Record<string, { nombre: string; descripcion: string }> = {
   flash_offers: {
     nombre: 'Modo oferta',
     descripcion: 'Rellena huecos de última hora avisando a clientas interesadas.'
+  },
+  elegir_profesional: {
+    nombre: 'Elegir profesional',
+    descripcion: 'Tus clientas podrán pedir cita con quien quieran, y la confirmación dirá con quién es.'
   }
 };
 

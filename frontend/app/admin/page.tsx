@@ -31,7 +31,8 @@ const FLAGS: { key: string; label: string }[] = [
   { key: 'reactivation', label: 'Reactivación por ciclo (P2)' },
   { key: 'post_sale', label: 'Post-servicio 48 h (P6)' },
   { key: 'style_file', label: 'Ficha de estilo (P5)' },
-  { key: 'flash_offers', label: 'Modo oferta (P4)' }
+  { key: 'flash_offers', label: 'Modo oferta (P4)' },
+  { key: 'elegir_profesional', label: 'Elegir profesional (B5.3)' }
 ];
 
 export default function AdminPage() {

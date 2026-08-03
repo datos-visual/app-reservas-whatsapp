@@ -7,7 +7,7 @@ const { supabase } = require('./db');
 const { DateTime } = require('luxon');
 
 // Flags premium reconocidos (doc 09 §3). Un plan comercial = conjunto de flags.
-const PREMIUM_FLAGS = ['smart_slots', 'waitlist', 'reactivation', 'post_sale', 'style_file', 'flash_offers'];
+const PREMIUM_FLAGS = ['smart_slots', 'waitlist', 'reactivation', 'post_sale', 'style_file', 'flash_offers', 'elegir_profesional'];
 
 // Lectura tolerante: una tabla que falte (BD sin migrar) devuelve [] y el
 // backoffice sigue funcionando con lo que haya.

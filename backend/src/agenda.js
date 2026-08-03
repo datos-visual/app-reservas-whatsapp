@@ -74,7 +74,7 @@ async function agendaDelDia(storeId, dateIso) {
 
   const { data, error } = await supabase
     .from('appointments')
-    .select('id, start_at, end_at, status, source, service_id, customers ( phone, name ), services ( name, duration_minutes )')
+    .select('id, start_at, end_at, status, source, service_id, resource_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
     .eq('store_id', storeId)
     .gte('start_at', dia.startOf('day').toUTC().toISO())
     .lt('start_at', dia.plus({ days: 1 }).startOf('day').toUTC().toISO())
@@ -95,7 +95,8 @@ async function agendaDelDia(storeId, dateIso) {
       source: c.source,
       cliente: c.customers?.name || null,
       telefono: c.customers?.phone || null,
-      servicio: c.services?.name || null
+      servicio: c.services?.name || null,
+      profesional: c.resources?.name || null   // null = sin asignar (o sin equipo)
     }))
   };
 }
@@ -143,8 +144,14 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
   if (!huecos.some((h) => h.label === inicio.toFormat('HH:mm'))) {
     throw errorValidacion(`A las ${inicio.toFormat('HH:mm')} no cabe ${servicio ? `«${servicio.name}» (${duracion} min)` : `una cita de ${duracion} min`}: está ocupado o fuera de horario.`);
   }
-  if (await getConfirmedAppointmentByStart(storeId, inicio.toISO())) {
-    throw errorValidacion('Ya hay una cita confirmada a esa hora.');
+  // Con equipo, "ocupado" = no queda nadie libre; sin equipo, la regla de
+  // siempre (una cita por hora). Mismo criterio que el bot.
+  const personaAsignada = await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone);
+  const conEquipo = (await equipo.listarPersonas(storeId)).length > 0;
+  if (conEquipo ? !personaAsignada : !!(await getConfirmedAppointmentByStart(storeId, inicio.toISO()))) {
+    throw errorValidacion(conEquipo
+      ? 'A esa hora ya no queda nadie libre en tu equipo.'
+      : 'Ya hay una cita confirmada a esa hora.');
   }
 
   // 4) Cliente (creando o reutilizando su ficha) y nombre si lo dio la tienda
@@ -175,7 +182,7 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
       googleEventId: evento.id,
       source: 'admin',
       serviceId: servicio?.id ?? null,
-      resourceId: await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone)
+      resourceId: personaAsignada
     });
   } catch (err) {
     await deleteCalendarEvent(storeId, evento.id);   // no dejar basura en Calendar
