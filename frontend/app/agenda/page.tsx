@@ -140,11 +140,16 @@ export default function AgendaPage() {
         </div>
       }
     >
-      {/* Tira de días: la peluquera se mueve de un vistazo, sin abrir calendarios */}
+      {/* Tira de días: muestra la SEMANA del día que se está viendo (lunes a
+          domingo), para que avance al navegar y no se quede anclada a hoy. */}
       <div className="mb-5 grid grid-cols-7 gap-1.5">
         {Array.from({ length: 7 }, (_, i) => {
-          const d = new Date(new Date(hoy).getTime() + i * 86400000);
-          const iso = d.toISOString().slice(0, 10);
+          const base = new Date(fecha + 'T12:00:00');
+          const lunes = new Date(base);
+          lunes.setDate(base.getDate() - ((base.getDay() + 6) % 7)); // 0=domingo → lunes
+          const d = new Date(lunes);
+          d.setDate(lunes.getDate() + i);
+          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           const activo = iso === fecha;
           return (
             <button
@@ -162,6 +167,9 @@ export default function AgendaPage() {
               <span className={`block text-lg leading-tight ${activo ? 'font-semibold' : ''}`}>
                 {d.getDate()}
               </span>
+              {iso === hoy && !activo && (
+                <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-[#0f7a4f]" aria-label="hoy" />
+              )}
             </button>
           );
         })}
