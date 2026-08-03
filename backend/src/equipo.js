@@ -292,6 +292,88 @@ async function borrarAusencia(storeId, id) {
 }
 
 /**
+ * Cambia la profesional de UNA cita. Valida que la nueva exista, esté activa
+ * y no tenga otra cita solapando. El índice único de la BD es la última red:
+ * si dos cambios coinciden, salta 23505 y lo contamos como "ya ocupada".
+ */
+async function reasignarCita(storeId, appointmentId, nuevoResourceId, zone = 'Europe/Madrid') {
+  const { data: cita, error: errCita } = await supabase
+    .from('appointments')
+    .select('id, start_at, end_at, status, resource_id')
+    .eq('store_id', storeId)
+    .eq('id', appointmentId)
+    .maybeSingle();
+  if (errCita) throw errCita;
+  if (!cita) return null;
+  if (cita.status !== 'confirmed') {
+    const e = new Error('Esa cita ya no está activa.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+
+  const personas = await listarPersonas(storeId);
+  const destino = personas.find((p) => p.id === Number(nuevoResourceId));
+  if (!destino) {
+    const e = new Error('Esa persona no existe o está dada de baja.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+
+  const { libres } = await disponibilidadEnRango(storeId, cita.start_at, cita.end_at, zone);
+  if (!libres.some((p) => p.id === destino.id)) {
+    const e = new Error(`${destino.name} no está libre a esa hora (o no trabaja ese día).`);
+    e.code = 'VALIDACION';
+    throw e;
+  }
+
+  const { error } = await supabase
+    .from('appointments')
+    .update({ resource_id: destino.id })
+    .eq('store_id', storeId)
+    .eq('id', appointmentId);
+  if (error) {
+    if (error.code === '23505') {
+      const e = new Error(`${destino.name} ya tiene una cita a esa hora.`);
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    throw error;
+  }
+  console.log('[Equipo] Cita reasignada', { storeId, appointmentId, de: cita.resource_id, a: destino.id });
+  return { ...cita, resource_id: destino.id, profesional: destino.name };
+}
+
+/**
+ * Traspasa TODAS las citas futuras de una persona a otra (baja, enfermedad,
+ * o antes de borrarla). Las que no encajen (la destinataria ya está ocupada
+ * a esa hora) se devuelven para que la tienda las resuelva a mano.
+ */
+async function traspasarCitas(storeId, origenId, destinoId, zone = 'Europe/Madrid') {
+  const { data: citas, error } = await supabase
+    .from('appointments')
+    .select('id, start_at, end_at')
+    .eq('store_id', storeId)
+    .eq('resource_id', origenId)
+    .eq('status', 'confirmed')
+    .gte('start_at', new Date().toISOString())
+    .order('start_at', { ascending: true });
+  if (error) throw error;
+
+  const movidas = [];
+  const conflictivas = [];
+  for (const c of citas || []) {
+    try {
+      await reasignarCita(storeId, c.id, destinoId, zone);
+      movidas.push(c.id);
+    } catch (err) {
+      conflictivas.push({ id: c.id, start_at: c.start_at, motivo: err.message });
+    }
+  }
+  console.log('[Equipo] Traspaso de citas', { storeId, origenId, destinoId, movidas: movidas.length, conflictos: conflictivas.length });
+  return { movidas: movidas.length, conflictivas };
+}
+
+/**
  * Borra a una persona DE VERDAD. Se niega si tiene citas futuras: en ese
  * caso hay que reasignarlas o darla de baja (las citas pasadas no estorban,
  * la clave foránea las deja sin persona asignada sin perder el histórico).
@@ -358,6 +440,8 @@ module.exports = {
   listarPersonas,
   capacidadTienda,
   borrarPersona,
+  reasignarCita,
+  traspasarCitas,
   disponibilidadEnRango,
   filtrarHuecosPorEquipo,
   elegirPersonaLibre,

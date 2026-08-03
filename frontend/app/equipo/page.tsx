@@ -96,7 +96,33 @@ export default function EquipoPage() {
     if (!confirm(`¿Borrar a ${p.name} del equipo? Sus citas pasadas se conservan en el histórico.`)) return;
     const r = await apiFetch(`/api/equipo/${p.id}`, { method: 'DELETE' });
     if (!r.ok) {
-      setError((await r.json().catch(() => ({}))).error || 'No se pudo borrar.');
+      const cuerpo = await r.json().catch(() => ({}));
+      // Tiene citas futuras: ofrecer traspasarlas a otra persona
+      const otras = personas.filter((x) => x.id !== p.id && x.is_active);
+      if (r.status === 409 && otras.length) {
+        const nombres = otras.map((x, i) => `${i + 1}) ${x.name}`).join('  ');
+        const elegido = prompt(
+          `${cuerpo.error}\n\n¿A quién traspaso sus citas futuras? Escribe el número:\n${nombres}\n\n(o Cancelar para dejarlo)`
+        );
+        const idx = parseInt(elegido || '', 10) - 1;
+        if (Number.isInteger(idx) && otras[idx]) {
+          const t = await apiFetch(`/api/equipo/${p.id}/traspasar`, {
+            method: 'POST',
+            body: JSON.stringify({ destino_id: otras[idx].id })
+          });
+          const res = await t.json().catch(() => ({}));
+          if (t.ok) {
+            setAviso(
+              `${res.movidas} cita(s) traspasadas a ${otras[idx].name}` +
+              (res.conflictivas?.length ? ` · ${res.conflictivas.length} no encajaban y siguen asignadas` : '')
+            );
+            await cargar();
+            return;
+          }
+        }
+        return;
+      }
+      setError(cuerpo.error || 'No se pudo borrar.');
       return;
     }
     setError('');

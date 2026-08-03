@@ -2463,6 +2463,45 @@ app.put('/api/equipo/:id', async (req, res) => {
   }
 });
 
+// Cambiar la profesional de una cita (enfermedad, reparto, preferencia)
+app.put('/api/appointments/:id/asignar', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    const destino = parseInt(req.body?.resource_id, 10);
+    if (!Number.isInteger(id) || !Number.isInteger(destino)) {
+      return res.status(400).json({ error: 'Faltan datos para reasignar la cita.' });
+    }
+    const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+    const r = await equipo.reasignarCita(storeId, id, destino, zone);
+    if (!r) return res.status(404).json({ error: 'Cita no encontrada' });
+    res.json(r);
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(409).json({ error: err.message });
+    console.error('[API] Error reasignando cita', err);
+    res.status(500).json({ error: 'Error reasignando la cita' });
+  }
+});
+
+// Traspasar TODAS las citas futuras de una persona a otra
+app.post('/api/equipo/:id/traspasar', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const origen = parseInt(req.params.id, 10);
+    const destino = parseInt(req.body?.destino_id, 10);
+    if (!Number.isInteger(origen) || !Number.isInteger(destino) || origen === destino) {
+      return res.status(400).json({ error: 'Indica a quién traspasar las citas.' });
+    }
+    const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+    res.json(await equipo.traspasarCitas(storeId, origen, destino, zone));
+  } catch (err) {
+    console.error('[API] Error traspasando citas', err);
+    res.status(500).json({ error: 'Error traspasando las citas' });
+  }
+});
+
 app.delete('/api/equipo/:id', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);

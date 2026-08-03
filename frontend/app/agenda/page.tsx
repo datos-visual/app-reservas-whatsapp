@@ -29,6 +29,7 @@ type Agenda = {
   citas: Cita[];
 };
 type Servicio = { id: number; name: string; duration_minutes: number; is_active: boolean };
+type Persona = { id: number; name: string; is_active: boolean };
 
 const inputCls = 'ca-input';
 
@@ -38,6 +39,7 @@ export default function AgendaPage() {
   const [fecha, setFecha] = useState(hoy);
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
   const [nueva, setNueva] = useState({ telefono: '', nombre: '', service_id: '', hora: '', avisar: true });
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
@@ -52,6 +54,9 @@ export default function AgendaPage() {
       }
       apiFetch('/api/services').then(async (r) => {
         if (r.ok) setServicios(((await r.json()).services || []).filter((s: Servicio) => s.is_active));
+      });
+      apiFetch('/api/equipo').then(async (r) => {
+        if (r.ok) setPersonas(((await r.json()).personas || []).filter((p: Persona) => p.is_active));
       });
       cargar(fecha);
     });
@@ -104,6 +109,23 @@ export default function AgendaPage() {
     } finally {
       setGuardando(false);
     }
+  }
+
+  async function reasignar(id: number, resourceId: string) {
+    if (!resourceId) return;
+    const r = await apiFetch(`/api/appointments/${id}/asignar`, {
+      method: 'PUT',
+      body: JSON.stringify({ resource_id: Number(resourceId) })
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setError(body.error || 'No se pudo cambiar de profesional.');
+      return;
+    }
+    setError('');
+    setAviso('Cita reasignada ✓');
+    setTimeout(() => setAviso(''), 2500);
+    cargar(fecha);
   }
 
   async function cancelar(id: number) {
@@ -223,9 +245,24 @@ export default function AgendaPage() {
                         </p>
                       </div>
                     </div>
-                    <button onClick={() => cancelar(c.id)} className="ca-btn-danger ca-btn-sm">
-                      Cancelar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {personas.length > 0 && (
+                        <select
+                          className="ca-input w-auto py-1.5 text-xs"
+                          value=""
+                          onChange={(e) => reasignar(c.id, e.target.value)}
+                          title="Cambiar de profesional"
+                        >
+                          <option value="">Cambiar a…</option>
+                          {personas.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button onClick={() => cancelar(c.id)} className="ca-btn-danger ca-btn-sm">
+                        Cancelar
+                      </button>
+                    </div>
                   </li>
                 ))}
             </ul>
