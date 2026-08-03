@@ -2617,6 +2617,55 @@ app.put('/api/admin/stores/:storeId/modules/:modulo', async (req, res) => {
   }
 });
 
+// Alta COMPLETA de tienda desde el backoffice (Fase 1: el alta la haces tú)
+app.post('/api/admin/stores', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const { createStoreAsAdmin } = require('./onboarding');
+    const { name, timezone, appointment_duration_minutes, business_email, business_phone,
+      owner_email, owner_password, vertical_code } = req.body || {};
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'El nombre del negocio es obligatorio' });
+    }
+    if (owner_password && String(owner_password).length < 6) {
+      return res.status(400).json({ error: 'La contraseña del panel debe tener al menos 6 caracteres' });
+    }
+    const duration = parseInt(appointment_duration_minutes, 10);
+
+    const { store, usuario, avisoUsuario } = await createStoreAsAdmin({
+      name: String(name).trim(),
+      timezone: timezone || 'Europe/Madrid',
+      appointmentDurationMinutes: Number.isFinite(duration) && duration > 0 ? duration : 30,
+      businessEmail: business_email || null,
+      businessPhone: business_phone || null,
+      ownerEmail: owner_email || null,
+      ownerPassword: owner_password || null
+    });
+
+    // Sector elegido → catálogo semilla editable (mismo camino que B6)
+    let sembrados = 0;
+    if (vertical_code) {
+      try {
+        ({ sembrados } = await catalog.setVertical(store.id, String(vertical_code)));
+      } catch (err) {
+        console.error('[Admin] Tienda creada pero falló la semilla del vertical', { storeId: store.id, err });
+      }
+    }
+
+    res.status(201).json({
+      store_id: store.id,
+      name: store.name,
+      usuario: usuario?.email || null,
+      servicios_creados: sembrados,
+      aviso: avisoUsuario
+    });
+  } catch (err) {
+    console.error('[Admin] Error creando tienda', err);
+    res.status(500).json({ error: 'Error creando la tienda' });
+  }
+});
+
 // Repara tiendas antiguas sin fichas de módulos (idempotente, seguro)
 app.post('/api/admin/reparar-fichas', async (req, res) => {
   if (!requireAdmin(req, res)) return;

@@ -23,7 +23,12 @@ const DEFAULT_BUSINESS_HOURS = [
  * Crea tienda + vínculo owner + horario por defecto.
  * Sin transacciones en supabase-js: compensación manual si falla el vínculo.
  */
-async function createStoreWithOwner({ userId, name, timezone, appointmentDurationMinutes, businessEmail, businessPhone }) {
+/**
+ * Crea la tienda con TODO lo que necesita para funcionar (horario por
+ * defecto y fichas de módulos), SIN vincular usuario. La usan el alta
+ * autoservicio (con dueño) y el alta desde el backoffice (sin dueño).
+ */
+async function createStoreBase({ name, timezone, appointmentDurationMinutes, businessEmail, businessPhone }) {
   const { data: store, error } = await supabase
     .from('stores')
     .insert({
@@ -37,9 +42,23 @@ async function createStoreWithOwner({ userId, name, timezone, appointmentDuratio
     .single();
 
   if (error) {
-    console.error('[Onboarding] Error creando tienda', { userId, error });
+    console.error('[Onboarding] Error creando tienda', { name, error });
     throw error;
   }
+
+  const hoursRows = DEFAULT_BUSINESS_HOURS.map((h) => ({ ...h, store_id: store.id }));
+  const { error: hoursError } = await supabase.from('store_business_hours').insert(hoursRows);
+  if (hoursError) {
+    console.error('[Onboarding] Error creando horario por defecto', { storeId: store.id, hoursError });
+  }
+
+  await crearFichasDeModulos(store);
+  console.log('[Onboarding] Tienda creada (base)', { storeId: store.id, name });
+  return store;
+}
+
+async function createStoreWithOwner({ userId, name, timezone, appointmentDurationMinutes, businessEmail, businessPhone }) {
+  const store = await createStoreBase({ name, timezone, appointmentDurationMinutes, businessEmail, businessPhone });
 
   const { error: linkError } = await supabase
     .from('store_users')
@@ -51,17 +70,45 @@ async function createStoreWithOwner({ userId, name, timezone, appointmentDuratio
     throw linkError;
   }
 
-  const hoursRows = DEFAULT_BUSINESS_HOURS.map((h) => ({ ...h, store_id: store.id }));
-  const { error: hoursError } = await supabase.from('store_business_hours').insert(hoursRows);
-  if (hoursError) {
-    // No bloquea el alta: el bot usa fallback 08:00-17:00 si faltan horarios
-    console.error('[Onboarding] Error creando horario por defecto', { storeId: store.id, hoursError });
+  console.log('[Onboarding] Tienda creada y vinculada a su dueño', { storeId: store.id, userId });
+  return store;
+}
+
+/**
+ * Alta desde el BACKOFFICE: crea la tienda y, opcionalmente, el usuario del
+ * panel (con contraseña ya confirmada) y su vínculo. Es la vía prevista en
+ * Fase 1, donde el alta la hace el administrador acompañando al cliente.
+ */
+async function createStoreAsAdmin({ name, timezone, appointmentDurationMinutes, businessEmail, businessPhone, ownerEmail, ownerPassword }) {
+  const store = await createStoreBase({ name, timezone, appointmentDurationMinutes, businessEmail, businessPhone });
+
+  let usuario = null;
+  if (ownerEmail && ownerPassword) {
+    try {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: String(ownerEmail).trim(),
+        password: String(ownerPassword),
+        email_confirm: true   // sin confirmación por correo: puede entrar ya
+      });
+      if (error) throw error;
+      usuario = data?.user || null;
+
+      if (usuario?.id) {
+        const { error: linkError } = await supabase
+          .from('store_users')
+          .insert({ store_id: store.id, user_id: usuario.id, role: 'owner' });
+        if (linkError) throw linkError;
+      }
+    } catch (err) {
+      // La tienda queda creada: el vínculo se puede rehacer sin perder nada
+      console.error('[Onboarding] Tienda creada pero falló el usuario del panel', {
+        storeId: store.id, ownerEmail, message: err?.message
+      });
+      return { store, usuario: null, avisoUsuario: err?.message || 'No se pudo crear el usuario del panel' };
+    }
   }
 
-  await crearFichasDeModulos(store);
-
-  console.log('[Onboarding] Tienda creada', { storeId: store.id, userId });
-  return store;
+  return { store, usuario: usuario ? { id: usuario.id, email: usuario.email } : null, avisoUsuario: null };
 }
 
 /**
@@ -302,6 +349,7 @@ function tokenExpiryWarning(tokenExpiresAt, warnDays = 7) {
 
 module.exports = {
   createStoreWithOwner,
+  createStoreAsAdmin,
   repararFichasDeModulos,
   getStoreOverview,
   upsertCalendarConnection,

@@ -42,6 +42,14 @@ export default function AdminPage() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState<string | null>(null);
   const [actividad, setActividad] = useState<Record<string, { mensajes: any[]; citas: any[] } | null>>({});
+  const [resumen, setResumen] = useState<Record<string, number | null> | null>(null);
+  const [altaAbierta, setAltaAbierta] = useState(false);
+  const [alta, setAlta] = useState({
+    name: '', timezone: 'Europe/Madrid', appointment_duration_minutes: 30,
+    vertical_code: 'peluqueria', owner_email: '', owner_password: '', business_phone: ''
+  });
+  const [conexiones, setConexiones] = useState<Record<string, boolean>>({});
+  const [conex, setConex] = useState<Record<string, { cal: string; pnid: string; token: string; waba: string; msg: string }>>({});
 
   useEffect(() => {
     const t = sessionStorage.getItem('ca_admin_token');
@@ -71,12 +79,65 @@ export default function AdminPage() {
       }
       const data = await r.json();
       setTiendas(data.stores || []);
+      setResumen(data.resumen || null);
       setEntrado(true);
       sessionStorage.setItem('ca_admin_token', t);
     } catch {
       setError('No se pudo conectar con el backend.');
     } finally {
       setCargando(false);
+    }
+  }
+
+  // Alta completa de una tienda (crea negocio + usuario del panel + catálogo)
+  async function crearTienda() {
+    if (!alta.name.trim()) {
+      setError('El nombre del negocio es obligatorio.');
+      return;
+    }
+    setGuardando('alta');
+    setError('');
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/stores`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify(alta)
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(body.error || 'No se pudo crear la tienda.');
+        return;
+      }
+      setAltaAbierta(false);
+      setAlta({ ...alta, name: '', owner_email: '', owner_password: '', business_phone: '' });
+      await cargar(token);
+      setError(body.aviso ? `Tienda creada, pero: ${body.aviso}` : '');
+    } finally {
+      setGuardando(null);
+    }
+  }
+
+  // Conexiones de una tienda desde el backoffice (usa ?store_id= en modo admin)
+  async function accionConexion(storeId: string, ruta: string, cuerpo?: Record<string, unknown>) {
+    setGuardando(storeId + ruta);
+    try {
+      const r = await fetch(`${API_BASE}/api/onboarding/${ruta}?store_id=${storeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify(cuerpo || {})
+      });
+      const body = await r.json().catch(() => ({}));
+      const ok = r.ok && body.ok !== false;
+      setConex((c) => ({
+        ...c,
+        [storeId]: {
+          ...(c[storeId] || { cal: '', pnid: '', token: '', waba: '', msg: '' }),
+          msg: ok ? '✓ ' + (body.mensaje || 'Correcto') : '✗ ' + (body.error || body.mensaje || 'Ha fallado')
+        }
+      }));
+      if (ok && !ruta.includes('test')) await cargar(token);
+    } finally {
+      setGuardando(null);
     }
   }
 
@@ -195,6 +256,12 @@ export default function AdminPage() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => setAltaAbierta((v) => !v)}
+            className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            {altaAbierta ? 'Cerrar alta' : '＋ Alta de tienda'}
+          </button>
+          <button
             onClick={() => cargar(token)}
             disabled={cargando}
             className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
@@ -215,6 +282,70 @@ export default function AdminPage() {
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+
+      {resumen && (
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          {[
+            ['Tiendas', resumen.tiendas],
+            ['Operativas', resumen.tiendas_operativas],
+            ['Con incidencias', resumen.tiendas_con_incidencias],
+            ['Citas este mes', resumen.citas_confirmadas_mes],
+            ['Próximos 7 días', resumen.citas_proximos_7dias],
+            ['Clientes', resumen.clientes_totales]
+          ].map(([etiqueta, valor]) => (
+            <div key={String(etiqueta)} className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <p className="text-xs text-slate-400">{etiqueta}</p>
+              <p className="text-xl font-semibold text-white">{valor ?? '—'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {altaAbierta && (
+        <div className="mb-5 rounded-lg border border-emerald-700/60 bg-slate-900/60 p-4">
+          <p className="mb-1 text-sm font-medium text-white">Alta de una peluquería nueva</p>
+          <p className="mb-3 text-xs text-slate-400">
+            Crea el negocio, su usuario del panel y su catálogo inicial. Después conecta
+            Calendar y WhatsApp desde la tarjeta de la tienda, sin salir de aquí.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <input
+              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              placeholder="Nombre del negocio *" value={alta.name}
+              onChange={(e) => setAlta({ ...alta, name: e.target.value })}
+            />
+            <select
+              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              value={alta.vertical_code} onChange={(e) => setAlta({ ...alta, vertical_code: e.target.value })}
+            >
+              <option value="peluqueria">Peluquería (catálogo incluido)</option>
+              <option value="taller">Taller mecánico (catálogo incluido)</option>
+              <option value="ninguno">Sin catálogo inicial</option>
+            </select>
+            <input
+              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              placeholder="Teléfono del negocio" value={alta.business_phone}
+              onChange={(e) => setAlta({ ...alta, business_phone: e.target.value })}
+            />
+            <input
+              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              placeholder="Email para su panel" value={alta.owner_email}
+              onChange={(e) => setAlta({ ...alta, owner_email: e.target.value })}
+            />
+            <input
+              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              placeholder="Contraseña del panel (mín. 6)" value={alta.owner_password}
+              onChange={(e) => setAlta({ ...alta, owner_password: e.target.value })}
+            />
+            <button
+              onClick={crearTienda} disabled={guardando === 'alta'}
+              className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {guardando === 'alta' ? 'Creando…' : 'Crear tienda'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {tiendas.map((t) => (
@@ -295,6 +426,85 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => setConexiones((c) => ({ ...c, [t.id]: !c[t.id] }))}
+                className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                {conexiones[t.id] ? 'Ocultar conexiones' : 'Conectar Calendar / WhatsApp'}
+              </button>
+            </div>
+
+            {conexiones[t.id] && (
+              <div className="mt-3 grid grid-cols-1 gap-4 rounded border border-slate-800 p-3 md:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Google Calendar</p>
+                  <p className="mb-2 text-xs text-slate-400">
+                    El negocio comparte su calendario con{' '}
+                    <span className="text-slate-300">calendar-reservas@whatsapp-reservas-489313.iam.gserviceaccount.com</span>{' '}
+                    (permiso: hacer cambios) y te pasa el ID.
+                  </p>
+                  <input
+                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    placeholder="ID del calendario"
+                    value={conex[t.id]?.cal || ''}
+                    onChange={(e) => setConex((c) => ({ ...c, [t.id]: { ...(c[t.id] || { cal: '', pnid: '', token: '', waba: '', msg: '' }), cal: e.target.value } }))}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => accionConexion(t.id, 'calendar', { google_calendar_id: conex[t.id]?.cal })}
+                      className="rounded bg-slate-700 px-3 py-1 text-xs text-white hover:bg-slate-600"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      onClick={() => accionConexion(t.id, 'calendar/test')}
+                      className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                    >
+                      Probar conexión
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">WhatsApp (Meta)</p>
+                  <input
+                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    placeholder="phone_number_id"
+                    value={conex[t.id]?.pnid || ''}
+                    onChange={(e) => setConex((c) => ({ ...c, [t.id]: { ...(c[t.id] || { cal: '', pnid: '', token: '', waba: '', msg: '' }), pnid: e.target.value } }))}
+                  />
+                  <input
+                    type="password"
+                    className="mb-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    placeholder="Token de acceso (no se muestra después)"
+                    value={conex[t.id]?.token || ''}
+                    onChange={(e) => setConex((c) => ({ ...c, [t.id]: { ...(c[t.id] || { cal: '', pnid: '', token: '', waba: '', msg: '' }), token: e.target.value } }))}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => accionConexion(t.id, 'whatsapp', { phone_number_id: conex[t.id]?.pnid, access_token: conex[t.id]?.token })}
+                      className="rounded bg-slate-700 px-3 py-1 text-xs text-white hover:bg-slate-600"
+                    >
+                      Guardar
+                    </button>
+                    <button
+                      onClick={() => accionConexion(t.id, 'whatsapp/test')}
+                      className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                    >
+                      Probar conexión
+                    </button>
+                  </div>
+                </div>
+
+                {conex[t.id]?.msg && (
+                  <p className={`md:col-span-2 text-xs ${conex[t.id].msg.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {conex[t.id].msg}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="mt-3">
               <button

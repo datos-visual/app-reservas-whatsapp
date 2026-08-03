@@ -119,7 +119,38 @@ async function getAdminOverview() {
     };
   });
 
-  return { generado: ahora.toISO(), flagsDisponibles: PREMIUM_FLAGS, stores: result };
+  // Estadísticas agregadas del negocio (lo que quieres ver de un vistazo)
+  const inicioMes = ahora.startOf('month').toUTC().toISO();
+  const citasMes = await (async () => {
+    try {
+      const { count, error } = await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .gte('start_at', inicioMes)
+        .eq('status', 'confirmed');
+      return error ? null : (count || 0);
+    } catch { return null; }
+  })();
+  const clientes = await (async () => {
+    try {
+      const { count, error } = await supabase
+        .from('customers')
+        .select('id', { count: 'exact', head: true });
+      return error ? null : (count || 0);
+    } catch { return null; }
+  })();
+
+  const resumen = {
+    tiendas: result.length,
+    tiendas_operativas: result.filter((t) => t.whatsapp.conectado && t.whatsapp.activo && t.calendar.conectado).length,
+    tiendas_con_incidencias: result.filter((t) => t.incidencias.length > 0).length,
+    citas_confirmadas_mes: citasMes,
+    citas_proximos_7dias: result.reduce((n, t) => n + t.citas.proximos7dias, 0),
+    citas_ultimos_7dias: result.reduce((n, t) => n + t.citas.ultimos7dias, 0),
+    clientes_totales: clientes
+  };
+
+  return { generado: ahora.toISO(), flagsDisponibles: PREMIUM_FLAGS, resumen, stores: result };
 }
 
 /**
