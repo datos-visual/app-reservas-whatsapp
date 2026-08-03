@@ -961,7 +961,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `Tu cita del ${fmt(cancelled.start_at)} ha sido cancelada. Si quieres otra, envía DISPONIBLE YYYY-MM-DD.`
+        text: `Tu cita del ${fmtHuman(cancelled.start_at)} ha sido cancelada. Si quieres otra, dime qué día te viene bien y miramos huecos.`
       });
 
       // P3: avisar al primero de la lista de espera (nunca afecta al flujo)
@@ -1399,9 +1399,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
             accessToken,
             to: from,
             text:
-              'Ese hueco acaba de reservarse. Envía DISPONIBLE ' +
-              current.datePart +
-              ' para ver otros horarios.'
+              'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora que te venga bien y miro si está libre.'
           });
           return;
         }
@@ -1437,7 +1435,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       phoneNumberId,
       accessToken,
       to: from,
-      text: 'Perfecto, se ha cancelado la reserva pendiente. Si quieres otra cita, envía CITA YYYY-MM-DD HH:MM.'
+      text: 'Perfecto, no he reservado nada. Cuando quieras, dime qué día te viene bien y lo miramos.'
     });
     return;
   }
@@ -1457,7 +1455,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'Formato de fecha inválido. Usa: DISPONIBLE YYYY-MM-DD (ejemplo: DISPONIBLE 2026-03-04)'
+        text: 'No he entendido la fecha. Dímelo como quieras: "mañana", "el viernes" o "5 de agosto".'
       });
       return;
     }
@@ -1530,7 +1528,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         accessToken,
         to: from,
         text: `No hay huecos disponibles para ese día${franjaTxt}.` +
-          (franjaTxt ? ` Envía DISPONIBLE ${iso} para ver el día completo.` : '')
+          (franjaTxt ? ' ¿Quieres que mire el día completo o probamos otro día?' : ' ¿Probamos otro día?')
       });
       return;
     }
@@ -1563,7 +1561,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'Formato inválido. Usa: CITA YYYY-MM-DD HH:MM (ejemplo: CITA 2026-03-04 09:00)'
+        text: 'No he entendido la fecha y la hora. Dímelo como quieras: "mañana a las 10" o "el viernes por la tarde".'
       });
       return;
     }
@@ -1578,7 +1576,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'Fecha/hora inválidas. Usa: CITA YYYY-MM-DD HH:MM (ejemplo: CITA 2026-03-04 09:00)'
+        text: 'Esa fecha u hora no me cuadra. Prueba a decírmelo así: "mañana a las 10" o "el viernes a las 17:30".'
       });
       return;
     }
@@ -1649,9 +1647,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   if (lower === 'mis citas' || lower === 'miscitas') {
     const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
     if (!citas.length) {
-      await sendAndLog({
+      // Sin citas: en vez de pedir un comando, ofrecer los botones de siempre
+      await sendWelcomeMenu({
         storeId, phoneNumberId, accessToken, to: from,
-        text: 'No tienes citas próximas. Para reservar, envía DISPONIBLE YYYY-MM-DD.'
+        headerText: 'No tienes ninguna cita próxima.'
       });
       return;
     }
