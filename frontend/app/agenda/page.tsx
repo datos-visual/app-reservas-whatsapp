@@ -139,6 +139,33 @@ export default function AgendaPage() {
         </div>
       }
     >
+      {/* Tira de días: la peluquera se mueve de un vistazo, sin abrir calendarios */}
+      <div className="mb-5 grid grid-cols-7 gap-1.5">
+        {Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(new Date(hoy).getTime() + i * 86400000);
+          const iso = d.toISOString().slice(0, 10);
+          const activo = iso === fecha;
+          return (
+            <button
+              key={iso}
+              onClick={() => cambiarFecha(iso)}
+              className={`rounded-lg border px-1 py-2 text-center transition ${
+                activo
+                  ? 'border-[#0f7a4f] bg-[#ecf7f1] text-[#0f7a4f]'
+                  : 'border-[#e6e4de] bg-white text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              <span className="block text-[11px] uppercase tracking-wide">
+                {d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '')}
+              </span>
+              <span className={`block text-lg leading-tight ${activo ? 'font-semibold' : ''}`}>
+                {d.getDate()}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {error && <p className="ca-alert-error mb-4 flex items-start gap-2"><IconAviso />{error}</p>}
       {aviso && <p className="ca-alert-ok mb-4 flex items-start gap-2"><IconCheck />{aviso}</p>}
       {cargando && <p className="ca-hint">Cargando…</p>}

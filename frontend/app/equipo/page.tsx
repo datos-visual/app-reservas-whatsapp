@@ -92,6 +92,19 @@ export default function EquipoPage() {
     cargar();
   }
 
+  async function borrar(p: Persona) {
+    if (!confirm(`¿Borrar a ${p.name} del equipo? Sus citas pasadas se conservan en el histórico.`)) return;
+    const r = await apiFetch(`/api/equipo/${p.id}`, { method: 'DELETE' });
+    if (!r.ok) {
+      setError((await r.json().catch(() => ({}))).error || 'No se pudo borrar.');
+      return;
+    }
+    setError('');
+    await cargar();
+    setAviso('Persona borrada ✓');
+    setTimeout(() => setAviso(''), 2500);
+  }
+
   async function anadirAusencia(p: Persona) {
     if (!ausencia.start_date) { setError('Indica la fecha de inicio.'); return; }
     setGuardando('aus' + p.id);
@@ -153,6 +166,9 @@ export default function EquipoPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <button onClick={() => borrar(p)} className="ca-btn-danger ca-btn-sm">
+                      Borrar
+                    </button>
                     <button onClick={() => cambiarActiva(p)} className="ca-btn-ghost ca-btn-sm">
                       {p.is_active ? 'Dar de baja' : 'Reactivar'}
                     </button>

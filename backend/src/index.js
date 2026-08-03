@@ -368,7 +368,9 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     // B2: la duración es la del SERVICIO elegido, no la de la tienda
     slotDurationMinutes: service.durationMinutes,
     openTime: businessHours?.openTime || '08:00',
-    closeTime: businessHours?.closeTime || '17:00'
+    closeTime: businessHours?.closeTime || '17:00',
+      // B5.1: tantas citas a la vez como personas trabajen
+      capacity: await equipo.capacidadTienda(storeId)
   };
   const events = await listEventsForDay(storeId, dateIso, zone);
   // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
@@ -611,7 +613,9 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       zone,
       slotDurationMinutes: d.durationMinutes,
       openTime: businessHours?.openTime || '08:00',
-      closeTime: businessHours?.closeTime || '17:00'
+      closeTime: businessHours?.closeTime || '17:00',
+      // B5.1: tantas citas a la vez como personas trabajen
+      capacity: await equipo.capacidadTienda(storeId)
     };
     const events = await listEventsForDay(storeId, d.dateIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
@@ -912,7 +916,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       zone,
       slotDurationMinutes: service?.duration_minutes ?? storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
-      closeTime: businessHours?.closeTime || '17:00'
+      closeTime: businessHours?.closeTime || '17:00',
+      // B5.1: tantas citas a la vez como personas trabajen
+      capacity: await equipo.capacidadTienda(storeId)
     };
     const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
@@ -1265,7 +1271,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       // B2: si la reserva es de un servicio del catálogo, manda SU duración
       slotDurationMinutes: current.durationMinutes ?? storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
-      closeTime: businessHours?.closeTime || '17:00'
+      closeTime: businessHours?.closeTime || '17:00',
+      // B5.1: tantas citas a la vez como personas trabajen
+      capacity: await equipo.capacidadTienda(storeId)
     };
 
     const events = await listEventsForDay(storeId, startIso, zone);
@@ -1497,7 +1505,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       zone,
       slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
-      closeTime: businessHours?.closeTime || '17:00'
+      closeTime: businessHours?.closeTime || '17:00',
+      // B5.1: tantas citas a la vez como personas trabajen
+      capacity: await equipo.capacidadTienda(storeId)
     };
 
     // P1 premium: smart_slots prioriza y marca con ⭐ (orden cronológico)
@@ -1619,7 +1629,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       zone,
       slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
-      closeTime: businessHours?.closeTime || '17:00'
+      closeTime: businessHours?.closeTime || '17:00',
+      // B5.1: tantas citas a la vez como personas trabajen
+      capacity: await equipo.capacidadTienda(storeId)
     };
 
     const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
@@ -2444,6 +2456,22 @@ app.put('/api/equipo/:id', async (req, res) => {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error actualizando persona', err);
     res.status(500).json({ error: 'Error guardando los cambios' });
+  }
+});
+
+app.delete('/api/equipo/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const borrada = await equipo.borrarPersona(storeId, id);
+    if (!borrada) return res.status(404).json({ error: 'Esa persona no existe' });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(409).json({ error: err.message });
+    console.error('[API] Error borrando persona', err);
+    res.status(500).json({ error: 'Error borrando a la persona' });
   }
 });
 

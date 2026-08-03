@@ -51,6 +51,17 @@ async function listarPersonas(storeId, { soloActivas = true } = {}) {
   }
 }
 
+/**
+ * Cuántas citas simultáneas admite la tienda = personas activas (mínimo 1).
+ * IMPRESCINDIBLE pasarlo a generateSlots: si no, los eventos de Google
+ * Calendar descartan el hueco a la primera cita y el filtro por equipo
+ * nunca llega a verlo (bug real 3-ago-2026).
+ */
+async function capacidadTienda(storeId) {
+  const personas = await listarPersonas(storeId);
+  return personas.length || 1;
+}
+
 async function listarTurnos(storeId) {
   const { data, error } = await supabase
     .from('resource_schedules')
@@ -280,6 +291,41 @@ async function borrarAusencia(storeId, id) {
   return data || null;
 }
 
+/**
+ * Borra a una persona DE VERDAD. Se niega si tiene citas futuras: en ese
+ * caso hay que reasignarlas o darla de baja (las citas pasadas no estorban,
+ * la clave foránea las deja sin persona asignada sin perder el histórico).
+ */
+async function borrarPersona(storeId, id) {
+  const { count } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', storeId)
+    .eq('resource_id', id)
+    .eq('status', 'confirmed')
+    .gte('start_at', new Date().toISOString());
+
+  if ((count || 0) > 0) {
+    const e = new Error(
+      `Esa persona tiene ${count} cita(s) futura(s) asignada(s). Cancélalas o cámbialas de hora antes de borrarla; ` +
+      'si solo quieres que deje de recibir citas nuevas, dale de baja.'
+    );
+    e.code = 'VALIDACION';
+    throw e;
+  }
+
+  const { data, error } = await supabase
+    .from('resources')
+    .delete()
+    .eq('store_id', storeId)
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  console.log('[Equipo] Persona borrada', { storeId, id });
+  return data || null;
+}
+
 /** Vista completa para el panel: personas + sus turnos + sus ausencias futuras. */
 async function equipoCompleto(storeId) {
   const personas = await listarPersonas(storeId, { soloActivas: false });
@@ -310,6 +356,8 @@ async function equipoCompleto(storeId) {
 
 module.exports = {
   listarPersonas,
+  capacidadTienda,
+  borrarPersona,
   disponibilidadEnRango,
   filtrarHuecosPorEquipo,
   elegirPersonaLibre,
