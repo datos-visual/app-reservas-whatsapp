@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CanalAgenda · Estado del proyecto</title>
+<style>
+  :root{
+    --verde:#0f7a4f; --verde-claro:#ecf7f1; --ambar:#b45309; --ambar-claro:#fef3c7;
+    --rojo:#b91c1c; --rojo-claro:#fee2e2; --gris:#6b6b68; --borde:#e6e4de; --fondo:#f7f7f4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fondo);color:#1f2937;
+       font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:32px 20px 64px}
+  header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;margin-bottom:28px}
+  .marca{display:flex;align-items:center;gap:12px}
+  .logo{width:44px;height:44px;border-radius:11px;background:var(--verde);color:#fff;
+        display:grid;place-items:center;font-weight:700;font-size:15px}
+  h1{margin:0;font-size:22px;letter-spacing:-.01em}
+  .sub{color:var(--gris);font-size:13px;margin-top:2px}
+  .fecha{font-size:12px;color:var(--gris);text-align:right}
+
+  .card{background:#fff;border:1px solid var(--borde);border-radius:14px;
+        box-shadow:0 1px 2px rgba(16,24,40,.04)}
+  .p{padding:20px}
+  h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--gris);
+     margin:34px 0 12px;font-weight:600}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .kpi .n{font-size:28px;font-weight:650;letter-spacing:-.02em}
+  .kpi .l{font-size:12px;color:var(--gris);margin-top:2px}
+  .kpi .foot{font-size:11px;color:var(--gris);margin-top:6px}
+
+  .barra{height:9px;border-radius:99px;background:#eceae4;overflow:hidden;margin:10px 0 6px}
+  .barra > i{display:block;height:100%;background:var(--verde);border-radius:99px}
+
+  .areas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+  .area h3{margin:0 0 2px;font-size:15px}
+  .area p{margin:0;color:var(--gris);font-size:13px}
+  .pct{float:right;font-weight:650;font-size:14px}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+     color:var(--gris);font-weight:600;padding:0 10px 8px}
+  td{padding:10px;border-top:1px solid #f1efe9;vertical-align:top}
+  tr:first-child td{border-top:none}
+
+  .tag{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .ok{background:var(--verde-claro);color:var(--verde)}
+  .wip{background:var(--ambar-claro);color:var(--ambar)}
+  .no{background:#f1efe9;color:var(--gris)}
+  .stop{background:var(--rojo-claro);color:var(--rojo)}
+
+  .linea{position:relative;padding-left:26px}
+  .linea::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--borde)}
+  .hito{position:relative;padding:0 0 18px}
+  .hito::before{content:"";position:absolute;left:-23px;top:5px;width:11px;height:11px;border-radius:99px;
+                background:#fff;border:2.5px solid var(--verde)}
+  .hito.pend::before{border-color:#cfcdc6}
+  .hito .d{font-size:11.5px;color:var(--gris);font-weight:600;letter-spacing:.03em}
+  .hito .t{font-weight:600;margin:1px 0 2px}
+  .hito .x{color:var(--gris);font-size:13.5px}
+
+  ul.limpio{margin:8px 0 0;padding-left:18px}
+  ul.limpio li{margin-bottom:5px}
+  .nota{font-size:13px;color:var(--gris);margin-top:10px}
+  footer{margin-top:34px;font-size:12px;color:var(--gris);text-align:center}
+  @media print{body{background:#fff}.card{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="marca">
+      <div class="logo">CA</div>
+      <div>
+        <h1>CanalAgenda — estado del proyecto</h1>
+        <div class="sub">Reservas por WhatsApp para negocios con cita previa</div>
+      </div>
+    </div>
+    <div class="fecha">Actualizado<br><strong>3 de agosto de 2026</strong></div>
+  </header>
+
+  <div class="card p">
+    <strong>Camino al primer piloto real</strong>
+    <div class="barra"><i style="width:78%"></i></div>
+    <div class="sub">78% · El producto casi está; lo que falta es sobre todo legal y comercial</div>
+    <div class="kpis" style="margin-top:18px">
+      <div class="kpi"><div class="n">100%</div><div class="l">Bot de WhatsApp</div><div class="foot">probado con clientas reales</div></div>
+      <div class="kpi"><div class="n">90%</div><div class="l">Panel del negocio</div><div class="foot">faltan métricas</div></div>
+      <div class="kpi"><div class="n">95%</div><div class="l">Tu backoffice</div><div class="foot">altas de punta a punta</div></div>
+      <div class="kpi"><div class="n">2 / 7</div><div class="l">Servicios premium</div><div class="foot">el resto, solo el interruptor</div></div>
+      <div class="kpi"><div class="n">0%</div><div class="l">Cobro y RGPD</div><div class="foot">imprescindible para facturar</div></div>
+    </div>
+  </div>
+
+  <h2>Por áreas</h2>
+  <div class="areas">
+    <div class="card p area">
+      <span class="pct" style="color:var(--verde)">100%</span>
+      <h3>Bot conversacional</h3>
+      <p>Reserva guiada con botones, lenguaje natural, cancelar y cambiar cita, recordatorios 24 h y 2 h, nombre desde el perfil de WhatsApp.</p>
+      <p style="margin-top:8px"><span class="tag ok">verificado en real</span></p>
+    </div>
+    <div class="card p area">
+      <span class="pct" style="color:var(--verde)">90%</span>
+      <h3>Panel de la peluquería</h3>
+      <p>Agenda del día, citas por teléfono, equipo con turnos y vacaciones, catálogo, horarios, plan contratado.</p>
+      <p style="margin-top:8px"><span class="tag ok">en uso</span> <span class="tag wip">faltan métricas</span></p>
+    </div>
+    <div class="card p area">
+      <span class="pct" style="color:var(--verde)">95%</span>
+      <h3>Backoffice (tú)</h3>
+      <p>Alta completa de tiendas, conexión de Calendar y WhatsApp, incidencias automáticas, estadísticas, activación de servicios.</p>
+      <p style="margin-top:8px"><span class="tag ok">operativo</span></p>
+    </div>
+    <div class="card p area">
+      <span class="pct" style="color:var(--ambar)">50%</span>
+      <h3>Multi-profesional</h3>
+      <p>Equipo con turnos, reparto automático, reasignar y traspasar citas. Faltan aparatos con unidades y elegir profesional.</p>
+      <p style="margin-top:8px"><span class="tag wip">entrega 1 de 3</span></p>
+    </div>
+    <div class="card p area">
+      <span class="pct" style="color:var(--rojo)">bloqueado</span>
+      <h3>Llamada perdida → WhatsApp</h3>
+      <p>El módulo diferencial: construido y probado entero, pero necesita un número de voz español.</p>
+      <p style="margin-top:8px"><span class="tag stop">esperando a Twilio</span></p>
+    </div>
+    <div class="card p area">
+      <span class="pct" style="color:var(--gris)">0%</span>
+      <h3>Negocio</h3>
+      <p>Cobro con Stripe, textos legales y RGPD, métricas de valor para renovar el piloto.</p>
+      <p style="margin-top:8px"><span class="tag no">sin empezar</span></p>
+    </div>
+  </div>
+
+  <h2>Servicios premium — la verdad sin adornos</h2>
+  <div class="card p">
+    <table>
+      <tr><th>Servicio</th><th>Estado</th><th>Qué falta</th></tr>
+      <tr><td><strong>Compactación de agenda</strong> (P1)</td><td><span class="tag ok">funciona</span></td><td>—</td></tr>
+      <tr><td><strong>Lista de espera</strong> (P3)</td><td><span class="tag ok">funciona</span></td><td>Plantilla de Meta para avisar fuera de 24 h</td></tr>
+      <tr><td>Reactivación por ciclo (P2)</td><td><span class="tag no">solo interruptor</span></td><td>Motor proactivo + plantilla marketing + consentimiento</td></tr>
+      <tr><td>Post-servicio 48 h (P6)</td><td><span class="tag no">solo interruptor</span></td><td>Depende del motor de P2</td></tr>
+      <tr><td>Ficha de estilo (P5)</td><td><span class="tag no">solo interruptor</span></td><td>Recibir y guardar fotos + galería en el panel</td></tr>
+      <tr><td>Modo oferta (P4)</td><td><span class="tag no">solo interruptor</span></td><td>Cupos y segmentación · el de mayor riesgo de spam</td></tr>
+      <tr><td>Elegir profesional (B5.3)</td><td><span class="tag no">solo interruptor</span></td><td>"¿Con quién?" en el bot y confirmación con nombre</td></tr>
+    </table>
+    <p class="nota">⚠️ Activar uno de los cinco pendientes no hace nada ni da error. No enseñarlos como disponibles a una clienta.</p>
+  </div>
+
+  <h2>Cómo hemos llegado hasta aquí</h2>
+  <div class="card p">
+    <div class="linea">
+      <div class="hito"><div class="d">8-13 JULIO</div><div class="t">Cimientos</div>
+        <div class="x">Se corrige un fallo grave que impedía volver a reservar huecos cancelados. Aislamiento entre tiendas, acceso con contraseña, alta guiada y control de caducidad de credenciales.</div></div>
+      <div class="hito"><div class="d">13-14 JULIO</div><div class="t">El bot aprende a hablar</div>
+        <div class="x">Interpretación de lenguaje natural con dos proveedores de IA en cascada. "¿Tenéis hueco el viernes por la tarde?", "cancela la de las 16", "cámbiala a las 17". Cuatro rondas de pruebas reales.</div></div>
+      <div class="hito"><div class="d">17 JULIO</div><div class="t">Catálogo y servicios premium</div>
+        <div class="x">Cada servicio con su duración y precio: el tinte de 2 h ocupa 2 h. Nace el sistema de planes contratables y tu backoffice.</div></div>
+      <div class="hito"><div class="d">19 JULIO</div><div class="t">Gestión de citas y lista de espera</div>
+        <div class="x">Botones para cambiar o cancelar, lista de espera y catálogo autoservicio. Se envían las plantillas a Meta.</div></div>
+      <div class="hito"><div class="d">28 JULIO</div><div class="t">El día de las averías silenciosas</div>
+        <div class="x">Se descubre que el planificador llevaba semanas apagado sin avisar. Se arregla, se añade un segundo despachador de respaldo y se tapa un agujero por el que las tiendas nuevas nunca habrían enviado recordatorios.</div></div>
+      <div class="hito"><div class="d">30 JULIO</div><div class="t">Horarios en manos de la tienda</div>
+        <div class="x">La peluquería edita su horario y sus vacaciones sin depender de ti. Los nombres se toman del perfil de WhatsApp.</div></div>
+      <div class="hito"><div class="d">3 AGOSTO</div><div class="t">Agenda, rediseño y equipo</div>
+        <div class="x">Citas por teléfono desde el panel con aviso automático, interfaz nueva clara y con navegación, y varias profesionales trabajando a la vez con turnos, vacaciones y reparto automático.</div></div>
+      <div class="hito pend"><div class="d">PRÓXIMO</div><div class="t">Primer piloto real</div>
+        <div class="x">Textos legales, un alta completa con cuentas de verdad y una peluquería usándolo de lunes a sábado.</div></div>
+    </div>
+  </div>
+
+  <h2>Lo que bloquea, y de quién depende</h2>
+  <div class="areas">
+    <div class="card p">
+      <h3>No depende de ti</h3>
+      <ul class="limpio">
+        <li><strong>Número de voz español</strong> (Twilio) → sin él no hay módulo de llamadas perdidas.</li>
+        <li><strong>Aprobación de plantillas</strong> por Meta: 24-72 h por cada tienda nueva.</li>
+        <li><strong>Verificación de empresa</strong> en Meta, con documentación.</li>
+      </ul>
+    </div>
+    <div class="card p">
+      <h3>Depende de ti</h3>
+      <ul class="limpio">
+        <li>Aviso de privacidad y contrato de encargado del tratamiento (RGPD).</li>
+        <li>Rotar el token de administrador y el de GitHub (salieron en capturas).</li>
+        <li>Encontrar la primera peluquería piloto — <em>el riesgo real ya no es técnico</em>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Siguientes pasos, en orden</h2>
+  <div class="card p">
+    <ol class="limpio">
+      <li><strong>Probar lo del equipo</strong> con dos peluqueras y dos móviles.</li>
+      <li><strong>Aparatos con unidades limitadas</strong> (sillón de color, lavacabezas): un servicio puede necesitar máquina además de persona.</li>
+      <li><strong>Textos legales</strong> y consentimiento de clientas.</li>
+      <li><strong>Un alta real completa</strong>, cronometrada, con cuentas de verdad.</li>
+      <li><strong>Métricas para la tienda</strong>: citas del mes, no-shows evitados, huecos recuperados. Es lo que convierte un piloto en cliente de pago.</li>
+      <li><strong>Cobro</strong> (Stripe) — o transferencia manual para los diez primeros.</li>
+    </ol>
+  </div>
+
+  <footer>
+    Documento generado a partir del estado real del código · Detalle técnico en
+    VISION-GLOBAL-PROYECTO.md · Backlog completo en docs/12-backlog-producto.md
+  </footer>
+</div>
+</body>
+</html>

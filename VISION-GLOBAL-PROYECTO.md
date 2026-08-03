@@ -385,6 +385,13 @@ missed-call (M1-M6) están **construidos, desplegados y probados**:
   (disponibilidad por persona y reparto equilibrado), integración en los 6
   caminos de huecos, API `/api/equipo` y pantalla `/equipo`.
   **Pendiente de que el fundador ejecute la migración y lo pruebe.**
+- ⚠️ **AVISO sobre los 7 interruptores premium (3-ago):** el sistema de
+  contratación está completo (flags, backoffice, panel de la tienda), pero
+  **solo DOS servicios están construidos: P1 `smart_slots` y P3 `waitlist`**.
+  Los otros cinco (`reactivation`, `post_sale`, `style_file`, `flash_offers`,
+  `elegir_profesional`) son **solo el interruptor**: activarlos no hace nada
+  y tampoco da error. No enseñarlos como disponibles a un cliente hasta
+  construirlos. Estado visual siempre actualizado en `ESTADO-DEL-PROYECTO.html`.
 - 📤 **Plantillas enviadas a Meta el 19-jul:** `canalagenda_reminder_v2`
   (Servicio, 4 variables con servicio), `canalagenda_waitlist_v1`
   (Meta la forzó a MARKETING) y `canalagenda_reactivacion_v1` (Marketing).
