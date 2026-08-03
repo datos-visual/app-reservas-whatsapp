@@ -9,6 +9,25 @@
 const { DateTime } = require('luxon');
 const { supabase } = require('./db');
 
+/**
+ * ¿El error es "esa tabla/columna todavía no existe"? Si la migración de
+ * equipo no se ha ejecutado, es mejor decirlo con todas las letras que
+ * soltar un "error inesperado" que no orienta a nadie.
+ */
+function faltaMigracion(error) {
+  const m = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+  return m.includes('pgrst205') || m.includes('42p01') ||
+         m.includes('could not find the table') || m.includes('does not exist');
+}
+function errorMigracion() {
+  const e = new Error(
+    'Falta aplicar la migración del equipo en la base de datos (database/migration_equipo.sql). ' +
+    'Hasta entonces no se pueden guardar turnos ni ausencias.'
+  );
+  e.code = 'VALIDACION';
+  return e;
+}
+
 /** Personas activas de la tienda (kind='empleado'). [] si no hay o falla. */
 async function listarPersonas(storeId, { soloActivas = true } = {}) {
   try {
@@ -183,7 +202,7 @@ async function crearPersona(storeId, { nombre }) {
     .insert({ store_id: storeId, name: name.slice(0, 40), kind: 'empleado', is_active: true })
     .select('*')
     .single();
-  if (error) throw error;
+  if (error) throw faltaMigracion(error) ? errorMigracion() : error;
   console.log('[Equipo] Persona añadida', { storeId, id: data.id, name });
   return data;
 }
@@ -225,11 +244,11 @@ async function guardarTurnos(storeId, resourceId, turnos) {
     .delete()
     .eq('store_id', storeId)
     .eq('resource_id', resourceId);
-  if (delErr) throw delErr;
+  if (delErr) throw faltaMigracion(delErr) ? errorMigracion() : delErr;
 
   if (filas.length) {
     const { error } = await supabase.from('resource_schedules').insert(filas);
-    if (error) throw error;
+    if (error) throw faltaMigracion(error) ? errorMigracion() : error;
   }
   console.log('[Equipo] Turnos actualizados', { storeId, resourceId, turnos: filas.length });
   return filas;
@@ -245,7 +264,7 @@ async function crearAusencia(storeId, resourceId, { startDate, endDate, reason }
     })
     .select('*')
     .single();
-  if (error) throw error;
+  if (error) throw faltaMigracion(error) ? errorMigracion() : error;
   return data;
 }
 

@@ -50,7 +50,7 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-[#e6e4de] bg-white">
+      <header className="sticky top-0 z-30 border-b border-[#e6e4de] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-3">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f7a4f] text-sm font-bold text-white">

@@ -4,7 +4,10 @@
 type P = { className?: string };
 const base = (className?: string) =>
   `h-[18px] w-[18px] shrink-0 ${className || ''}`;
+// width/height explícitos además de las clases: así el icono NUNCA se ve
+// gigante aunque falle la generación del CSS (lección del 3-ago).
 const props = {
+  width: 18, height: 18,
   fill: 'none', stroke: 'currentColor', strokeWidth: 1.7,
   strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24'
 };

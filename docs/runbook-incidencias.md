@@ -48,8 +48,19 @@ defecto del código.
   `NEXT_PUBLIC_*` en Environment del servicio del panel.
 - **La página carga pero "no se pudo conectar con el backend"** → CORS:
   añadir la URL del panel a `DASHBOARD_ORIGIN` (backend, lista por comas).
-- **Texto invisible / sin contraste** → el panel usa tema oscuro global:
-  toda página nueva debe usar clases slate + `text-white`, no tarjetas blancas.
+- **La interfaz sale ROTA: iconos gigantes, menús desmontados, títulos
+  descolocados** → Tailwind ha borrado clases al compilar. Causa habitual:
+  se ha añadido una carpeta nueva de código (p. ej. `components/`) y NO está
+  en `content` de `tailwind.config.ts`. Comprobarlo es lo primero.
+  (Incidente real 3-ago-2026.) Además, los iconos SVG llevan `width`/`height`
+  explícitos para que nunca se vean gigantes aunque falle el CSS.
+- **El build de Render falla con "declared but its value is never read"** →
+  `noUnusedLocals` está activo: cualquier variable o import sin usar tumba el
+  despliegue. Antes de cada push del frontend:
+  `cd frontend && ./node_modules/.bin/tsc --noEmit`
+- **Estilos:** el panel usa tema CLARO con el sistema de `globals.css`
+  (`ca-card`, `ca-btn-primary`, `ca-input`, `ca-badge-ok`…). No inventar
+  clases sueltas: reutilizar esas.
 - **Contraseña olvidada de un usuario de prueba** (emails ficticios: la
   recuperación por correo NO funciona). El `update` de `auth.users` con
   `crypt()` es frágil. **Vía fiable:** Supabase → Authentication → Users →

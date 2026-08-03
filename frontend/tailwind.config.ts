@@ -1,10 +1,13 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  // OJO: este proyecto NO tiene carpeta src/ — el código vive en app/ y lib/
+  // OJO: este proyecto NO tiene carpeta src/ — el código vive en app/, lib/
+  // y components/. Si se olvida una carpeta, Tailwind BORRA sus clases al
+  // compilar y la interfaz sale rota (pasó el 3-ago con components/).
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./lib/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
