@@ -497,7 +497,7 @@ async function notificarListaEspera({ storeId, phoneNumberId, accessToken, start
  * payload era conocido y se ha respondido. Los ids se validan siempre contra
  * el store_id resuelto por webhook — nunca se confía en el payload.
  */
-async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload }) {
+async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload, profileName = null }) {
   if (payload === 'ca:menu:reservar') {
     await sendServiceList({ storeId, phoneNumberId, accessToken, to: from });
     return true;
@@ -663,7 +663,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
   if (payload === 'ca:res:confirm') {
     // Reutiliza ÍNTEGRO el circuito probado del SI (revalidación, Calendar,
     // 23505+rollback, atribución, nombre) — el estado ya es pendingAppointment
-    await handleIncomingText({ storeId, phoneNumberId, accessToken, from, body: 'SI', nluAttempted: true });
+    await handleIncomingText({ storeId, phoneNumberId, accessToken, from, body: 'SI', nluAttempted: true, profileName });
     return true;
   }
 
@@ -852,7 +852,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
   return false;
 }
 
-async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body, nluAttempted = false }) {
+async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body, nluAttempted = false, profileName = null }) {
   const lower = (body || '').trim().toLowerCase();
 
   const storeConfig = await getStoreConfig(storeId);
@@ -992,7 +992,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     return handleIncomingText({
       storeId, phoneNumberId, accessToken, from,
       body: `CITA ${waitlistOffer.dateIso} ${waitlistOffer.time}`,
-      nluAttempted: true
+      nluAttempted: true, profileName
     });
   }
 
@@ -1293,7 +1293,18 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     try {
-      const customer = await createOrGetCustomer(storeId, from);
+      let customer = await createOrGetCustomer(storeId, from);
+
+      // N8: cliente NUEVO (ficha recién creada, sin nombre) → si su perfil de
+      // WhatsApp trae un nombre de persona, lo usamos en vez de preguntar.
+      if (!customer?.name) {
+        const delPerfil = nombreDePersona(profileName);
+        if (delPerfil) {
+          await updateCustomerName(storeId, from, delPerfil, 'perfil_whatsapp');
+          customer = { ...customer, name: delPerfil, name_source: 'perfil_whatsapp' };
+        }
+      }
+
       const quien = customer?.name ? `${customer.name} (${from})` : from;
       const calendarEvent = await createCalendarEvent(storeId, {
         summary: current.serviceName ? `${current.serviceName} — ${quien}` : `Cita WhatsApp ${quien}`,
@@ -1798,7 +1809,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
             accessToken,
             from,
             body: `CITA ${rescuedDate} ${interpreted.time}`,
-            nluAttempted: true
+            nluAttempted: true,
+            profileName
           });
         }
 
@@ -1935,7 +1947,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           accessToken,
           from,
           body: command,
-          nluAttempted: true
+          nluAttempted: true,
+          profileName
         });
       }
     } catch (err) {
@@ -1971,7 +1984,7 @@ async function handleWaitlistButton({ storeId, phoneNumberId, accessToken, from,
     await handleIncomingText({
       storeId, phoneNumberId, accessToken, from,
       body: `CITA ${offer.dateIso} ${offer.time}`,
-      nluAttempted: true
+      nluAttempted: true, profileName
     });
     return true;
   }
@@ -2146,7 +2159,7 @@ async function processWebhookBody(body, { requestId }) {
       if (kind === 'button' && payload) {
         let handled = false;
         if (payload.startsWith('ca:')) {
-          handled = await handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload });
+          handled = await handleFlowPayload({ storeId, phoneNumberId, accessToken, from, payload, profileName });
         }
         if (!handled && payload.startsWith('REMINDER_')) {
           handled = await handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload });
@@ -2165,7 +2178,8 @@ async function processWebhookBody(body, { requestId }) {
         phoneNumberId,
         accessToken,
         from,
-        body: textBody
+        body: textBody,
+        profileName
       });
     } catch (err) {
       console.error('[Webhook] Error procesando mensaje', {
