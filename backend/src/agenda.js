@@ -143,14 +143,14 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
     // Igual que en el bot: tantas citas a la vez como personas trabajen.
     // Sin esto, la primera cita del día tapaba la hora para todo el equipo.
     capacity: await equipo.capacidadTienda(storeId)
-  }), zone);
+  }), zone, servicio?.id ?? null);
   if (!huecos.some((h) => h.label === inicio.toFormat('HH:mm'))) {
     throw errorValidacion(`A las ${inicio.toFormat('HH:mm')} no cabe ${servicio ? `«${servicio.name}» (${duracion} min)` : `una cita de ${duracion} min`}: está ocupado o fuera de horario.`);
   }
   // Con equipo, "ocupado" = no queda nadie libre; sin equipo, la regla de
   // siempre (una cita por hora). Mismo criterio que el bot.
   const personaAsignada = await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone);
-  const conEquipo = (await equipo.listarPersonas(storeId)).length > 0;
+  const conEquipo = await equipo.hayEquipoActivo(storeId);
   if (conEquipo ? !personaAsignada : !!(await getConfirmedAppointmentByStart(storeId, inicio.toISO()))) {
     throw errorValidacion(conEquipo
       ? 'A esa hora ya no queda nadie libre en tu equipo.'

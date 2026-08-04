@@ -14,6 +14,8 @@ import { IconMas, IconAviso, IconCheck } from '../../components/icons';
 type Turno = { id?: number; weekday: number; open_time: string; close_time: string };
 type Ausencia = { id: number; start_date: string; end_date: string; reason: string | null };
 type Persona = { id: number; name: string; is_active: boolean; turnos: Turno[]; ausencias: Ausencia[] };
+type Aparato = { id: number; name: string; units: number; is_active: boolean };
+type Ajustes = { usarEquipo: boolean; usarAparatos: boolean };
 
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const ORDEN = [1, 2, 3, 4, 5, 6, 0];
@@ -21,6 +23,9 @@ const ORDEN = [1, 2, 3, 4, 5, 6, 0];
 export default function EquipoPage() {
   const router = useRouter();
   const [personas, setPersonas] = useState<Persona[]>([]);
+  const [aparatos, setAparatos] = useState<Aparato[]>([]);
+  const [ajustes, setAjustes] = useState<Ajustes>({ usarEquipo: true, usarAparatos: true });
+  const [nuevoAparato, setNuevoAparato] = useState({ nombre: '', unidades: 1 });
   const [nueva, setNueva] = useState('');
   const [abierta, setAbierta] = useState<number | null>(null);
   const [borrador, setBorrador] = useState<Record<number, Turno[]>>({});
@@ -46,11 +51,51 @@ export default function EquipoPage() {
       if (!r.ok) { setError((await r.json().catch(() => ({}))).error || 'No se pudo cargar el equipo.'); return; }
       const body = await r.json();
       setPersonas(body.personas || []);
+      setAparatos(body.aparatos || []);
+      if (body.ajustes) setAjustes(body.ajustes);
       setBorrador({});
       setError('');
     } finally {
       setCargando(false);
     }
+  }
+
+  async function cambiarAjuste(campo: 'usar_equipo' | 'usar_aparatos', valor: boolean) {
+    const r = await apiFetch('/api/equipo/ajustes', {
+      method: 'PUT',
+      body: JSON.stringify({ [campo]: valor })
+    });
+    if (!r.ok) {
+      setError((await r.json().catch(() => ({}))).error || 'No se pudo guardar el ajuste.');
+      return;
+    }
+    setAjustes(await r.json());
+  }
+
+  async function crearAparato() {
+    if (!nuevoAparato.nombre.trim()) return;
+    setGuardando('aparato');
+    try {
+      const r = await apiFetch('/api/aparatos', { method: 'POST', body: JSON.stringify(nuevoAparato) });
+      if (!r.ok) {
+        setError((await r.json().catch(() => ({}))).error || 'No se pudo crear.');
+        return;
+      }
+      setNuevoAparato({ nombre: '', unidades: 1 });
+      await cargar();
+    } finally { setGuardando(null); }
+  }
+
+  async function cambiarUnidades(a: Aparato, unidades: number) {
+    const r = await apiFetch(`/api/aparatos/${a.id}`, { method: 'PUT', body: JSON.stringify({ unidades }) });
+    if (r.ok) cargar();
+    else setError('No se pudieron guardar las unidades.');
+  }
+
+  async function borrarAparato(a: Aparato) {
+    if (!confirm(`¿Quitar «${a.name}»? Los servicios que lo necesiten dejarán de tener ese límite.`)) return;
+    const r = await apiFetch(`/api/aparatos/${a.id}`, { method: 'DELETE' });
+    if (r.ok) cargar();
   }
 
   async function anadir() {
@@ -161,6 +206,36 @@ export default function EquipoPage() {
       {error && <p className="ca-alert-error mb-4 flex items-start gap-2"><IconAviso />{error}</p>}
       {aviso && <p className="ca-alert-ok mb-4 flex items-center gap-2"><IconCheck />{aviso}</p>}
       {cargando && <p className="ca-hint">Cargando…</p>}
+
+      {!cargando && (
+        <div className="ca-card-p mb-5">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+            Cómo se calculan tus huecos
+          </p>
+          <label className="flex cursor-pointer items-start gap-3 py-2">
+            <input type="checkbox" className="mt-1" checked={ajustes.usarEquipo}
+              onChange={(e) => cambiarAjuste('usar_equipo', e.target.checked)} />
+            <span>
+              <span className="font-medium text-slate-900">Tener en cuenta a mi equipo</span>
+              <span className="block ca-hint">
+                Se dan tantas citas a la vez como personas estén trabajando, respetando turnos y vacaciones.
+                Si lo apagas, se vuelve a <strong>una cita a la vez</strong> sin borrar nada.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f0efe9] py-2 pt-3">
+            <input type="checkbox" className="mt-1" checked={ajustes.usarAparatos}
+              onChange={(e) => cambiarAjuste('usar_aparatos', e.target.checked)} />
+            <span>
+              <span className="font-medium text-slate-900">Tener en cuenta mis aparatos</span>
+              <span className="block ca-hint">
+                Un servicio que necesite sillón de color o lavacabezas solo se ofrece si queda uno libre.
+                Si lo apagas, los aparatos dejan de limitar.
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       {!cargando && personas.length === 0 && (
         <div className="ca-alert-info mb-5">
@@ -309,6 +384,53 @@ export default function EquipoPage() {
               />
               <button onClick={anadir} disabled={guardando === 'nueva'} className="ca-btn-primary">
                 {guardando === 'nueva' ? 'Añadiendo…' : 'Añadir'}
+              </button>
+            </div>
+          </div>
+
+          {/* B5.2 — aparatos y sitios con unidades limitadas */}
+          <div className="ca-card-p">
+            <h2 className="ca-h2">Aparatos y sitios</h2>
+            <p className="mb-4 mt-1 ca-hint">
+              Lo que hay en número limitado: sillones de color, lavacabezas, cabinas…
+              Luego, en <strong>Servicios</strong>, marcas cuál necesita cada uno.
+            </p>
+
+            {aparatos.length === 0 && (
+              <p className="mb-3 ca-hint">Todavía no has añadido ninguno: nada limita por aparato.</p>
+            )}
+            <ul className="mb-4 space-y-2">
+              {aparatos.map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e6e4de] px-3 py-2">
+                  <span className="font-medium text-slate-900">{a.name}</span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-500">Unidades</label>
+                    <input
+                      type="number" min={1} max={50} defaultValue={a.units}
+                      className="ca-input w-20 py-1.5"
+                      onBlur={(e) => Number(e.target.value) !== a.units && cambiarUnidades(a, Number(e.target.value))}
+                    />
+                    <button onClick={() => borrarAparato(a)} className="ca-btn-danger ca-btn-sm">Quitar</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="grow">
+                <label className="ca-label">Nombre</label>
+                <input className="ca-input" placeholder="Sillón de color"
+                  value={nuevoAparato.nombre}
+                  onChange={(e) => setNuevoAparato({ ...nuevoAparato, nombre: e.target.value })} />
+              </div>
+              <div>
+                <label className="ca-label">Unidades</label>
+                <input type="number" min={1} max={50} className="ca-input w-24"
+                  value={nuevoAparato.unidades}
+                  onChange={(e) => setNuevoAparato({ ...nuevoAparato, unidades: Number(e.target.value) })} />
+              </div>
+              <button onClick={crearAparato} disabled={guardando === 'aparato'} className="ca-btn-ghost">
+                Añadir
               </button>
             </div>
           </div>

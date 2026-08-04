@@ -28,6 +28,48 @@ function errorMigracion() {
   return e;
 }
 
+/**
+ * Interruptores de la tienda. La tienda puede desactivar la gestión por
+ * profesional o la de aparatos y volver EXACTAMENTE al comportamiento
+ * anterior sin borrar sus datos. Tolerante: sin las columnas, todo activo.
+ */
+async function ajustesTienda(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('stores')
+      .select('usar_equipo, usar_aparatos')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return { usarEquipo: true, usarAparatos: true };
+    return {
+      usarEquipo: data.usar_equipo !== false,
+      usarAparatos: data.usar_aparatos !== false
+    };
+  } catch {
+    return { usarEquipo: true, usarAparatos: true };
+  }
+}
+
+async function guardarAjustes(storeId, { usarEquipo, usarAparatos }) {
+  const patch = {};
+  if (usarEquipo !== undefined) patch.usar_equipo = usarEquipo === true;
+  if (usarAparatos !== undefined) patch.usar_aparatos = usarAparatos === true;
+  if (!Object.keys(patch).length) return null;
+
+  const { error } = await supabase.from('stores').update(patch).eq('id', storeId);
+  if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  console.log('[Equipo] Ajustes de disponibilidad', { storeId, ...patch });
+  return ajustesTienda(storeId);
+}
+
+/** ¿Se está gestionando la disponibilidad por profesional AHORA MISMO? */
+async function hayEquipoActivo(storeId) {
+  const { usarEquipo } = await ajustesTienda(storeId);
+  if (!usarEquipo) return false;
+  return (await listarPersonas(storeId)).length > 0;
+}
+
 /** Personas activas de la tienda (kind='empleado'). [] si no hay o falla. */
 async function listarPersonas(storeId, { soloActivas = true } = {}) {
   try {
@@ -58,6 +100,8 @@ async function listarPersonas(storeId, { soloActivas = true } = {}) {
  * nunca llega a verlo (bug real 3-ago-2026).
  */
 async function capacidadTienda(storeId) {
+  const { usarEquipo } = await ajustesTienda(storeId);
+  if (!usarEquipo) return 1;                 // interruptor apagado → como antes
   const personas = await listarPersonas(storeId);
   return personas.length || 1;
 }
@@ -87,7 +131,7 @@ async function citasDelDia(storeId, dateIso, zone) {
   const dia = DateTime.fromISO(dateIso, { zone });
   const { data, error } = await supabase
     .from('appointments')
-    .select('id, start_at, end_at, resource_id')
+    .select('id, start_at, end_at, resource_id, service_id')
     .eq('store_id', storeId)
     .eq('status', 'confirmed')
     .gte('start_at', dia.startOf('day').toUTC().toISO())
@@ -98,6 +142,70 @@ async function citasDelDia(storeId, dateIso, zone) {
 
 function solapa(aIni, aFin, bIni, bFin) {
   return aIni < bFin && aFin > bIni;
+}
+
+// ---------- B5.2: aparatos con unidades limitadas ----------
+
+/** Aparatos de la tienda (todo lo que no son personas). */
+async function listarAparatos(storeId, { soloActivos = true } = {}) {
+  try {
+    let q = supabase
+      .from('resources')
+      .select('*')
+      .eq('store_id', storeId)
+      .neq('kind', 'empleado')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+    if (soloActivos) q = q.eq('is_active', true);
+    const { data, error } = await q;
+    if (error) return [];
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+/** Qué aparatos necesita cada servicio: Map(service_id → [resource_id]). */
+async function requisitosPorServicio(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('service_resources')
+      .select('service_id, resource_id')
+      .eq('store_id', storeId);
+    if (error) return new Map();
+    const mapa = new Map();
+    for (const r of data || []) {
+      if (!mapa.has(r.service_id)) mapa.set(r.service_id, []);
+      mapa.get(r.service_id).push(r.resource_id);
+    }
+    return mapa;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * ¿Quedan aparatos libres para este servicio en [inicio, fin)?
+ * Cuenta cuántas citas solapadas usan cada aparato (según el servicio de
+ * cada una) y lo compara con las unidades disponibles.
+ */
+function aparatosDisponibles({ serviceId, inicio, fin, citas, requisitos, aparatosPorId, zone }) {
+  const necesita = requisitos.get(Number(serviceId)) || [];
+  if (!necesita.length) return true;    // ese servicio no usa aparatos
+
+  for (const aparatoId of necesita) {
+    const aparato = aparatosPorId.get(aparatoId);
+    const unidades = aparato?.is_active === false ? 0 : (aparato?.units ?? 1);
+
+    const enUso = citas.filter((c) => {
+      if (!solapa(inicio, fin, DateTime.fromISO(c.start_at, { zone }), DateTime.fromISO(c.end_at, { zone }))) return false;
+      const suyos = requisitos.get(Number(c.service_id)) || [];
+      return suyos.includes(aparatoId);
+    }).length;
+
+    if (enUso >= unidades) return false;
+  }
+  return true;
 }
 
 /**
@@ -154,26 +262,52 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
  * huecos TAL CUAL (comportamiento histórico).
  * Añade a cada hueco `personasLibres` para poder mostrarlo si interesa.
  */
-async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone) {
+async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId = null) {
   if (!Array.isArray(slots) || !slots.length) return slots;
 
-  const personas = await listarPersonas(storeId);
-  if (!personas.length) return slots;   // sin equipo → como siempre
+  // Interruptores de la tienda: si están apagados, esto no filtra nada
+  const { usarEquipo, usarAparatos } = await ajustesTienda(storeId);
 
+  const personas = usarEquipo ? await listarPersonas(storeId) : [];
+  const requisitos = (usarAparatos && serviceId) ? await requisitosPorServicio(storeId) : new Map();
+  const necesitaAparatos = serviceId && (requisitos.get(Number(serviceId)) || []).length > 0;
+
+  // Ni equipo ni aparatos configurados → comportamiento histórico intacto
+  if (!personas.length && !necesitaAparatos) return slots;
+
+  const citas = await citasDelDia(storeId, dateIso, zone);
   const cache = {
     personas,
     turnos: await listarTurnos(storeId),
     ausencias: await listarAusencias(storeId, dateIso),
-    citas: await citasDelDia(storeId, dateIso, zone)
+    citas
   };
+  const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
   const resultado = [];
   for (const s of slots) {
-    const { libres } = await disponibilidadEnRango(storeId, s.startIso, s.endIso, zone, cache);
-    if (libres.length > 0) resultado.push({ ...s, personasLibres: libres.length });
+    // 1) ¿Hay alguien libre? (si no hay equipo dado de alta, no se filtra)
+    if (personas.length) {
+      const { libres } = await disponibilidadEnRango(storeId, s.startIso, s.endIso, zone, cache);
+      if (!libres.length) continue;
+      s = { ...s, personasLibres: libres.length };
+    }
+    // 2) ¿Y queda aparato libre para ESTE servicio?
+    if (necesitaAparatos) {
+      const libre = aparatosDisponibles({
+        serviceId,
+        inicio: DateTime.fromISO(s.startIso, { zone }),
+        fin: DateTime.fromISO(s.endIso, { zone }),
+        citas, requisitos, aparatosPorId, zone
+      });
+      if (!libre) continue;
+    }
+    resultado.push(s);
   }
-  console.log('[Equipo] Huecos filtrados por equipo', {
-    storeId, dateIso, antes: slots.length, despues: resultado.length, personas: personas.length
+
+  console.log('[Equipo] Huecos filtrados', {
+    storeId, dateIso, antes: slots.length, despues: resultado.length,
+    personas: personas.length, conAparatos: !!necesitaAparatos
   });
   return resultado;
 }
@@ -184,6 +318,8 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone) {
  * que es como funciona hoy).
  */
 async function elegirPersonaLibre(storeId, inicioIso, finIso, zone) {
+  const { usarEquipo } = await ajustesTienda(storeId);
+  if (!usarEquipo) return null;              // sin gestión por profesional
   const dateIso = DateTime.fromISO(inicioIso, { zone }).toISODate();
   const cache = {
     personas: await listarPersonas(storeId),
@@ -408,6 +544,93 @@ async function borrarPersona(storeId, id) {
   return data || null;
 }
 
+// ---------- CRUD de aparatos y de sus requisitos ----------
+
+async function crearAparato(storeId, { nombre, unidades, tipo }) {
+  const name = String(nombre || '').trim();
+  const units = parseInt(unidades, 10);
+  if (!name) {
+    const e = new Error('El nombre del aparato es obligatorio.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+  if (!Number.isInteger(units) || units < 1 || units > 50) {
+    const e = new Error('Las unidades deben ser un número entre 1 y 50.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+  const kind = ['elevador', 'sala', 'otro'].includes(tipo) ? tipo : 'otro';
+
+  const { data, error } = await supabase
+    .from('resources')
+    .insert({ store_id: storeId, name: name.slice(0, 40), kind, units, is_active: true })
+    .select('*')
+    .single();
+  if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  console.log('[Equipo] Aparato creado', { storeId, id: data.id, name, units });
+  return data;
+}
+
+async function actualizarAparato(storeId, id, { nombre, unidades, is_active }) {
+  const patch = {};
+  if (nombre !== undefined) patch.name = String(nombre).trim().slice(0, 40);
+  if (unidades !== undefined) {
+    const u = parseInt(unidades, 10);
+    if (!Number.isInteger(u) || u < 1 || u > 50) {
+      const e = new Error('Las unidades deben ser un número entre 1 y 50.');
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    patch.units = u;
+  }
+  if (is_active !== undefined) patch.is_active = is_active === true;
+  if (!Object.keys(patch).length) return null;
+
+  const { data, error } = await supabase
+    .from('resources')
+    .update(patch)
+    .eq('store_id', storeId)
+    .eq('id', id)
+    .neq('kind', 'empleado')     // este endpoint no toca personas
+    .select('*')
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function borrarAparato(storeId, id) {
+  const { data, error } = await supabase
+    .from('resources')
+    .delete()
+    .eq('store_id', storeId)
+    .eq('id', id)
+    .neq('kind', 'empleado')
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+/** Define qué aparatos necesita un servicio (lista completa; sustituye). */
+async function guardarRequisitos(storeId, serviceId, resourceIds) {
+  const ids = [...new Set((resourceIds || []).map((n) => parseInt(n, 10)).filter(Number.isInteger))];
+
+  const { error: delErr } = await supabase
+    .from('service_resources')
+    .delete()
+    .eq('store_id', storeId)
+    .eq('service_id', serviceId);
+  if (delErr) throw faltaMigracion(delErr) ? errorMigracion() : delErr;
+
+  if (ids.length) {
+    const filas = ids.map((resource_id) => ({ store_id: storeId, service_id: serviceId, resource_id }));
+    const { error } = await supabase.from('service_resources').insert(filas);
+    if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  }
+  console.log('[Equipo] Requisitos de servicio actualizados', { storeId, serviceId, aparatos: ids.length });
+  return ids;
+}
+
 /** Vista completa para el panel: personas + sus turnos + sus ausencias futuras. */
 async function equipoCompleto(storeId) {
   const personas = await listarPersonas(storeId, { soloActivas: false });
@@ -442,6 +665,15 @@ module.exports = {
   borrarPersona,
   reasignarCita,
   traspasarCitas,
+  listarAparatos,
+  requisitosPorServicio,
+  ajustesTienda,
+  guardarAjustes,
+  hayEquipoActivo,
+  crearAparato,
+  actualizarAparato,
+  borrarAparato,
+  guardarRequisitos,
   disponibilidadEnRango,
   filtrarHuecosPorEquipo,
   elegirPersonaLibre,

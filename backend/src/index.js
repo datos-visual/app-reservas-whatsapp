@@ -376,7 +376,7 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
   // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
   // (quién está de turno y libre). Sin equipo, todo sigue igual que antes.
   const slots = await equipo.filtrarHuecosPorEquipo(
-    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone
+    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone, service.serviceId
   );
 
   if (!slots.length) {
@@ -619,7 +619,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     };
     const events = await listEventsForDay(storeId, d.dateIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone
+      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone, d.serviceId
     );
     const match = slots.find((s) => s.label === timeLabel);
 
@@ -1279,7 +1279,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const events = await listEventsForDay(storeId, startIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, DateTime.fromISO(startIso, { zone }).toISODate(),
-      generate30MinSlots(startIso, events, slotOptions), zone
+      generate30MinSlots(startIso, events, slotOptions), zone, current.serviceId
     );
     const startDt = DateTime.fromISO(startIso, { zone });
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
@@ -1301,7 +1301,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // (Antes se preguntaba siempre lo segundo, y con dos peluqueras eso
     //  rechazaba la segunda cita de la misma hora — bug real 3-ago-2026.)
     const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone);
-    const conEquipo = (await equipo.listarPersonas(storeId)).length > 0;
+    const conEquipo = await equipo.hayEquipoActivo(storeId);
 
     const ocupado = conEquipo
       ? !personaAsignada
@@ -2423,10 +2423,94 @@ app.get('/api/equipo', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    res.json(await equipo.equipoCompleto(storeId));
+    const [completo, aparatos, ajustes] = await Promise.all([
+      equipo.equipoCompleto(storeId),
+      equipo.listarAparatos(storeId, { soloActivos: false }),
+      equipo.ajustesTienda(storeId)
+    ]);
+    res.json({ ...completo, aparatos, ajustes });
   } catch (err) {
     console.error('[API] Error en GET /api/equipo', err);
     res.status(500).json({ error: 'Error leyendo el equipo (¿migración de equipo aplicada?)' });
+  }
+});
+
+// Interruptores: la tienda puede volver al comportamiento anterior
+app.put('/api/equipo/ajustes', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const r = await equipo.guardarAjustes(storeId, {
+      usarEquipo: req.body?.usar_equipo,
+      usarAparatos: req.body?.usar_aparatos
+    });
+    res.json(r || { ok: true });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error guardando ajustes de disponibilidad', err);
+    res.status(500).json({ error: 'Error guardando los ajustes' });
+  }
+});
+
+// --- B5.2: aparatos con unidades y qué servicio necesita cuál ---
+app.post('/api/aparatos', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.status(201).json(await equipo.crearAparato(storeId, {
+      nombre: req.body?.nombre, unidades: req.body?.unidades, tipo: req.body?.tipo
+    }));
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error creando aparato', err);
+    res.status(500).json({ error: 'Error creando el recurso' });
+  }
+});
+
+app.put('/api/aparatos/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const r = await equipo.actualizarAparato(storeId, id, {
+      nombre: req.body?.nombre, unidades: req.body?.unidades, is_active: req.body?.is_active
+    });
+    if (!r) return res.status(404).json({ error: 'Recurso no encontrado' });
+    res.json(r);
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error actualizando aparato', err);
+    res.status(500).json({ error: 'Error guardando el recurso' });
+  }
+});
+
+app.delete('/api/aparatos/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const r = await equipo.borrarAparato(storeId, id);
+    if (!r) return res.status(404).json({ error: 'Recurso no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[API] Error borrando aparato', err);
+    res.status(500).json({ error: 'Error borrando el recurso' });
+  }
+});
+
+app.put('/api/services/:id/recursos', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    res.json({ recursos: await equipo.guardarRequisitos(storeId, id, req.body?.resource_ids) });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error guardando requisitos del servicio', err);
+    res.status(500).json({ error: 'Error guardando los recursos del servicio' });
   }
 });
 
@@ -2732,7 +2816,16 @@ app.get('/api/services', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    res.json({ services: await catalog.listServices(storeId) });
+    const [services, requisitos, aparatos] = await Promise.all([
+      catalog.listServices(storeId),
+      equipo.requisitosPorServicio(storeId),
+      equipo.listarAparatos(storeId)
+    ]);
+    // Cada servicio lleva qué aparatos necesita (B5.2)
+    return res.json({
+      services: services.map((s) => ({ ...s, recursos: requisitos.get(s.id) || [] })),
+      aparatos
+    });
   } catch (err) {
     console.error('[API] Error en GET /api/services', err);
     res.status(500).json({ error: 'Error listando servicios (¿migración del catálogo aplicada?)' });

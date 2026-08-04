@@ -18,7 +18,9 @@ type Servicio = {
   description: string | null;
   is_active: boolean;
   sort_order: number;
+  recursos?: number[];
 };
+type Aparato = { id: number; name: string; units: number };
 
 const inputCls =
   'w-full ca-input focus:border-[#0f7a4f] focus:outline-none';
@@ -26,6 +28,7 @@ const inputCls =
 export default function CatalogoPage() {
   const router = useRouter();
   const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [aparatos, setAparatos] = useState<Aparato[]>([]);
   const [edits, setEdits] = useState<Record<number, Partial<Servicio>>>({});
   const [nuevo, setNuevo] = useState({ name: '', duration_minutes: 30, price_eur: '', description: '' });
   const [error, setError] = useState('');
@@ -58,6 +61,7 @@ export default function CatalogoPage() {
       }
       const body = await r.json();
       setServicios(body.services || []);
+      setAparatos(body.aparatos || []);
       setEdits({});
       setError('');
     } catch {
@@ -96,6 +100,22 @@ export default function CatalogoPage() {
     } finally {
       setGuardando(null);
     }
+  }
+
+  async function cambiarRecurso(servicio: Servicio, aparatoId: number, marcado: boolean) {
+    const actuales = servicio.recursos || [];
+    const nuevos = marcado ? [...actuales, aparatoId] : actuales.filter((x) => x !== aparatoId);
+    const r = await apiFetch(`/api/services/${servicio.id}/recursos`, {
+      method: 'PUT',
+      body: JSON.stringify({ resource_ids: nuevos })
+    });
+    if (!r.ok) {
+      setError((await r.json().catch(() => ({}))).error || 'No se pudo guardar.');
+      return;
+    }
+    setServicios((ss) => ss.map((s) => (s.id === servicio.id ? { ...s, recursos: nuevos } : s)));
+    setAviso('Guardado ✓');
+    setTimeout(() => setAviso(''), 1500);
   }
 
   async function crear() {
@@ -180,6 +200,26 @@ export default function CatalogoPage() {
                       />
                     </div>
                   </div>
+                  {aparatos.length > 0 && (
+                    <div className="mt-3 border-t border-[#f0efe9] pt-3">
+                      <p className="mb-2 text-xs text-slate-500">
+                        ¿Necesita algún aparato? Solo se ofrecerá si queda uno libre.
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        {aparatos.map((a) => (
+                          <label key={a.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={(s.recursos || []).includes(a.id)}
+                              onChange={(ev) => cambiarRecurso(s, a.id, ev.target.checked)}
+                            />
+                            {a.name} <span className="text-xs text-slate-400">×{a.units}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-3 flex items-center justify-between">
                     <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                       <input
