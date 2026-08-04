@@ -37,7 +37,6 @@ const {
   getServiceById
 } = require('./db');
 const {
-  listEventsForDay,
   seleccionarHuecos,
   createCalendarEvent,
   deleteCalendarEvent,
@@ -56,6 +55,9 @@ const { verifyTwilioSignature, parseIncomingCall, buildVoiceTwiml } = require('.
 const { interpretMessage, interpretChoice, nluResultToCommand } = require('./nlu');
 const { joinWaitlist, getFirstWaitingForDate, markWaitlistNotified } = require('./waitlist');
 const equipo = require('./equipo');
+// Sincronización con Google Calendar: si la tienda borra un evento en su
+// calendario, el hueco tiene que volver a ofrecerse (ver sincronizacion.js).
+const sincronizacion = require('./sincronizacion');
 const {
   REMINDER_PAYLOADS,
   dispatchReminders,
@@ -372,7 +374,7 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
       // B5.1: tantas citas a la vez como personas trabajen
       capacity: await equipo.capacidadTienda(storeId)
   };
-  const events = await listEventsForDay(storeId, dateIso, zone);
+  const events = await sincronizacion.eventosDelDia(storeId, dateIso, zone);
   // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
   // (quién está de turno y libre). Sin equipo, todo sigue igual que antes.
   const slots = await equipo.filtrarHuecosPorEquipo(
@@ -617,7 +619,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       // B5.1: tantas citas a la vez como personas trabajen
       capacity: await equipo.capacidadTienda(storeId)
     };
-    const events = await listEventsForDay(storeId, d.dateIso, zone);
+    const events = await sincronizacion.eventosDelDia(storeId, d.dateIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone, d.serviceId
     );
@@ -920,7 +922,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       // B5.1: tantas citas a la vez como personas trabajen
       capacity: await equipo.capacidadTienda(storeId)
     };
-    const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
+    const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone
     );
@@ -1276,7 +1278,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       capacity: await equipo.capacidadTienda(storeId)
     };
 
-    const events = await listEventsForDay(storeId, startIso, zone);
+    const events = await sincronizacion.eventosDelDia(storeId, startIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, DateTime.fromISO(startIso, { zone }).toISODate(),
       generate30MinSlots(startIso, events, slotOptions), zone, current.serviceId
@@ -1518,7 +1520,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const premium = await getPremiumFeatures(storeId);
     const smartSlots = premium?.smart_slots === true;
 
-    const events = await listEventsForDay(storeId, iso, zone);
+    const events = await sincronizacion.eventosDelDia(storeId, iso, zone);
     let slots = await equipo.filtrarHuecosPorEquipo(
       storeId, iso, generate30MinSlots(iso, events, slotOptions), zone
     );
@@ -1638,7 +1640,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       capacity: await equipo.capacidadTienda(storeId)
     };
 
-    const events = await listEventsForDay(storeId, dateTime.toISO(), zone);
+    const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone
     );
@@ -2405,7 +2407,40 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
       console.error('[Reminders] Error en despacho de recordatorios', { requestId, err });
     }
 
-    res.json({ ...resumen, tokens_por_caducar: tokensPorCaducar, recordatorios });
+    // Sincronización con Google Calendar: la tienda borra el evento en su
+    // calendario y nosotros devolvemos el hueco al bot. Aprovechamos el
+    // mismo cron — sin infraestructura nueva (regla de costes).
+    let sincronizacionCalendar = null;
+    try {
+      const r = await sincronizacion.reconciliarTodas({ requestId });
+      sincronizacionCalendar = { revisadas: r.revisadas, liberadas: r.liberadas.length };
+
+      // Un hueco liberado es una oportunidad: avisar a la lista de espera
+      for (const { storeId, cita } of r.liberadas) {
+        try {
+          const cuenta = await getWhatsappAccountByStoreId(storeId);
+          if (cuenta?.access_token) {
+            notificarListaEspera({
+              storeId,
+              phoneNumberId: cuenta.phone_number_id,
+              accessToken: cuenta.access_token,
+              startIso: cita.start_at
+            });
+          }
+        } catch (err) {
+          console.error('[Sync] Error avisando a la lista de espera', { storeId, err });
+        }
+      }
+    } catch (err) {
+      console.error('[Sync] Error en la reconciliación con Calendar', { requestId, err });
+    }
+
+    res.json({
+      ...resumen,
+      tokens_por_caducar: tokensPorCaducar,
+      recordatorios,
+      sincronizacion_calendar: sincronizacionCalendar
+    });
   } catch (err) {
     console.error('[MissedCall] Error en despacho', { requestId, err });
     res.status(500).json({ error: 'Error despachando pendientes' });
@@ -2423,12 +2458,13 @@ app.get('/api/equipo', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const [completo, aparatos, ajustes] = await Promise.all([
+    const [completo, aparatos, ajustes, sincronizarCalendar] = await Promise.all([
       equipo.equipoCompleto(storeId),
       equipo.listarAparatos(storeId, { soloActivos: false }),
-      equipo.ajustesTienda(storeId)
+      equipo.ajustesTienda(storeId),
+      sincronizacion.sincronizacionActiva(storeId)
     ]);
-    res.json({ ...completo, aparatos, ajustes });
+    res.json({ ...completo, aparatos, ajustes: { ...ajustes, sincronizarCalendar } });
   } catch (err) {
     console.error('[API] Error en GET /api/equipo', err);
     res.status(500).json({ error: 'Error leyendo el equipo (¿migración de equipo aplicada?)' });
@@ -2440,11 +2476,17 @@ app.put('/api/equipo/ajustes', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
+    // La vigilancia del calendario vive en otra columna y se guarda aparte,
+    // para no arrastrar los interruptores del equipo si falta su migración.
+    if (req.body?.usar_sync_calendar !== undefined) {
+      await sincronizacion.guardarAjusteSync(storeId, req.body.usar_sync_calendar === true);
+    }
     const r = await equipo.guardarAjustes(storeId, {
       usarEquipo: req.body?.usar_equipo,
       usarAparatos: req.body?.usar_aparatos
     });
-    res.json(r || { ok: true });
+    const sincronizarCalendar = await sincronizacion.sincronizacionActiva(storeId);
+    res.json({ ...(r || {}), sincronizarCalendar });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error guardando ajustes de disponibilidad', err);
@@ -2647,6 +2689,62 @@ app.get('/api/agenda', async (req, res) => {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error en GET /api/agenda', err);
     res.status(500).json({ error: 'Error obteniendo la agenda' });
+  }
+});
+
+// Sincronizar a mano con Google Calendar (botón del panel). Revisa el mes
+// siguiente y libera las citas cuyo evento se borró en el calendario.
+app.post('/api/agenda/sincronizar', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const r = await sincronizacion.reconciliarTienda(storeId, { dias: 30 });
+
+    for (const cita of r.liberadas) {
+      try {
+        const cuenta = await getWhatsappAccountByStoreId(storeId);
+        if (cuenta?.access_token) {
+          notificarListaEspera({
+            storeId,
+            phoneNumberId: cuenta.phone_number_id,
+            accessToken: cuenta.access_token,
+            startIso: cita.start_at
+          });
+        }
+      } catch (err) {
+        console.error('[Sync] Error avisando a la lista de espera', { storeId, err });
+      }
+    }
+
+    res.json({
+      revisadas: r.revisadas,
+      liberadas: r.liberadas.length,
+      horas: r.liberadas.map((c) =>
+        DateTime.fromISO(c.start_at).setZone('Europe/Madrid').toFormat("dd/MM 'a las' HH:mm")
+      ),
+      motivo: r.motivo || null,
+      error: r.error || null
+    });
+  } catch (err) {
+    if (err?.code === 'CALENDAR_NOT_CONFIGURED') {
+      return res.status(400).json({ error: 'Esta tienda no tiene Google Calendar conectado.' });
+    }
+    console.error('[API] Error sincronizando con Calendar', err);
+    res.status(500).json({ error: 'Error sincronizando con Google Calendar' });
+  }
+});
+
+// Interruptor: la tienda puede apagar la vigilancia del calendario
+app.put('/api/agenda/sincronizacion', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const activo = await sincronizacion.guardarAjusteSync(storeId, req.body?.activo === true);
+    res.json({ activo });
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error guardando ajuste de sincronización', err);
+    res.status(500).json({ error: 'Error guardando el ajuste' });
   }
 });
 

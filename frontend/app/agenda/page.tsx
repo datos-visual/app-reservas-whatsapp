@@ -45,6 +45,7 @@ export default function AgendaPage() {
   const [aviso, setAviso] = useState('');
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -111,6 +112,35 @@ export default function AgendaPage() {
     }
   }
 
+  // Si en el salón se borra una cita directamente en Google Calendar, aquí
+  // se recupera esa hora. Normalmente lo hace solo (cada 10 min), pero el
+  // botón da la tranquilidad de verlo al momento.
+  async function sincronizar() {
+    setSincronizando(true);
+    setError('');
+    setAviso('');
+    try {
+      const r = await apiFetch('/api/agenda/sincronizar', { method: 'POST' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(body.error || 'No se pudo sincronizar con Google Calendar.');
+        return;
+      }
+      if (body.error) {
+        setError('No se pudo leer Google Calendar ahora mismo. No se ha cambiado nada.');
+        return;
+      }
+      setAviso(
+        body.liberadas > 0
+          ? `Se han recuperado ${body.liberadas} hora(s) que se habían borrado en Google Calendar: ${body.horas.join(', ')}.`
+          : 'Todo cuadra con Google Calendar ✓'
+      );
+      cargar(fecha);
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
   async function reasignar(id: number, resourceId: string) {
     if (!resourceId) return;
     const r = await apiFetch(`/api/appointments/${id}/asignar`, {
@@ -159,6 +189,14 @@ export default function AgendaPage() {
           <button onClick={() => cambiarFecha(new Date(new Date(fecha).getTime() + 86400000).toISOString().slice(0, 10))}
             className="ca-btn-ghost ca-btn-sm" aria-label="Día siguiente">→</button>
           <button onClick={() => cambiarFecha(hoy)} className="ca-btn-ghost ca-btn-sm">Hoy</button>
+          <button
+            onClick={sincronizar}
+            disabled={sincronizando}
+            className="ca-btn-ghost ca-btn-sm"
+            title="Si has borrado citas directamente en Google Calendar, recupera esas horas"
+          >
+            {sincronizando ? 'Comprobando…' : '↻ Google Calendar'}
+          </button>
         </div>
       }
     >

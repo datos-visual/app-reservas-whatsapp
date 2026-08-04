@@ -15,7 +15,7 @@ type Turno = { id?: number; weekday: number; open_time: string; close_time: stri
 type Ausencia = { id: number; start_date: string; end_date: string; reason: string | null };
 type Persona = { id: number; name: string; is_active: boolean; turnos: Turno[]; ausencias: Ausencia[] };
 type Aparato = { id: number; name: string; units: number; is_active: boolean };
-type Ajustes = { usarEquipo: boolean; usarAparatos: boolean };
+type Ajustes = { usarEquipo: boolean; usarAparatos: boolean; sincronizarCalendar?: boolean };
 
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const ORDEN = [1, 2, 3, 4, 5, 6, 0];
@@ -60,7 +60,10 @@ export default function EquipoPage() {
     }
   }
 
-  async function cambiarAjuste(campo: 'usar_equipo' | 'usar_aparatos', valor: boolean) {
+  async function cambiarAjuste(
+    campo: 'usar_equipo' | 'usar_aparatos' | 'usar_sync_calendar',
+    valor: boolean
+  ) {
     const r = await apiFetch('/api/equipo/ajustes', {
       method: 'PUT',
       body: JSON.stringify({ [campo]: valor })
@@ -231,6 +234,17 @@ export default function EquipoPage() {
               <span className="block ca-hint">
                 Un servicio que necesite sillón de color o lavacabezas solo se ofrece si queda uno libre.
                 Si lo apagas, los aparatos dejan de limitar.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f0efe9] py-2 pt-3">
+            <input type="checkbox" className="mt-1" checked={ajustes.sincronizarCalendar !== false}
+              onChange={(e) => cambiarAjuste('usar_sync_calendar', e.target.checked)} />
+            <span>
+              <span className="font-medium text-slate-900">Vigilar mi Google Calendar</span>
+              <span className="block ca-hint">
+                Si borras una cita directamente en Google Calendar, esa hora vuelve a ofrecerse
+                por WhatsApp. Si lo apagas, las citas solo se anulan desde aquí o desde el chat.
               </span>
             </span>
           </label>

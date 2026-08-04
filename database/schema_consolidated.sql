@@ -431,6 +431,8 @@ alter table public.service_resources enable row level security;
 -- Interruptores de la tienda: apagarlos devuelve el comportamiento anterior
 alter table public.stores add column if not exists usar_equipo   boolean not null default true;
 alter table public.stores add column if not exists usar_aparatos boolean not null default true;
+-- Vigilancia de borrados hechos directamente en Google Calendar
+alter table public.stores add column if not exists usar_sync_calendar boolean not null default true;
 
 alter table public.appointments add column if not exists service_id  bigint references public.services(id)  on delete set null;
 alter table public.appointments add column if not exists resource_id bigint references public.resources(id) on delete set null;

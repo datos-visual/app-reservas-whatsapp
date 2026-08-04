@@ -39,6 +39,36 @@ en el panel de esa tienda → **Horarios** → ajustar y **Guardar** (guarda
 siempre los 7 días). Los horarios reales mandan sobre cualquier valor por
 defecto del código.
 
+## 3.ter Borré la cita en Google Calendar y el hueco sigue ocupado
+
+Una cita vive en **dos sitios**: la base de datos y el Google Calendar de la
+tienda. Desde el 4-ago-2026 el sistema vigila el calendario y, cuando el
+evento ya no está, **cancela la cita y devuelve el hueco** (además avisa a la
+lista de espera si la tienda tiene el flag `waitlist`).
+
+Ocurre en dos momentos:
+
+- **Al instante**, cuando alguien consulta huecos de ese día: el flujo ya pide
+  los eventos a Google, así que detectar la ausencia no cuesta nada.
+- **Cada 10 minutos**, en la pasada del cron (`sincronizacion_calendar` en la
+  respuesta de `/internal/missed-calls/dispatch`), revisando los próximos 30
+  días de todas las tiendas con calendario conectado.
+
+Si hace falta verlo ya: panel → **Agenda** → botón **↻ Google Calendar**.
+
+Por seguridad, **nunca se cancela una cita "porque no aparece en el listado"**:
+antes se pregunta a Google por ese evento concreto y solo se cancela si
+responde que no existe (404/410) o que está cancelado. Si Google no responde,
+no se toca nada y se reintenta en la siguiente pasada — se prefiere un hueco
+bloqueado de más a una clienta cancelada por error.
+
+Diagnóstico en los logs de Render: `[Sync] Cita liberada`, `[Sync] Hueco
+recuperado al vuelo`, `[Sync] No se pudo leer el calendario`.
+
+Se puede apagar en panel → **Equipo** → *Vigilar mi Google Calendar*
+(columna `stores.usar_sync_calendar`, migración
+`database/migration_sync_calendar.sql`).
+
 ## 4. El panel web falla
 
 - **404 en /login** y se ve "Inicio · Precios · Solicitar acceso" → estás en

@@ -682,6 +682,38 @@ confirmación SI, DISPONIBLE, CITA directa, cambio de cita) y en las citas
 manuales del panel. Al confirmar, `equipo.elegirPersonaLibre()` asigna a la
 persona con menos carga ese día.
 
+### 10.56 INCIDENTE 4-ago-2026 — la cita borrada en Google Calendar no liberaba el hueco
+
+**Qué pasó:** el fundador borró dos citas directamente en Google Calendar y el
+bot siguió considerando esas horas ocupadas.
+
+**Por qué:** una cita vive en dos sitios (BD y Calendar). Hasta B5 la
+disponibilidad se leía **solo de Calendar**, así que borrar allí bastaba. Al
+introducir el equipo, la ocupación pasó a calcularse **desde `appointments`**
+— y nadie estaba mirando si el evento seguía existiendo. Es un efecto
+colateral del propio B5, no un fallo de Google.
+
+**Solución (módulo `backend/src/sincronizacion.js`):**
+- `eventosDelDia()` sustituye a `listEventsForDay()` en los **7 caminos** de
+  disponibilidad: devuelve los mismos eventos y de paso reconcilia el día.
+  Coste normal: una consulta a la BD y **cero** llamadas extra a Google.
+- `reconciliarTodas()` en el cron de cada 10 min (30 días vista, todas las
+  tiendas con calendario), avisando a la lista de espera de cada hueco
+  recuperado.
+- Botón **↻ Google Calendar** en la Agenda del panel.
+- Interruptor `stores.usar_sync_calendar` (migración
+  `migration_sync_calendar.sql`) → apagado = comportamiento anterior.
+
+**Regla de diseño que NO se debe relajar:** cancelar es destructivo para la
+clienta, así que jamás se cancela por ausencia en un listado; se confirma
+evento por evento con `events.get` y solo cuenta un 404/410 o `status:
+cancelled`. Ante error de red, no se toca nada. Probado ejecutando la lógica
+con dobles (8 reglas, incluidos falsos positivos y Google caído).
+
+**Lección de producto:** cualquier dato que la tienda pueda tocar por fuera de
+la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
+peluquera no va a cambiar su herramienta de siempre.
+
 ### 10.6 INCIDENTE 28-jul-2026 — el planificador estaba muerto
 El cron de cron-job.org se había **autodesactivado** tras errores HTTP
 repetidos: semanas sin recordatorios ni despacho, **sin ningún error visible**

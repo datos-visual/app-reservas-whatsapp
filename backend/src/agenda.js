@@ -22,9 +22,10 @@ const {
   getWhatsappAccountByStoreId,
   logMessage
 } = require('./db');
-const { listEventsForDay, generate30MinSlots, createCalendarEvent, deleteCalendarEvent } = require('./calendar');
+const { generate30MinSlots, createCalendarEvent, deleteCalendarEvent } = require('./calendar');
 const { sendTextMessage } = require('./whatsappCloud');
 const equipo = require('./equipo');
+const sincronizacion = require('./sincronizacion');
 
 function errorValidacion(mensaje) {
   const e = new Error(mensaje);
@@ -134,7 +135,7 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
   const fin = inicio.plus({ minutes: duracion });
 
   // 3) ¿Cabe y está libre? (mismo cálculo que el bot: Calendar + horario)
-  const eventos = await listEventsForDay(storeId, inicio.toISO(), zone);
+  const eventos = await sincronizacion.eventosDelDia(storeId, inicio.toISO(), zone);
   const huecos = await equipo.filtrarHuecosPorEquipo(storeId, fecha, generate30MinSlots(inicio.toISO(), eventos, {
     zone,
     slotDurationMinutes: duracion,

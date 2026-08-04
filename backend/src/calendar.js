@@ -56,6 +56,58 @@ async function listEventsForDay(storeId, dateIso, zone) {
   return res.data.items || [];
 }
 
+/**
+ * Eventos de un rango de días (para la reconciliación con la BD).
+ * Pagina hasta agotar el rango: si nos quedáramos con la primera página
+ * daríamos por "desaparecidas" citas que sí existen — y las cancelaríamos.
+ */
+async function listEventsForRange(storeId, desdeIso, hastaIso, { showDeleted = true } = {}) {
+  const { calendar, jwtClient } = getCalendarClient();
+  await jwtClient.authorize();
+
+  const calendarId = await resolveCalendarIdForStore(storeId);
+  const items = [];
+  let pageToken;
+  do {
+    const res = await calendar.events.list({
+      calendarId,
+      timeMin: desdeIso,
+      timeMax: hastaIso,
+      singleEvents: true,
+      showDeleted,
+      maxResults: 2500,
+      pageToken
+    });
+    items.push(...(res.data.items || []));
+    pageToken = res.data.nextPageToken;
+  } while (pageToken);
+
+  return items;
+}
+
+/**
+ * Un evento concreto. Devuelve null si Google dice que ya no está (404/410)
+ * o si está marcado como cancelado. Se usa para CONFIRMAR un borrado antes
+ * de tocar la base de datos: nunca cancelamos una cita "por ausencia".
+ */
+async function getCalendarEvent(storeId, eventId) {
+  if (!eventId) return null;
+  const { calendar, jwtClient } = getCalendarClient();
+  await jwtClient.authorize();
+
+  const calendarId = await resolveCalendarIdForStore(storeId);
+  try {
+    const res = await calendar.events.get({ calendarId, eventId });
+    const ev = res.data;
+    if (!ev || ev.status === 'cancelled') return null;
+    return ev;
+  } catch (err) {
+    const code = err?.code || err?.response?.status;
+    if (code === 404 || code === 410) return null;   // borrado de verdad
+    throw err;                                        // fallo de red/permiso
+  }
+}
+
 async function createCalendarEvent(storeId, { summary, description, start, end }, zone) {
   const { calendar, jwtClient } = getCalendarClient();
   await jwtClient.authorize();
@@ -191,6 +243,8 @@ function generate30MinSlots(dateIso, events, options = {}) {
 
 module.exports = {
   listEventsForDay,
+  listEventsForRange,
+  getCalendarEvent,
   createCalendarEvent,
   deleteCalendarEvent,
   generateSlots,
