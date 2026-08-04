@@ -93,11 +93,19 @@ una próxima ejecución. Si pone 0 habilitados o aparece en *Failed Cronjobs*:
 editar el cronjob, volver a **habilitarlo** y **Guardar** (la ejecución de
 prueba NO lo reactiva). Un 429 puntual en la prueba manual suele ser Render
 frenando mientras el servicio despierta: espera 3 min y repite.
-**Red de seguridad añadida:** `.github/workflows/cron-despachador.yml` —
-segundo despachador en GitHub Actions cada 15 min, que despierta al backend
-antes, reintenta y avisa por email si falla. Requiere el secreto
-`INTERNAL_CRON_TOKEN` en GitHub. El endpoint es idempotente: que lo llamen
-dos planificadores no duplica envíos.
+**Reparto de responsabilidades entre los dos planificadores:**
+- **Principal: cron-job.org cada 10 minutos.** Los 10 min no son capricho:
+  el plan gratuito de Render duerme el servidor a los ~15 min de inactividad
+  y despertarlo cuesta 30-60 s (por eso el primer WhatsApp del día tarda).
+  Llamando cada 10 min, el backend se mantiene despierto.
+- **Respaldo: `.github/workflows/cron-despachador.yml`, una vez por hora.**
+  Despierta el backend, reintenta y GitHub avisa por email si falla. Estaba
+  cada 15 min y se comía los 2.000 min/mes gratuitos de Actions en repos
+  privados. Una vez por hora basta: las ventanas de recordatorio son de horas.
+  Requiere el secreto `INTERNAL_CRON_TOKEN` en GitHub.
+- El endpoint es idempotente: que lo llamen dos planificadores no duplica nada.
+- **Cuando haya el primer cliente de pago:** instancia de pago en Render
+  (~7 $/mes) y se acabaron los arranques en frío. No antes.
 
 ### 5.1 Descartes del motor
 

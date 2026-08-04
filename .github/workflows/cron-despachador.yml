@@ -18,9 +18,13 @@ name: Despachador CanalAgenda
 
 on:
   schedule:
-    # Cada 15 minutos. Ojo: GitHub puede retrasar los cron unos minutos si hay
-    # carga; las ventanas de recordatorio (horas) toleran ese desfase de sobra.
-    - cron: '*/15 * * * *'
+    # CADA HORA (3-ago-2026). Este flujo es la RED DE SEGURIDAD, no el
+    # planificador principal: ese es cron-job.org cada 10 minutos. A cada
+    # 15 min se comía los 2.000 minutos/mes gratuitos de Actions en repos
+    # privados. Una vez por hora basta para que, si el cron principal muere,
+    # los recordatorios sigan saliendo (sus ventanas son de horas) y GitHub
+    # te avise por email.
+    - cron: '7 * * * *'
   workflow_dispatch: {}   # botón "Run workflow" para lanzarlo a mano
 
 concurrency:
