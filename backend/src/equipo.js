@@ -285,24 +285,28 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
   const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
   const resultado = [];
-  for (const s of slots) {
+  for (const original of slots) {
+    let hueco = original;   // OJO: nunca reasignar la variable del for...of
+
     // 1) ¿Hay alguien libre? (si no hay equipo dado de alta, no se filtra)
     if (personas.length) {
-      const { libres } = await disponibilidadEnRango(storeId, s.startIso, s.endIso, zone, cache);
+      const { libres } = await disponibilidadEnRango(storeId, hueco.startIso, hueco.endIso, zone, cache);
       if (!libres.length) continue;
-      s = { ...s, personasLibres: libres.length };
+      hueco = { ...hueco, personasLibres: libres.length };
     }
+
     // 2) ¿Y queda aparato libre para ESTE servicio?
     if (necesitaAparatos) {
       const libre = aparatosDisponibles({
         serviceId,
-        inicio: DateTime.fromISO(s.startIso, { zone }),
-        fin: DateTime.fromISO(s.endIso, { zone }),
+        inicio: DateTime.fromISO(hueco.startIso, { zone }),
+        fin: DateTime.fromISO(hueco.endIso, { zone }),
         citas, requisitos, aparatosPorId, zone
       });
       if (!libre) continue;
     }
-    resultado.push(s);
+
+    resultado.push(hueco);
   }
 
   console.log('[Equipo] Huecos filtrados', {
