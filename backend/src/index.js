@@ -3154,6 +3154,16 @@ app.get('/api/appointments', async (req, res) => {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
     const target = date || new Date().toISOString();
+    // Contrastar con Google Calendar antes de listar: si borraron la cita
+    // allí, no puede seguir apareciendo en el panel (ver sincronizacion.js)
+    try {
+      const zona = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+      const d = DateTime.fromISO(String(target), { zone: zona });
+      const fechaIso = (d.isValid ? d : DateTime.now().setZone(zona)).toISODate();
+      await sincronizacion.eventosDelDia(storeId, fechaIso, zona);
+    } catch (err) {
+      console.warn('[Inicio] No se pudo contrastar con Google Calendar', { storeId, message: err?.message });
+    }
     const appointments = await getAppointmentsByDate(storeId, target);
     res.json(appointments);
   } catch (err) {

@@ -73,6 +73,18 @@ async function agendaDelDia(storeId, dateIso) {
   const dia = DateTime.fromISO(dateIso, { zone });
   if (!dia.isValid) throw errorValidacion('Fecha inválida.');
 
+  // La agenda tiene que enseñar la VERDAD: si la tienda borró una cita
+  // directamente en su Google Calendar, aquí se detecta antes de pintar.
+  // Best-effort: sin calendario conectado o con Google caído, se muestra lo
+  // que hay en la base de datos en vez de dejar la pantalla en blanco.
+  try {
+    await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
+  } catch (err) {
+    console.warn('[Agenda] No se pudo contrastar con Google Calendar', {
+      storeId, fecha: dia.toISODate(), message: err?.message
+    });
+  }
+
   const { data, error } = await supabase
     .from('appointments')
     .select('id, start_at, end_at, status, source, service_id, resource_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
