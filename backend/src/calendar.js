@@ -166,9 +166,16 @@ async function deleteCalendarEvent(storeId, eventId) {
 // cronológico — quien muestra la lista decide cómo usar la puntuación
 // (marcar con ⭐, priorizar en la selección…). Lección de UX: reordenar
 // una lista de horas confunde; se marca, no se desordena.
-function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1 }) {
+// stepMinutes: cada cuánto puede EMPEZAR una cita (la rejilla), independiente
+// de lo que DURA. Antes el cursor avanzaba la duración entera del servicio, y
+// eso perdía dinero: un sábado de 10:00 a 14:00 con Mechas de 2h30 solo
+// ofrecía las 10:00, cuando 11:30→14:00 estaba libre. Con paso 30 se ofrecen
+// 10:00, 10:30, 11:00 y 11:30. stepMinutes<=0 vuelve al comportamiento
+// anterior (bloques del tamaño del servicio).
+function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDurationMinutes, capacity = 1, stepMinutes = 30 }) {
   const tz = zone || config.timezone || 'Europe/Madrid';
   const slotMins = slotDurationMinutes ?? 30;
+  const paso = Number(stepMinutes) > 0 ? Number(stepMinutes) : slotMins;
 
   // Fallback para tiendas sin store_business_hours configurado
   const [openH, openM] = (openTime || '08:00').split(':').map(Number);
@@ -218,7 +225,7 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
       });
     }
 
-    cursor = slotEnd;
+    cursor = cursor.plus({ minutes: paso });
   }
 
   return slots;

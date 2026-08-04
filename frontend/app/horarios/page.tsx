@@ -29,6 +29,8 @@ export default function HorariosPage() {
   const [aviso, setAviso] = useState('');
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  // Rejilla: cada cuántos minutos puede empezar una cita (0 = bloques)
+  const [paso, setPaso] = useState(30);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -56,6 +58,9 @@ export default function HorariosPage() {
         const body = await rh.json();
         setDias(body.hours || []);
         setConfigurado(body.configured !== false);
+        if (body.paso_huecos_min !== undefined && body.paso_huecos_min !== null) {
+          setPaso(Number(body.paso_huecos_min));
+        }
       } else setError('No se pudo cargar el horario.');
       if (rc.ok) setCierres((await rc.json()).closures || []);
     } catch {
@@ -75,7 +80,7 @@ export default function HorariosPage() {
     try {
       const r = await apiFetch('/api/business-hours', {
         method: 'PUT',
-        body: JSON.stringify({ hours: dias })
+        body: JSON.stringify({ hours: dias, paso_huecos_min: paso })
       });
       const body = await r.json().catch(() => null);
       if (!r.ok) {
@@ -83,6 +88,7 @@ export default function HorariosPage() {
         return;
       }
       setDias(body.hours || []);
+      if (body.paso_huecos_min !== undefined) setPaso(Number(body.paso_huecos_min));
       setConfigurado(true);
       setAviso('Horario guardado ✓');
       setTimeout(() => setAviso(''), 2500);
@@ -197,6 +203,25 @@ export default function HorariosPage() {
                   </div>
                 );
               })}
+            </div>
+            <div className="mt-4 border-t border-[#f0efe9] pt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-900">
+                ¿Cada cuánto pueden empezar las citas?
+              </label>
+              <select
+                className="ca-input w-auto"
+                value={paso}
+                onChange={(e) => setPaso(Number(e.target.value))}
+              >
+                <option value={15}>Cada 15 minutos</option>
+                <option value={30}>Cada media hora (recomendado)</option>
+                <option value={60}>Cada hora en punto</option>
+                <option value={0}>En bloques del tamaño del servicio</option>
+              </select>
+              <p className="ca-hint mt-1">
+                Con media hora, un servicio de 2 h 30 en un sábado de 10:00 a 14:00 se ofrece a las
+                10:00, 10:30, 11:00 y 11:30. En bloques solo se ofrecería las 10:00.
+              </p>
             </div>
             <button
               onClick={guardarHorario}

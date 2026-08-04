@@ -372,7 +372,9 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     openTime: businessHours?.openTime || '08:00',
     closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
-      capacity: await equipo.capacidadTienda(storeId)
+      capacity: await equipo.capacidadTienda(storeId),
+      // Rejilla configurable: cada cuanto puede EMPEZAR una cita (30 min)
+      stepMinutes: await equipo.pasoHuecos(storeId)
   };
   const events = await sincronizacion.eventosDelDia(storeId, dateIso, zone);
   // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
@@ -617,7 +619,9 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
-      capacity: await equipo.capacidadTienda(storeId)
+      capacity: await equipo.capacidadTienda(storeId),
+      // Rejilla configurable: cada cuanto puede EMPEZAR una cita (30 min)
+      stepMinutes: await equipo.pasoHuecos(storeId)
     };
     const events = await sincronizacion.eventosDelDia(storeId, d.dateIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
@@ -920,7 +924,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
-      capacity: await equipo.capacidadTienda(storeId)
+      capacity: await equipo.capacidadTienda(storeId),
+      // Rejilla configurable: cada cuanto puede EMPEZAR una cita (30 min)
+      stepMinutes: await equipo.pasoHuecos(storeId)
     };
     const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
@@ -1275,7 +1281,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
-      capacity: await equipo.capacidadTienda(storeId)
+      capacity: await equipo.capacidadTienda(storeId),
+      // Rejilla configurable: cada cuanto puede EMPEZAR una cita (30 min)
+      stepMinutes: await equipo.pasoHuecos(storeId)
     };
 
     const events = await sincronizacion.eventosDelDia(storeId, startIso, zone);
@@ -1513,7 +1521,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
-      capacity: await equipo.capacidadTienda(storeId)
+      capacity: await equipo.capacidadTienda(storeId),
+      // Rejilla configurable: cada cuanto puede EMPEZAR una cita (30 min)
+      stepMinutes: await equipo.pasoHuecos(storeId)
     };
 
     // P1 premium: smart_slots prioriza y marca con ⭐ (orden cronológico)
@@ -1637,7 +1647,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
-      capacity: await equipo.capacidadTienda(storeId)
+      capacity: await equipo.capacidadTienda(storeId),
+      // Rejilla configurable: cada cuanto puede EMPEZAR una cita (30 min)
+      stepMinutes: await equipo.pasoHuecos(storeId)
     };
 
     const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
@@ -2836,13 +2848,14 @@ app.get('/api/business-hours', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const [hours, configured] = await Promise.all([
+    const [hours, configured, paso] = await Promise.all([
       listBusinessHours(storeId),
-      hasBusinessHours(storeId)
+      hasBusinessHours(storeId),
+      equipo.pasoHuecos(storeId)
     ]);
     // configured=false ⇒ los 7 días son propuestas, NO están guardados:
     // el bot no dará citas hasta que la tienda pulse Guardar.
-    res.json({ hours, configured });
+    res.json({ hours, configured, paso_huecos_min: paso });
   } catch (err) {
     console.error('[API] Error en GET /api/business-hours', err);
     res.status(500).json({ error: 'Error leyendo el horario' });
@@ -2854,7 +2867,12 @@ app.put('/api/business-hours', async (req, res) => {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
     const filas = validarHorario(req.body?.hours);
-    res.json({ hours: await replaceBusinessHours(storeId, filas) });
+    const hours = await replaceBusinessHours(storeId, filas);
+    let paso;
+    if (req.body?.paso_huecos_min !== undefined) {
+      paso = await equipo.guardarPasoHuecos(storeId, req.body.paso_huecos_min);
+    }
+    res.json({ hours, paso_huecos_min: paso ?? (await equipo.pasoHuecos(storeId)) });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error en PUT /api/business-hours', err);

@@ -433,6 +433,8 @@ alter table public.stores add column if not exists usar_equipo   boolean not nul
 alter table public.stores add column if not exists usar_aparatos boolean not null default true;
 -- Vigilancia de borrados hechos directamente en Google Calendar
 alter table public.stores add column if not exists usar_sync_calendar boolean not null default true;
+-- Rejilla: cada cuántos minutos puede empezar una cita (0 = bloques del servicio)
+alter table public.stores add column if not exists paso_huecos_min smallint not null default 30;
 
 alter table public.appointments add column if not exists service_id  bigint references public.services(id)  on delete set null;
 alter table public.appointments add column if not exists resource_id bigint references public.resources(id) on delete set null;

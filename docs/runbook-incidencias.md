@@ -69,6 +69,22 @@ Se puede apagar en panel → **Equipo** → *Vigilar mi Google Calendar*
 (columna `stores.usar_sync_calendar`, migración
 `database/migration_sync_calendar.sql`).
 
+## 3.quater El bot ofrece muy pocas horas para un servicio largo
+
+Hasta el 4-ago-2026 los huecos se generaban en **bloques del tamaño del
+servicio**: un sábado de 10:00 a 14:00 con Mechas (2h30) solo ofrecía las
+10:00, porque el siguiente bloque (12:30→15:00) no cabía — y 11:30→14:00,
+que estaba libre, no se ofrecía nunca. Dinero perdido a diario.
+
+Ahora la tienda elige la **rejilla** en panel → **Horarios** → *¿Cada cuánto
+pueden empezar las citas?* (15 / 30 / 60 minutos o bloques). Por defecto 30.
+Columna `stores.paso_huecos_min`, migración `database/migration_paso_huecos.sql`.
+
+Cuenta rápida para saber si lo que ves es correcto: **la última hora ofrecible
+es la del cierre menos la duración del servicio**. Si aun así salen menos de
+las esperadas, mira los turnos del equipo ese día (el turno debe cubrir el
+servicio ENTERO) y si el servicio exige un aparato ya ocupado.
+
 ## 4. El panel web falla
 
 - **404 en /login** y se ve "Inicio · Precios · Solicitar acceso" → estás en

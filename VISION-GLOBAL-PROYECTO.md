@@ -714,6 +714,31 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.57 INCIDENTE 4-ago-2026 — la rejilla de huecos perdía dinero
+
+**Qué pasó:** para Mechas (150 min) un sábado de 10:00 a 14:00 el bot ofrecía
+**una sola hora**, las 10:00.
+
+**Por qué:** `generateSlots` avanzaba el cursor la duración entera del servicio
+(`cursor = slotEnd`), así que solo existían bloques 10:00→12:30 y 12:30→15:00;
+el segundo no cabía. **11:30→14:00 estaba libre y no se ofrecía jamás.** El
+mismo efecto explicaba los tintes ofrecidos solo cada 2 h.
+
+**Solución:** `stepMinutes` separa *cada cuánto puede empezar* una cita de
+*cuánto dura*. Por defecto 30 min, configurable por tienda en Horarios
+(15/30/60 o `0` = bloques, comportamiento anterior). Columna
+`stores.paso_huecos_min` (`migration_paso_huecos.sql`), leída con
+`equipo.pasoHuecos()` en los 7 caminos de disponibilidad.
+
+Verificado ejecutando `generateSlots` con el caso real: sábado 10-14 con 2h30
+→ `10:00 10:30 11:00 11:30`; en bloques → `10:00`; y ningún hueco termina
+después del cierre ni solapa con una cita cuando la capacidad es 1.
+
+**Lección:** un fallo que no da error y solo *ofrece de menos* es el más caro
+de todos, porque nadie lo denuncia — la clienta se va y la tienda no se entera.
+Al probar disponibilidad hay que contar los huecos esperados a mano, no
+limitarse a comprobar que "sale algo".
+
 ### 10.6 INCIDENTE 28-jul-2026 — el planificador estaba muerto
 El cron de cron-job.org se había **autodesactivado** tras errores HTTP
 repetidos: semanas sin recordatorios ni despacho, **sin ningún error visible**

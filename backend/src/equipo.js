@@ -51,6 +51,41 @@ async function ajustesTienda(storeId) {
   }
 }
 
+/**
+ * Rejilla de la tienda: cada cuántos minutos puede EMPEZAR una cita.
+ * 30 por defecto. 0 = bloques del tamaño del servicio (comportamiento
+ * anterior a ago-2026). Consulta propia y tolerante: si falta la columna,
+ * no puede arrastrar a los demás interruptores.
+ */
+async function pasoHuecos(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('stores')
+      .select('paso_huecos_min')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data || data.paso_huecos_min == null) return 30;
+    return Number(data.paso_huecos_min);
+  } catch {
+    return 30;
+  }
+}
+
+async function guardarPasoHuecos(storeId, minutos) {
+  const permitidos = [0, 15, 30, 60];
+  const valor = Number(minutos);
+  if (!permitidos.includes(valor)) {
+    const e = new Error('La rejilla solo puede ser 15, 30, 60 minutos o bloques del servicio.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+  const { error } = await supabase.from('stores').update({ paso_huecos_min: valor }).eq('id', storeId);
+  if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  console.log('[Equipo] Rejilla de huecos', { storeId, minutos: valor });
+  return valor;
+}
+
 async function guardarAjustes(storeId, { usarEquipo, usarAparatos }) {
   const patch = {};
   if (usarEquipo !== undefined) patch.usar_equipo = usarEquipo === true;
@@ -673,6 +708,8 @@ module.exports = {
   requisitosPorServicio,
   ajustesTienda,
   guardarAjustes,
+  pasoHuecos,
+  guardarPasoHuecos,
   hayEquipoActivo,
   crearAparato,
   actualizarAparato,

@@ -155,7 +155,9 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
     closeTime: horario.closeTime || '17:00',
     // Igual que en el bot: tantas citas a la vez como personas trabajen.
     // Sin esto, la primera cita del día tapaba la hora para todo el equipo.
-    capacity: await equipo.capacidadTienda(storeId)
+    capacity: await equipo.capacidadTienda(storeId),
+    // Misma rejilla que el bot: si no, el panel ofrecería horas distintas
+    stepMinutes: await equipo.pasoHuecos(storeId)
   }), zone, servicio?.id ?? null);
   if (!huecos.some((h) => h.label === inicio.toFormat('HH:mm'))) {
     throw errorValidacion(`A las ${inicio.toFormat('HH:mm')} no cabe ${servicio ? `«${servicio.name}» (${duracion} min)` : `una cita de ${duracion} min`}: está ocupado o fuera de horario.`);
