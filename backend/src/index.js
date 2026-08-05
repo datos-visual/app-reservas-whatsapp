@@ -2764,20 +2764,20 @@ app.put('/api/agenda/sincronizacion', async (req, res) => {
   }
 });
 
-// Bloquear / liberar un rato de la agenda (limpiar material, comer, médico)
+// Bloquear / liberar una franja horaria (limpiar material, comer, médico)
 app.post('/api/agenda/bloqueos', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
     const { fecha, hora, minutos, motivo } = req.body || {};
-    res.status(201).json(await agenda.bloquearRato(storeId, { fecha, hora, minutos, motivo }));
+    res.status(201).json(await agenda.bloquearFranja(storeId, { fecha, hora, minutos, motivo }));
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     if (err?.code === 'CALENDAR_NOT_CONFIGURED') {
       return res.status(400).json({ error: 'Conecta primero Google Calendar para poder bloquear horas.' });
     }
-    console.error('[API] Error bloqueando un rato', err);
-    res.status(500).json({ error: 'No se pudo bloquear ese rato' });
+    console.error('[API] Error bloqueando una franja', err);
+    res.status(500).json({ error: 'No se pudo bloquear esa franja' });
   }
 });
 
@@ -2785,12 +2785,12 @@ app.delete('/api/agenda/bloqueos/:eventId', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    await agenda.desbloquearRato(storeId, req.params.eventId);
+    await agenda.liberarFranja(storeId, req.params.eventId);
     res.json({ ok: true });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
-    console.error('[API] Error liberando un rato', err);
-    res.status(500).json({ error: 'No se pudo liberar ese rato' });
+    console.error('[API] Error liberando una franja', err);
+    res.status(500).json({ error: 'No se pudo liberar esa franja' });
   }
 });
 

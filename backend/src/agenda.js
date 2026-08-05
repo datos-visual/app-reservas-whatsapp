@@ -104,7 +104,7 @@ async function agendaDelDia(storeId, dateIso) {
   const fases = await equipo.fasesPorServicio(storeId);
   const margen = await equipo.margenRelleno(storeId);
 
-  // Ratos bloqueados: eventos del calendario que NO son citas nuestras
+  // Franjas bloqueadas: eventos del calendario que NO son citas nuestras
   // (limpiar material, comer, el médico...). Se pintan aparte para que la
   // dueña vea por qué el asistente no ofrece esas horas.
   const idsDeCitas = new Set((data || []).map((c) => c.google_event_id).filter(Boolean));
@@ -162,14 +162,14 @@ async function agendaDelDia(storeId, dateIso) {
 }
 
 /**
- * Bloquea un rato de la agenda (limpiar material, comer, el médico).
+ * Bloquea una franja horaria de la agenda (limpiar material, comer, el médico).
  *
  * Se crea como evento normal de Google Calendar SIN fila en `appointments`:
  * así lo trata el sistema como un evento ajeno y tapa el hueco entero, que es
  * justo lo que se quiere. Y la dueña puede verlo y borrarlo desde su propio
  * calendario si le resulta más cómodo.
  */
-async function bloquearRato(storeId, { fecha, hora, minutos, motivo }) {
+async function bloquearFranja(storeId, { fecha, hora, minutos, motivo }) {
   const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) throw errorValidacion('Fecha inválida (AAAA-MM-DD).');
@@ -187,19 +187,19 @@ async function bloquearRato(storeId, { fecha, hora, minutos, motivo }) {
     storeId,
     {
       summary: `🔒 ${titulo}`,
-      description: 'Rato bloqueado desde el panel de CanalAgenda. Mientras exista, el asistente no ofrecerá estas horas.',
+      description: 'Franja bloqueada desde el panel de CanalAgenda. Mientras exista, el asistente no ofrecerá estas horas.',
       start: inicio.toISO(),
       end: fin.toISO()
     },
     zone
   );
 
-  console.log('[Agenda] Rato bloqueado', { storeId, fecha, hora, minutos: dur, titulo });
+  console.log('[Agenda] Franja bloqueada', { storeId, fecha, hora, minutos: dur, titulo });
   return { event_id: evento?.id || null, desde: inicio.toFormat('HH:mm'), hasta: fin.toFormat('HH:mm') };
 }
 
-/** Libera un rato bloqueado. Solo borra el evento; no toca citas. */
-async function desbloquearRato(storeId, eventId) {
+/** Libera una franja bloqueada. Solo borra el evento; no toca citas. */
+async function liberarFranja(storeId, eventId) {
   if (!eventId) throw errorValidacion('Falta el identificador del bloqueo.');
 
   // Guarda de seguridad: jamás borrar por aquí un evento que sea una cita.
@@ -210,10 +210,10 @@ async function desbloquearRato(storeId, eventId) {
     .eq('google_event_id', eventId)
     .limit(1)
     .maybeSingle();
-  if (data) throw errorValidacion('Eso es una cita, no un rato bloqueado. Cancélala desde la propia cita.');
+  if (data) throw errorValidacion('Eso es una cita, no una franja bloqueada. Cancélala desde la propia cita.');
 
   await deleteCalendarEvent(storeId, eventId);
-  console.log('[Agenda] Rato liberado', { storeId, eventId });
+  console.log('[Agenda] Franja liberada', { storeId, eventId });
   return true;
 }
 
@@ -358,5 +358,5 @@ async function cancelarCitaManual(storeId, appointmentId, { avisar = true } = {}
 
 module.exports = {
   agendaDelDia, crearCitaManual, cancelarCitaManual, normalizarTelefono,
-  bloquearRato, desbloquearRato
+  bloquearFranja, liberarFranja
 };

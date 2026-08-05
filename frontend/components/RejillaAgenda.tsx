@@ -4,7 +4,7 @@
 //
 // Es la pantalla donde el salón vive ocho horas al día, así que manda una
 // regla por encima de la estética: **lo que no se puede vender se ve rayado**.
-// Fuera de turno, vacaciones, cerrado o un rato bloqueado se dibujan con la
+// Fuera de turno, vacaciones, cerrado o una franja bloqueada se dibujan con
 // misma trama diagonal. Así la dueña deja de preguntarse «¿por qué el
 // asistente no ofrece esa hora?» — la respuesta está a la vista.
 //
@@ -245,7 +245,7 @@ export default function RejillaAgenda({
                   />
                 ))}
 
-                {/* Rayado: ratos bloqueados (afectan a todo el salón) */}
+                {/* Rayado: franjas bloqueadas (afectan a todo el salón) */}
                 {bloqueos.map((b) => {
                   const d = aMinutos(b.desde);
                   const h = aMinutos(b.hasta);
@@ -324,7 +324,7 @@ export default function RejillaAgenda({
       <div className="flex flex-wrap gap-4 border-t border-[#f2f1ec] px-4 py-2.5 text-[11px] text-[#8a8378]">
         <span className="flex items-center gap-1.5">
           <i className="inline-block h-3 w-3 rounded-[3px] border border-[#e2dcd2]" style={{ background: TRAMA }} />
-          fuera de turno, vacaciones o rato bloqueado
+          fuera de turno, vacaciones o franja bloqueada
         </span>
         <span className="flex items-center gap-1.5">
           <i className="inline-block h-3 w-3 rounded-[3px] border border-dashed border-[#c2410c]" />

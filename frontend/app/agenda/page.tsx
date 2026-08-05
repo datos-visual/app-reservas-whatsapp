@@ -167,10 +167,10 @@ export default function AgendaPage() {
     }
   }
 
-  // Bloquear un rato: limpiar material, comer, ir al banco. Se guarda como
+  // Bloquear una franja: limpiar material, comer, ir al banco. Se guarda como
   // evento en Google Calendar, así que el asistente deja de ofrecer esas horas.
   async function bloquear() {
-    if (!bloqueo.hora) { setError('Indica a qué hora empieza el rato que quieres bloquear.'); return; }
+    if (!bloqueo.hora) { setError('Indica a qué hora empieza la franja que quieres bloquear.'); return; }
     setGuardando(true);
     setError('');
     try {
@@ -179,7 +179,7 @@ export default function AgendaPage() {
         body: JSON.stringify({ ...bloqueo, fecha })
       });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) { setError(body.error || 'No se pudo bloquear ese rato.'); return; }
+      if (!r.ok) { setError(body.error || 'No se pudo bloquear esa franja.'); return; }
       setBloqueo({ hora: '', minutos: 30, motivo: '' });
       setAviso(`Bloqueado de ${body.desde} a ${body.hasta} ✓`);
       cargar(fecha);
@@ -193,7 +193,7 @@ export default function AgendaPage() {
     const r = await apiFetch(`/api/agenda/bloqueos/${encodeURIComponent(b.event_id)}`, { method: 'DELETE' });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) { setError(body.error || 'No se pudo liberar.'); return; }
-    setAviso('Rato liberado ✓');
+    setAviso('Franja liberada ✓');
     cargar(fecha);
   }
 
@@ -450,7 +450,7 @@ export default function AgendaPage() {
           )}
 
           <div className="ca-card-p mt-6">
-            <h2 className="ca-h2">Ratos bloqueados</h2>
+            <h2 className="ca-h2">Franjas horarias bloqueadas</h2>
             <p className="mb-4 mt-1 ca-hint">
               Tiempo que no quieres vender: limpiar material, comer, una gestión. El asistente
               dejará de ofrecer esas horas mientras el bloqueo exista.
@@ -486,7 +486,7 @@ export default function AgendaPage() {
                 value={bloqueo.motivo} onChange={(e) => setBloqueo({ ...bloqueo, motivo: e.target.value })} />
             </div>
             <button onClick={bloquear} disabled={guardando} className="mt-3 ca-btn-ghost">
-              Bloquear este rato
+              Bloquear esta franja
             </button>
           </div>
 
