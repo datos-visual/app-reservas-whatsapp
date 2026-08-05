@@ -1737,15 +1737,20 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
   // Cómo lo dice la gente de verdad. Antes solo se reconocía «cancelar» a
   // secas, así que «no me viene bien, anúlala» acababa en «no te he
-  // entendido» — con la cita recién creada delante. Estas formas son
-  // inequívocas y no chocan con nada del resto del flujo.
+  // entendido» — con la cita recién creada delante.
+  //
+  // OJO, solo verbos INEQUÍVOCOS. Quedan fuera a propósito «déjalo»,
+  // «olvídalo» y «no me viene bien» a secas: el prompt de la IA usa
+  // justamente «déjalo» como ejemplo de RECHAZAR una propuesta, así que
+  // meterlos aquí podría cancelar una cita real a quien solo estaba
+  // rechazando un hueco. El falso positivo es caro; el falso negativo lo
+  // recoge la IA.
   const PIDE_ANULAR = new RegExp(
     '\\b(?:' +
       'an[uú]la(?:la|r|me|melo|mela)?|' +
       'canc[eé]la(?:la|me|melo|mela)?|' +
       'b[oó]rra(?:la|mela)|elim[ií]na(?:la|mela)?|qu[ií]ta(?:la|mela)|' +
-      'no\\s+puedo\\s+ir|no\\s+podr[ée]\\s+ir|no\\s+voy\\s+a\\s+poder|' +
-      'no\\s+me\\s+viene\\s+bien|d[ée]jalo|olv[ií]dalo' +
+      'no\\s+puedo\\s+ir|no\\s+podr[ée]\\s+ir|no\\s+voy\\s+a\\s+poder' +
     ')\\b',
     'i'
   );

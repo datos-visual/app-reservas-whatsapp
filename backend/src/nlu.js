@@ -15,7 +15,11 @@
 const config = require('./config');
 
 const VALID_INTENTS = ['DISPONIBLE', 'CITA', 'CONFIRMAR', 'RECHAZAR', 'MIS_CITAS', 'CANCELAR_CITA', 'CAMBIAR_CITA', 'AYUDA', 'BAJA', 'OTRO'];
-const TIMEOUT_MS = 6000;
+// 6 s se quedaba corto: en producción Gemini se abortaba («This operation was
+// aborted») y TODO el trabajo lo acababa haciendo Mistral, con el retraso
+// añadido del intento fallido. 10 s sigue por debajo de lo que aguanta una
+// conversación de WhatsApp.
+const TIMEOUT_MS = 10000;
 
 // ---------------------------------------------------------------------
 // Prompt
@@ -204,12 +208,15 @@ function providerChain() {
  * o null (sin proveedores, error, timeout o salida no fiable).
  * NUNCA lanza: la degradación al flujo de comandos es la red de seguridad.
  */
-async function interpretMessage({ text, timezone, nowDt }) {
+async function interpretMessage({ text, timezone, nowDt, conversation = [] }) {
   const chain = providerChain();
   if (chain.length === 0) return null;
   if (!text || String(text).trim().length < 2) return null;
 
-  const prompt = buildPrompt({ text, timezone, nowDt });
+  // La conversación reciente ES el contexto: sin ella, «anúlala» no tiene
+  // antecedente y el modelo se queda con el «no me viene bien» del principio,
+  // que parece un rechazo. Se pasaba desde index.js pero se perdía aquí.
+  const prompt = buildPrompt({ text, timezone, nowDt, conversation });
 
   for (const name of chain) {
     const controller = new AbortController();
