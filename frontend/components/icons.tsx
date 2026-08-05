@@ -48,3 +48,6 @@ export const IconPersonas = ({ className }: P) => (
 export const IconTienda = ({ className }: P) => (
   <svg className={base(className)} {...props}><path d="M4 9h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9Z" /><path d="m4 9 1.6-4.4A1 1 0 0 1 6.5 4h11a1 1 0 0 1 .9.6L20 9" /><path d="M9 21v-6h6v6" /></svg>
 );
+export const IconRefrescar = ({ className }: P) => (
+  <svg className={base(className)} {...props}><path d="M21 12a9 9 0 1 1-2.6-6.4" /><path d="M21 4v5h-5" /></svg>
+);

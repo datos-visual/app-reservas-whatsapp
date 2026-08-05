@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import AppShell from '../components/AppShell';
-import { IconAviso, IconAgenda } from '../components/icons';
+import { IconAviso, IconAgenda, IconRefrescar } from '../components/icons';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 
@@ -77,6 +77,20 @@ export default function DashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Al volver a esta pestaña, refrescar solo. Es el caso real: la dueña se
+  // va a Google Calendar, borra una cita y vuelve aquí — no debería tener
+  // que acordarse de pulsar nada. El botón queda para cuando ella quiera
+  // comprobarlo sin salir de la página.
+  useEffect(() => {
+    const alVolver = () => { if (document.visibilityState === 'visible') loadData(); };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('focus', alVolver);
+    return () => {
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('focus', alVolver);
+    };
+  }, [loadData]);
+
   if (!session) return null;
 
   const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -90,9 +104,20 @@ export default function DashboardPage() {
       titulo="Hoy"
       descripcion="Lo que tienes por delante y lo que necesita tu atención."
       acciones={
-        <button onClick={() => router.push('/agenda')} className="ca-btn-primary">
-          <IconAgenda /> Ver agenda
-        </button>
+        <>
+          <button onClick={() => router.push('/agenda')} className="ca-btn-primary">
+            <IconAgenda /> Ver agenda
+          </button>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="ca-btn-ghost"
+            title="Volver a leer los datos"
+            aria-label="Actualizar"
+          >
+            <IconRefrescar />
+          </button>
+        </>
       }
     >
       {authError && <p className="ca-alert-error mb-4">{authError}</p>}

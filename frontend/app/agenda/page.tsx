@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { apiFetch } from '../../lib/api';
 import { supabase } from '../../lib/supabaseClient';
 import AppShell from '../../components/AppShell';
-import { IconMas, IconAviso, IconCheck } from '../../components/icons';
+import { IconMas, IconAviso, IconCheck, IconRefrescar } from '../../components/icons';
 import RejillaAgenda from '../../components/RejillaAgenda';
 
 type Cita = {
@@ -110,6 +110,19 @@ export default function AgendaPage() {
       setCargando(false);
     }
   }
+
+  // Al volver a la pestaña se recarga el día que se esté viendo: si acaban
+  // de tocar el Google Calendar, la agenda ya está al día al mirarla.
+  useEffect(() => {
+    const alVolver = () => { if (document.visibilityState === 'visible') cargar(fecha); };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('focus', alVolver);
+    return () => {
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('focus', alVolver);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fecha]);
 
   function cambiarFecha(f: string) {
     setFecha(f);
@@ -245,6 +258,15 @@ export default function AgendaPage() {
           <button onClick={() => cambiarFecha(new Date(new Date(fecha).getTime() + 86400000).toISOString().slice(0, 10))}
             className="ca-btn-ghost ca-btn-sm" aria-label="Día siguiente">→</button>
           <button onClick={() => cambiarFecha(hoy)} className="ca-btn-ghost ca-btn-sm">Hoy</button>
+          <button
+            onClick={() => cargar(fecha)}
+            disabled={cargando}
+            className="ca-btn-ghost ca-btn-sm"
+            title="Volver a leer la agenda"
+            aria-label="Actualizar"
+          >
+            <IconRefrescar />
+          </button>
           <button
             onClick={sincronizar}
             disabled={sincronizando}
