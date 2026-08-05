@@ -54,9 +54,9 @@ export default function OnboardingVerticalPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="w-full max-w-lg rounded-xl border border-[#e7e5de] bg-white p-6">
+      <div className="w-full max-w-lg rounded-xl border border-[#ddd9d0] bg-white p-6">
         <h1 className="mb-1 ca-h2">¿Cuál es tu sector?</h1>
-        <p className="mb-6 text-sm text-[#8a8378]">
+        <p className="mb-6 text-sm text-[#6b6459]">
           Te preparamos un catálogo de servicios típico de tu gremio — luego
           podrás editarlo, cambiar precios y duraciones desde tu panel.
         </p>
@@ -68,12 +68,12 @@ export default function OnboardingVerticalPage() {
               onClick={() => setElegido(v.code)}
               className={`w-full rounded-lg border p-4 text-left transition ${
                 elegido === v.code
-                  ? 'border-[#1c1917] bg-[#f2f1ec]'
+                  ? 'border-[#1c1917] bg-[#efece4]'
                   : 'border-[#d6d3cb] hover:border-[#8a8378]'
               }`}
             >
               <p className="font-medium text-[#1c1917]">{v.label}</p>
-              <p className="mt-1 text-xs text-[#8a8378]">
+              <p className="mt-1 text-xs text-[#6b6459]">
                 Incluye: {v.services.slice(0, 4).join(', ')}
                 {v.services.length > 4 ? ` y ${v.services.length - 4} más` : ''}
               </p>
@@ -84,12 +84,12 @@ export default function OnboardingVerticalPage() {
             onClick={() => setElegido('ninguno')}
             className={`w-full rounded-lg border border-dashed p-4 text-left transition ${
               elegido === 'ninguno'
-                ? 'border-[#1c1917] bg-[#f2f1ec]'
+                ? 'border-[#1c1917] bg-[#efece4]'
                 : 'border-[#d6d3cb] hover:border-[#8a8378]'
             }`}
           >
             <p className="font-medium text-[#44403c]">Otro sector / empezar sin catálogo</p>
-            <p className="mt-1 text-xs text-[#8a8378]">
+            <p className="mt-1 text-xs text-[#6b6459]">
               Podrás crear tus servicios a mano desde el panel.
             </p>
           </button>

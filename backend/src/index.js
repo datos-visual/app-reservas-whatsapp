@@ -237,7 +237,7 @@ async function sendServiceList({ storeId, phoneNumberId, accessToken, to }) {
     });
     await logMessage({
       storeId, phone: to, fromMe: true,
-      body: `[lista] ¿Qué servicio quieres reservar? (${services.map((s) => s.name).join(', ')})`
+      body: `¿Qué servicio quieres reservar? — ${services.map((s) => s.name).join(', ')}`
     });
   } catch (err) {
     console.error('[Flujo] Error enviando lista de servicios', { storeId, err });
@@ -276,7 +276,7 @@ async function sendDateButtons({ storeId, phoneNumberId, accessToken, to, servic
     });
     await logMessage({
       storeId, phone: to, fromMe: true,
-      body: `[lista] «${service.serviceName}»: ¿para qué día? [Hoy … +8 días | Otro día]`
+      body: `«${service.serviceName}»: ¿para qué día?`
     });
   } catch (err) {
     console.error('[Flujo] Error enviando lista de fechas', { storeId, err });
@@ -399,7 +399,7 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
         });
         await logMessage({
           storeId, phone: to, fromMe: true,
-          body: `[botones] Sin hueco el ${fechaTxt} para «${service.serviceName}» [Apúntame ⏰ | Otro día | No, gracias]`
+          body: `Sin hueco el ${fechaTxt} para «${service.serviceName}». Le ofrezco lista de espera u otro día.`
         });
         return;
       } catch (err) {
@@ -437,7 +437,7 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
     });
     await logMessage({
       storeId, phone: to, fromMe: true,
-      body: `[lista] Huecos de «${service.serviceName}» el ${dateIso}: ${slots.slice(0, 10).map((s) => s.label).join(', ')}`
+      body: `Huecos de «${service.serviceName}» el ${dateIso}: ${slots.slice(0, 10).map((s) => s.label).join(', ')}`
     });
   } catch (err) {
     console.error('[Flujo] Error enviando lista de huecos', { storeId, err });
@@ -495,7 +495,7 @@ async function notificarListaEspera({ storeId, phoneNumberId, accessToken, start
         bodyParams: [negocio, d.setLocale('es').toFormat('cccc dd/MM'), d.toFormat('HH:mm')],
         buttonPayloads: ['WAITLIST_YES', 'WAITLIST_NO']
       });
-      await logMessage({ storeId, phone: telefono, body: `[plantilla waitlist] hueco ${fecha}`, fromMe: true });
+      await logMessage({ storeId, phone: telefono, body: `Aviso de hueco libre el ${fecha} (lista de espera)`, fromMe: true });
     }
     console.log('[Waitlist] Aviso de hueco liberado enviado', { storeId, waitlistId: entry.id, fecha: d.toISODate() });
   } catch (err) {
@@ -669,7 +669,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       });
       await logMessage({
         storeId, phone: from, fromMe: true,
-        body: `[botones] Resumen: ${d.serviceName} el ${fecha} [Confirmar ✓ | Cambiar hora | Cancelar]`
+        body: `Resumen: ${d.serviceName} el ${fecha}. ¿Lo confirmo?`
       });
     } catch (err) {
       console.error('[Flujo] Error enviando resumen de confirmación', { storeId, err });
@@ -742,7 +742,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
         });
         await logMessage({
           storeId, phone: from, fromMe: true,
-          body: `[botones] Cita del ${etiqueta} [Cambiar hora | Cancelar cita | Nada]`
+          body: `Cita del ${etiqueta}. ¿Quieres cambiarla o cancelarla?`
         });
       } catch (err) {
         console.error('[Flujo] Error enviando botones de cita', { storeId, err });
@@ -766,7 +766,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
         });
         await logMessage({
           storeId, phone: from, fromMe: true,
-          body: `[botones] ¿Cancelo la cita del ${etiqueta}? [Sí | No]`
+          body: `¿Cancelo la cita del ${etiqueta}?`
         });
       } catch (err) {
         console.error('[Flujo] Error enviando confirmación de cancelación', { storeId, err });
@@ -1559,7 +1559,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           });
           await logMessage({
             storeId, phone: from, fromMe: true,
-            body: `[botones] Sin huecos el ${iso} [Apúntame ⏰ | No, gracias]`
+            body: `Sin huecos el ${iso}. Le ofrezco apuntarse a la lista de espera.`
           });
           return;
         } catch (err) {
@@ -1722,7 +1722,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       });
       await logMessage({
         storeId, phone: from, fromMe: true,
-        body: `[lista] Tus citas: ${citas.map((c) => fmtHuman(c.start_at)).join(' | ')}`
+        body: `Tus citas: ${citas.map((c) => fmtHuman(c.start_at)).join(' · ')}`
       });
     } catch (err) {
       console.error('[Flujo] Error enviando lista de citas; fallback a texto', { storeId, err });

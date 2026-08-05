@@ -45,7 +45,7 @@ export type PersonaRejilla = {
   ausencias?: Ausencia[];
 };
 
-const ALTO_HORA = 64;          // px por hora: 30 min = 32 px, legible y compacto
+const ALTO_HORA = 68;          // px por hora: 30 min = 34 px, legible y compacto
 const TRAMA =
   'repeating-linear-gradient(45deg,#f7f6f2,#f7f6f2 5px,#efede6 5px,#efede6 10px)';
 
@@ -160,13 +160,13 @@ export default function RejillaAgenda({
     <div className="ca-card overflow-hidden">
       {/* Selector de profesional: solo en móvil */}
       {columnas.length > 1 && (
-        <div className="flex gap-1.5 overflow-x-auto border-b border-[#f2f1ec] px-3 py-2 sm:hidden">
+        <div className="flex gap-1.5 overflow-x-auto border-b border-[#ece9e1] px-3 py-2 sm:hidden">
           {columnas.map((c) => (
             <button
               key={String(c.id)}
               onClick={() => setMovil(c.id)}
               className={`whitespace-nowrap rounded-full px-3 py-1 text-xs transition ${
-                movil === c.id ? 'bg-[#1c1917] text-white' : 'bg-[#f2f1ec] text-[#57534e]'
+                movil === c.id ? 'bg-[#1c1917] text-white' : 'bg-[#efece4] text-[#57534e]'
               }`}
             >
               {c.nombre}
@@ -177,7 +177,7 @@ export default function RejillaAgenda({
 
       {/* Cabecera de columnas */}
       <div
-        className="grid border-b border-[#f2f1ec]"
+        className="grid border-b border-[#ece9e1]"
         style={{ gridTemplateColumns: `48px repeat(${columnas.length}, minmax(0,1fr))` }}
       >
         <div />
@@ -188,17 +188,25 @@ export default function RejillaAgenda({
               key={String(c.id)}
               className={`px-2 py-2.5 text-center ${oculta ? 'hidden sm:block' : ''}`}
             >
-              <span className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#f2f1ec] text-[11px] text-[#57534e]">
-                {c.nombre.slice(0, 1).toUpperCase()}
-              </span>
-              <span className="text-[12.5px] text-[#1c1917]">{c.nombre}</span>
+              {c.id === null ? (
+                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-[#ddd9d0] text-[12px] text-[#6b6459]">
+                  ?
+                </span>
+              ) : (
+                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#efece4] text-[12px] text-[#57534e]">
+                  {c.nombre.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span className="text-[13px] text-[#1c1917]">{c.nombre}</span>
             </div>
           );
         })}
       </div>
 
       {/* Rejilla */}
-      <div ref={scroller} className="max-h-[560px] overflow-y-auto">
+      {/* Sin scroll propio: la rejilla crece y la página baja una sola vez.
+          El scroll dentro del scroll irrita sin que uno sepa por qué. */}
+      <div ref={scroller}>
         <div
           className="relative grid"
           style={{ gridTemplateColumns: `48px repeat(${columnas.length}, minmax(0,1fr))`, height: alto }}
@@ -208,7 +216,7 @@ export default function RejillaAgenda({
             {horas.map((h) => (
               <div
                 key={h}
-                className="ca-cifras absolute right-2 -translate-y-1/2 text-[10.5px] text-[#a8a29e]"
+                className="ca-cifras absolute right-2 -translate-y-1/2 text-[12px] text-[#57534e]"
                 style={{ top: y(h) }}
               >
                 {h < fin ? aHhmm(h) : ''}
@@ -224,13 +232,13 @@ export default function RejillaAgenda({
             return (
               <div
                 key={String(col.id)}
-                className={`relative border-l border-[#f6f5f1] ${oculta ? 'hidden sm:block' : ''}`}
+                className={`relative border-l border-[#ece9e1] ${oculta ? 'hidden sm:block' : ''}`}
               >
                 {/* Líneas de hora: lo más tenues posible */}
                 {horas.slice(1).map((h) => (
                   <div
                     key={h}
-                    className="absolute left-0 right-0 border-t border-[#f6f5f1]"
+                    className="absolute left-0 right-0 border-t border-[#ece9e1]"
                     style={{ top: y(h) }}
                   />
                 ))}
@@ -256,7 +264,7 @@ export default function RejillaAgenda({
                       className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#e2dcd2] px-2 py-1"
                       style={{ top: y(d), height: Math.max(18, y(h) - y(d)), background: TRAMA }}
                     >
-                      <span className="text-[10.5px] text-[#57534e]">{b.titulo}</span>
+                      <span className="text-[12px] text-[#57534e]">{b.titulo}</span>
                     </div>
                   );
                 })}
@@ -274,17 +282,17 @@ export default function RejillaAgenda({
                     <button
                       key={c.id}
                       onClick={() => onSeleccionar?.(c)}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#e2dcd2] bg-[#f4f1ec] px-2 py-1 text-left transition hover:border-[#c9c1b4] focus:outline-none focus:ring-2 focus:ring-[#1c1917]/15"
+                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#ddd9d0] border-l-[3px] border-l-[#1c1917] bg-[#efebe3] px-2 py-1 text-left transition hover:bg-[#e8e3d9] focus:outline-none focus:ring-2 focus:ring-[#1c1917]/15"
                       style={{ top: y(d), height: alturaBloque }}
                     >
-                      <span className="ca-cifras block text-[10.5px] leading-tight text-[#8a8378]">
+                      <span className="ca-cifras block text-[12px] leading-tight text-[#6b6459]">
                         {aHhmm(d)}
                       </span>
                       <span className="block truncate text-[12px] leading-tight text-[#1c1917]">
                         {c.cliente || 'Sin nombre'}
                       </span>
                       {alturaBloque > 44 && (
-                        <span className="block truncate text-[11px] leading-tight text-[#57534e]">
+                        <span className="block truncate text-[12px] leading-tight text-[#57534e]">
                           {c.servicio}
                         </span>
                       )}
@@ -321,7 +329,7 @@ export default function RejillaAgenda({
       </div>
 
       {/* Leyenda: sin ella, el rayado se lee como «error» */}
-      <div className="flex flex-wrap gap-4 border-t border-[#f2f1ec] px-4 py-2.5 text-[11px] text-[#8a8378]">
+      <div className="flex flex-wrap gap-4 border-t border-[#ece9e1] px-4 py-2.5 text-[12px] text-[#6b6459]">
         <span className="flex items-center gap-1.5">
           <i className="inline-block h-3 w-3 rounded-[3px] border border-[#e2dcd2]" style={{ background: TRAMA }} />
           fuera de turno, vacaciones o franja bloqueada

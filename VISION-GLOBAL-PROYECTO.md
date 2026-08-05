@@ -714,6 +714,49 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.60 AUDITORÍA DE DISEÑO Y ACCESIBILIDAD (5-ago-2026)
+
+Revisión de las seis pantallas del panel por los cuatro ejes (tipografía,
+color, disposición, claridad). Lo corregido, con el porqué:
+
+1. **Escala tipográfica.** Había **trece tamaños** en uso y la jerarquía
+   estaba invertida: los títulos de sección (15 px) eran más pequeños que el
+   cuerpo (16 px). Ahora seis pasos (28/18/15/13/12 + cifras) y **dos pesos**
+   (400 y 500). El `font-semibold` se ha eliminado del proyecto.
+2. **Contraste — esto era accesibilidad, no gusto.** Los metadatos iban en
+   `#8a8378` (3,6:1) y las horas de la rejilla en `#a8a29e` (2,6:1), ambos por
+   debajo del mínimo AA de 4,5:1 y a 11 px. Ahora `#6b6459` (5,9:1) y
+   `#57534e` (7,5:1). Se han eliminado también **las versalitas pequeñas**:
+   11 px + mayúsculas + gris flojo era el texto menos legible del panel.
+3. **Superficies.** Tarjeta blanca sobre fondo `#faf9f6` daba 1,02:1 — la
+   estructura dependía de un borde casi invisible y se perdía con sol. Fondo
+   a `#f4f2ec` y borde a `#ddd9d0`. Los bloques de cita de la rejilla
+   (`#f4f1ec` sobre blanco, 1,05:1) llevan ahora **filo de tinta** a la
+   izquierda: en una agenda, ocupado-vs-libre es la distinción número uno.
+4. **Dedo.** Los botones compactos medían 27 px de alto. Mínimo 44 px (36 los
+   compactos). Es una peluquería: manos mojadas, laca, prisa.
+5. **Botón destructivo.** En Equipo, `Borrar` era el PRIMERO de la fila y con
+   el mismo peso que los demás. Ahora va el último, separado por un filete y
+   **apagado**: solo enseña color al pasar por encima. Un botón rojo
+   permanente invita a pulsarlo.
+6. **Mensajes internos fuera del panel.** El histórico enseñaba cadenas de
+   registro (`[lista] Huecos de «Mechas»…`, `[botones] …`). Reescritas como
+   conversación: la tabla `messages` es el historial que lee la tienda. Y las
+   conversaciones muestran el **nombre** de la clienta, no su teléfono.
+7. **Inicio rediseñado.** Tres cifras sin acción («30 mensajes recientes») se
+   sustituyen por un bloque en tinta con **lo siguiente** que toca y dos
+   datos que piden decisión: citas de hoy y **sin confirmar**. Fuera el botón
+   «Actualizar», que era pensamiento de programador.
+8. **Nomenclatura.** *Servicios* significaba dos cosas: el catálogo de la
+   peluquería y las funciones premium de CanalAgenda. Ahora **Catálogo** y
+   **Mi plan** (que habla de *funciones*, no de servicios).
+9. **Honestidad de catálogo.** Las cinco funciones premium diseñadas pero NO
+   construidas se marcan **«Próximamente»**. Ofrecerlas como contratables era
+   vender humo, y contratarlas no habría hecho nada.
+
+**Regla que queda:** ningún texto por debajo de 12 px, ningún gris por debajo
+de 4,5:1, ningún control por debajo de 36 px, y el acento solo en LA acción.
+
 ### 10.59 SISTEMA VISUAL «editorial cálida» + rejilla de agenda (5-ago-2026)
 
 **Por qué se cambió:** el panel usaba verde `#0f7a4f` en títulos, botones,

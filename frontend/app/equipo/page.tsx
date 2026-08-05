@@ -216,7 +216,7 @@ export default function EquipoPage() {
 
       {!cargando && (
         <div className="ca-card-p mb-5">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
+          <p className="ca-eyebrow">
             Cómo se calculan tus huecos
           </p>
           <label className="flex cursor-pointer items-start gap-3 py-2">
@@ -230,7 +230,7 @@ export default function EquipoPage() {
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f2f1ec] py-2 pt-3">
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#ece9e1] py-2 pt-3">
             <input type="checkbox" className="mt-1" checked={ajustes.usarAparatos}
               onChange={(e) => cambiarAjuste('usar_aparatos', e.target.checked)} />
             <span>
@@ -241,7 +241,7 @@ export default function EquipoPage() {
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f2f1ec] py-2 pt-3">
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#ece9e1] py-2 pt-3">
             <input type="checkbox" className="mt-1" checked={ajustes.sincronizarCalendar !== false}
               onChange={(e) => cambiarAjuste('usar_sync_calendar', e.target.checked)} />
             <span>
@@ -273,7 +273,7 @@ export default function EquipoPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div>
                     <p className="font-medium text-[#1c1917]">{p.name}</p>
-                    <p className="text-xs text-[#8a8378]">
+                    <p className="text-xs text-[#6b6459]">
                       {turnos.length === 0
                         ? 'Todo el horario del negocio'
                         : turnos.map((t) => `${NOMBRES[t.weekday].slice(0, 3)} ${t.open_time.slice(0, 5)}-${t.close_time.slice(0, 5)}`).join(' · ')}
@@ -294,26 +294,30 @@ export default function EquipoPage() {
                       )}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => borrar(p)} className="ca-btn-danger ca-btn-sm">
-                      Borrar
-                    </button>
-                    <button onClick={() => cambiarActiva(p)} className="ca-btn-ghost ca-btn-sm">
-                      {p.is_active ? 'Dar de baja' : 'Reactivar'}
-                    </button>
+                  {/* Lo destructivo va el ÚLTIMO y apagado. Tenerlo primero,
+                      con el mismo peso que lo demás, era un accidente
+                      esperando: se lee de izquierda a derecha. */}
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={() => setAbierta(abierta === p.id ? null : p.id)}
                       className="ca-btn-ghost ca-btn-sm"
                     >
                       {abierta === p.id ? 'Cerrar' : 'Turnos y vacaciones'}
                     </button>
+                    <button onClick={() => cambiarActiva(p)} className="ca-btn-ghost ca-btn-sm">
+                      {p.is_active ? 'Dar de baja' : 'Reactivar'}
+                    </button>
+                    <span className="mx-1 h-5 w-px bg-[#ece9e1]" aria-hidden="true" />
+                    <button onClick={() => borrar(p)} className="ca-btn-danger ca-btn-sm">
+                      Borrar
+                    </button>
                   </div>
                 </div>
 
                 {abierta === p.id && (
-                  <div className="border-t border-[#e7e5de] px-5 py-4">
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Turnos</p>
-                    <p className="mb-3 text-xs text-[#8a8378]">
+                  <div className="border-t border-[#ddd9d0] px-5 py-4">
+                    <p className="ca-eyebrow">Turnos</p>
+                    <p className="mb-3 text-xs text-[#6b6459]">
                       Marca los días que trabaja y sus horas. Si no marcas ninguno, se entiende que
                       trabaja todo el horario del negocio.
                     </p>
@@ -321,7 +325,7 @@ export default function EquipoPage() {
                       {ORDEN.map((wd) => {
                         const t = turnos.find((x) => x.weekday === wd);
                         return (
-                          <div key={wd} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e7e5de] px-3 py-2">
+                          <div key={wd} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#ddd9d0] px-3 py-2">
                             <label className="flex w-32 cursor-pointer items-center gap-2 text-sm text-[#44403c]">
                               <input
                                 type="checkbox" checked={!!t}
@@ -340,7 +344,7 @@ export default function EquipoPage() {
                                   value={t.open_time.slice(0, 5)}
                                   onChange={(e) => editarTurnos(p.id, turnos.map((x) => x.weekday === wd ? { ...x, open_time: e.target.value } : x))}
                                 />
-                                <span className="text-[#8a8378]">a</span>
+                                <span className="text-[#6b6459]">a</span>
                                 <input
                                   type="time" className="ca-input w-auto py-1.5"
                                   value={t.close_time.slice(0, 5)}
@@ -361,16 +365,16 @@ export default function EquipoPage() {
                       </button>
                     )}
 
-                    <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
+                    <p className="ca-eyebrow">
                       Vacaciones y días libres
                     </p>
                     {p.ausencias.length === 0 && <p className="mb-2 ca-hint">Ninguna programada.</p>}
                     <ul className="mb-3 space-y-1">
                       {p.ausencias.map((a) => (
-                        <li key={a.id} className="flex items-center justify-between rounded-lg border border-[#e7e5de] px-3 py-1.5 text-sm">
+                        <li key={a.id} className="flex items-center justify-between rounded-lg border border-[#ddd9d0] px-3 py-1.5 text-sm">
                           <span className="text-[#44403c]">
                             {fmt(a.start_date)}{a.end_date !== a.start_date && ` → ${fmt(a.end_date)}`}
-                            {a.reason && <span className="ml-2 text-[#8a8378]">({a.reason})</span>}
+                            {a.reason && <span className="ml-2 text-[#6b6459]">({a.reason})</span>}
                           </span>
                           <button onClick={() => quitarAusencia(a.id)} className="ca-btn-ghost ca-btn-sm">Quitar</button>
                         </li>
@@ -429,10 +433,10 @@ export default function EquipoPage() {
             )}
             <ul className="mb-4 space-y-2">
               {aparatos.map((a) => (
-                <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e7e5de] px-3 py-2">
+                <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#ddd9d0] px-3 py-2">
                   <span className="font-medium text-[#1c1917]">{a.name}</span>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-[#8a8378]">Unidades</label>
+                    <label className="text-xs text-[#6b6459]">Unidades</label>
                     <input
                       type="number" min={1} max={50} defaultValue={a.units}
                       className="ca-input w-20 py-1.5"

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
 import AppShell from '../components/AppShell';
-import { IconAviso, IconWhatsApp, IconAgenda, IconPersonas } from '../components/icons';
+import { IconAviso, IconAgenda } from '../components/icons';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 
@@ -19,9 +19,15 @@ type WhatsappStatus = {
 };
 type Appointment = {
   id: number; start_at: string; end_at: string;
+  confirmed_by_client_at?: string | null;
   customers?: { phone: string; name?: string | null } | null;
+  services?: { name: string } | null;
+  resources?: { name: string } | null;
 };
-type Message = { id: number; phone: string; content: string; from_me: boolean; created_at: string };
+type Message = {
+  id: number; phone: string; content: string; from_me: boolean; created_at: string;
+  nombre?: string | null;   // la clienta, cuando la conocemos
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -74,19 +80,19 @@ export default function DashboardPage() {
   if (!session) return null;
 
   const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  const proxima = appointments[0];
+  const ahora = Date.now();
+  // La próxima de verdad: la primera que aún no ha empezado
+  const proxima = appointments.find((c) => new Date(c.start_at).getTime() >= ahora) || appointments[0];
+  const sinConfirmar = appointments.filter((c) => !c.confirmed_by_client_at);
 
   return (
     <AppShell
       titulo="Hoy"
-      descripcion="Un vistazo rápido a tus citas, tu asistente y tus conversaciones."
+      descripcion="Lo que tienes por delante y lo que necesita tu atención."
       acciones={
-        <>
-          <button onClick={() => router.push('/agenda')} className="ca-btn-primary">
-            <IconAgenda /> Ver agenda
-          </button>
-          <button onClick={loadData} className="ca-btn-ghost">Actualizar</button>
-        </>
+        <button onClick={() => router.push('/agenda')} className="ca-btn-primary">
+          <IconAgenda /> Ver agenda
+        </button>
       }
     >
       {authError && <p className="ca-alert-error mb-4">{authError}</p>}
@@ -102,39 +108,69 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <section className="mb-5 grid gap-4 sm:grid-cols-3">
-        <div className="ca-card-p">
-          <p className="ca-hint flex items-center gap-2"><IconAgenda /> Citas hoy</p>
-          <p className="mt-1 text-3xl font-semibold text-[#1c1917]">{appointments.length}</p>
-          {proxima && (
-            <p className="mt-1 text-sm text-[#8a8378]">
-              La próxima, a las <span className="font-medium text-[#44403c]">{hora(proxima.start_at)}</span>
+      {/* Un bloque manda: lo que toca AHORA. La jerarquía la marca el peso
+          visual, no la caja. Los demás son datos que piden una decisión —
+          un número suelto («30 mensajes») no lleva a ninguna acción. */}
+      {proxima ? (
+        <section className="mb-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#1c1917] px-6 py-5">
+          <div>
+            <p className="text-[12px] font-medium text-[#a8a29e]">Lo siguiente</p>
+            <p className="mt-1 text-[17px] text-white">
+              <span className="ca-cifras">{hora(proxima.start_at)}</span>
+              <span className="mx-2 text-[#57534e]">·</span>
+              {proxima.customers?.name || 'Sin nombre'}
+              {proxima.services?.name && <span className="text-[#d6d3cb]"> — {proxima.services.name}</span>}
             </p>
-          )}
+            {proxima.resources?.name && (
+              <p className="mt-0.5 text-[13px] text-[#a8a29e]">con {proxima.resources.name}</p>
+            )}
+          </div>
+          <button onClick={() => router.push('/agenda')} className="ca-btn ca-btn-sm bg-white text-[#1c1917] hover:bg-[#f4f2ec]">
+            Abrir la agenda
+          </button>
+        </section>
+      ) : (
+        <section className="mb-3 rounded-xl border border-[#ddd9d0] bg-white px-6 py-5">
+          <p className="ca-h2">Hoy no tienes citas</p>
+          <p className="mt-1 ca-hint">El asistente sigue atendiendo por WhatsApp.</p>
+        </section>
+      )}
+
+      <section className="mb-6 grid gap-3 sm:grid-cols-3">
+        <div className="ca-card-p">
+          <p className="ca-meta">Citas hoy</p>
+          <p className="mt-1 font-serif text-[32px] leading-none text-[#1c1917]">{appointments.length}</p>
+          <p className="mt-2 text-[13px] text-[#57534e]">
+            {appointments.length ? `La última termina a las ${hora(appointments[appointments.length - 1].end_at)}` : 'Agenda libre'}
+          </p>
         </div>
 
         <div className="ca-card-p">
-          <p className="ca-hint flex items-center gap-2"><IconWhatsApp /> Asistente</p>
+          <p className="ca-meta">Sin confirmar</p>
+          <p className="mt-1 font-serif text-[32px] leading-none text-[#1c1917]">{sinConfirmar.length}</p>
+          <p className="mt-2 text-[13px] text-[#57534e]">
+            {sinConfirmar.length
+              ? 'Se les ha pedido confirmación por WhatsApp'
+              : 'Todas las de hoy están confirmadas'}
+          </p>
+        </div>
+
+        <div className="ca-card-p">
+          <p className="ca-meta">Asistente</p>
           <p className="mt-2">
             {status?.ready
               ? <span className="ca-badge-ok">Funcionando</span>
               : <span className="ca-badge-error">Sin conectar</span>}
           </p>
-          <p className="mt-2 text-xs text-[#a8a29e]">
+          <p className="mt-2 text-[13px] text-[#57534e]">
             {status?.ready ? 'Respondiendo a tus clientas en WhatsApp' : 'Contacta con CanalAgenda'}
           </p>
-        </div>
-
-        <div className="ca-card-p">
-          <p className="ca-hint flex items-center gap-2"><IconPersonas /> Mensajes recientes</p>
-          <p className="mt-1 text-3xl font-semibold text-[#1c1917]">{messages.length}</p>
-          <p className="mt-1 text-xs text-[#a8a29e]">últimas conversaciones</p>
         </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="ca-card">
-          <div className="border-b border-[#e7e5de] px-5 py-3">
+          <div className="border-b border-[#ddd9d0] px-5 py-3">
             <h2 className="ca-h2">Citas de hoy</h2>
           </div>
           {loading && <p className="px-5 py-4 ca-hint">Cargando…</p>}
@@ -146,15 +182,22 @@ export default function DashboardPage() {
               </button>
             </div>
           )}
-          <ul className="divide-y divide-[#f2f1ec]">
+          <ul className="divide-y divide-[#ece9e1]">
             {appointments.map((c) => (
               <li key={c.id} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <p className="font-medium text-[#1c1917]">{c.customers?.name || 'Sin nombre'}</p>
-                  <p className="text-sm text-[#8a8378]">{c.customers?.phone}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-[#1c1917]">
+                    {c.customers?.name || 'Sin nombre'}
+                    {c.services?.name && <span className="font-normal text-[#57534e]"> · {c.services.name}</span>}
+                  </p>
+                  <p className="ca-meta truncate">
+                    {c.resources?.name ? `con ${c.resources.name}` : 'sin asignar'}
+                    <span className="mx-1.5 text-[#ddd9d0]">·</span>
+                    {c.customers?.phone}
+                  </p>
                 </div>
-                <span className="rounded-lg bg-[#f2f1ec] px-3 py-1 text-sm font-medium text-[#1c1917]">
-                  {hora(c.start_at)}
+                <span className="ca-cifras shrink-0 rounded-lg bg-[#efece4] px-3 py-1.5 text-[13px] font-medium text-[#1c1917]">
+                  {hora(c.start_at)}–{hora(c.end_at)}
                 </span>
               </li>
             ))}
@@ -162,21 +205,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="ca-card">
-          <div className="border-b border-[#e7e5de] px-5 py-3">
+          <div className="border-b border-[#ddd9d0] px-5 py-3">
             <h2 className="ca-h2">Últimas conversaciones</h2>
           </div>
-          <ul className="max-h-[420px] divide-y divide-[#f2f1ec] overflow-y-auto">
+          <ul className="max-h-[420px] divide-y divide-[#ece9e1] overflow-y-auto">
             {messages.map((m) => (
-              <li key={m.id} className="px-5 py-3">
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-medium ${m.from_me ? 'text-[#a8a29e]' : 'text-[#1c1917]'}`}>
-                    {m.from_me ? 'Asistente' : m.phone}
+              <li key={m.id} className={`px-5 py-3 ${m.from_me ? 'bg-[#faf9f6]' : ''}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-[12px] font-medium ${m.from_me ? 'text-[#6b6459]' : 'text-[#1c1917]'}`}>
+                    {m.from_me ? 'Asistente' : m.nombre || m.phone}
                   </span>
-                  <span className="text-xs text-[#a8a29e]">
+                  <span className="ca-cifras shrink-0 text-[12px] text-[#6b6459]">
                     {new Date(m.created_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <p className="mt-1 line-clamp-2 text-sm text-[#44403c]">{m.content}</p>
+                <p className="mt-1 line-clamp-2 text-[13px] text-[#44403c]">{m.content}</p>
               </li>
             ))}
             {!loading && messages.length === 0 && (

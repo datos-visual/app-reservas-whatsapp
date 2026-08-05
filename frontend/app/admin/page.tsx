@@ -209,7 +209,7 @@ export default function AdminPage() {
   if (!entrado) {
     return (
       <main className="mx-auto max-w-md p-8">
-        <h1 className="text-2xl font-bold mb-2 text-[#1c1917]">Backoffice CanalAgenda</h1>
+        <h1 className="ca-h1 mb-2">Backoffice CanalAgenda</h1>
         <p className="text-sm text-[#44403c] mb-6">
           Acceso solo para el administrador. El token no se guarda en el servidor.
         </p>
@@ -225,7 +225,7 @@ export default function AdminPage() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="ADMIN_TOKEN"
-            className="w-full rounded border border-[#d6d3cb] bg-[#1c1917] px-3 py-2 text-[#1c1917] placeholder:text-[#8a8378]"
+            className="w-full rounded border border-[#d6d3cb] bg-[#1c1917] px-3 py-2 text-[#1c1917] placeholder:text-[#6b6459]"
           />
           <button
             type="submit"
@@ -266,7 +266,7 @@ export default function AdminPage() {
           <button
             onClick={() => cargar(token)}
             disabled={cargando}
-            className="rounded border border-[#d6d3cb] px-3 py-1.5 text-sm text-[#44403c] hover:bg-[#faf9f6] disabled:opacity-50"
+            className="rounded border border-[#d6d3cb] px-3 py-1.5 text-sm text-[#44403c] hover:bg-[#f4f2ec] disabled:opacity-50"
           >
             {cargando ? 'Actualizando…' : 'Actualizar'}
           </button>
@@ -276,7 +276,7 @@ export default function AdminPage() {
               setEntrado(false);
               setToken('');
             }}
-            className="rounded border border-[#d6d3cb] px-3 py-1.5 text-sm text-[#44403c] hover:bg-[#faf9f6]"
+            className="rounded border border-[#d6d3cb] px-3 py-1.5 text-sm text-[#44403c] hover:bg-[#f4f2ec]"
           >
             Salir
           </button>
@@ -296,7 +296,7 @@ export default function AdminPage() {
             ['Clientes', resumen.clientes_totales]
           ].map(([etiqueta, valor]) => (
             <div key={String(etiqueta)} className="ca-card px-3 py-2">
-              <p className="text-xs text-[#8a8378]">{etiqueta}</p>
+              <p className="text-xs text-[#6b6459]">{etiqueta}</p>
               <p className="ca-h2">{valor ?? '—'}</p>
             </div>
           ))}
@@ -306,7 +306,7 @@ export default function AdminPage() {
       {altaAbierta && (
         <div className="mb-5 rounded-lg border border-[#dbe7de] bg-white p-4">
           <p className="mb-1 text-sm font-medium text-[#1c1917]">Alta de una peluquería nueva</p>
-          <p className="mb-3 text-xs text-[#8a8378]">
+          <p className="mb-3 text-xs text-[#6b6459]">
             Crea el negocio, su usuario del panel y su catálogo inicial. Después conecta
             Calendar y WhatsApp desde la tarjeta de la tienda, sin salir de aquí.
           </p>
@@ -354,15 +354,15 @@ export default function AdminPage() {
           <div key={t.id} className="ca-card-p">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="font-semibold text-[#1c1917]">
+                <h2 className="font-medium text-[#1c1917]">
                   {t.name}{' '}
                   {t.vertical_code && (
-                    <span className="ml-1 rounded bg-[#f2f1ec] px-2 py-0.5 text-xs font-normal text-[#44403c]">
+                    <span className="ml-1 rounded bg-[#efece4] px-2 py-0.5 text-xs font-normal text-[#44403c]">
                       {t.vertical_code}
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-[#8a8378]">{t.id}</p>
+                <p className="text-xs text-[#6b6459]">{t.id}</p>
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs">
                 <span className={`rounded px-2 py-0.5 ${t.whatsapp.conectado && t.whatsapp.activo ? 'bg-[#edf4ee] text-[#2f5d3f]' : 'bg-red-100 text-red-800'}`}>
@@ -371,7 +371,7 @@ export default function AdminPage() {
                 <span className={`rounded px-2 py-0.5 ${t.calendar.conectado ? 'bg-[#edf4ee] text-[#2f5d3f]' : 'bg-red-100 text-red-800'}`}>
                   Calendar {t.calendar.conectado ? 'OK' : 'sin conectar'}
                 </span>
-                <span className="rounded bg-[#f2f1ec] px-2 py-0.5 text-[#44403c]">
+                <span className="rounded bg-[#efece4] px-2 py-0.5 text-[#44403c]">
                   Citas: {t.citas.ultimos7dias} últ. 7d · {t.citas.proximos7dias} próx. 7d
                 </span>
               </div>
@@ -390,8 +390,8 @@ export default function AdminPage() {
               </ul>
             )}
 
-            <div className="mt-4 border-t border-[#e7e5de] pt-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
+            <div className="mt-4 border-t border-[#ddd9d0] pt-3">
+              <p className="ca-eyebrow">
                 Módulos con plantilla de Meta
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -439,10 +439,10 @@ export default function AdminPage() {
             </div>
 
             {conexiones[t.id] && (
-              <div className="mt-3 grid grid-cols-1 gap-4 rounded-lg border border-[#e7e5de] p-3 md:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-4 rounded-lg border border-[#ddd9d0] p-3 md:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Google Calendar</p>
-                  <p className="mb-2 text-xs text-[#8a8378]">
+                  <p className="ca-eyebrow">Google Calendar</p>
+                  <p className="mb-2 text-xs text-[#6b6459]">
                     El negocio comparte su calendario con{' '}
                     <span className="text-[#44403c]">calendar-reservas@whatsapp-reservas-489313.iam.gserviceaccount.com</span>{' '}
                     (permiso: hacer cambios) y te pasa el ID.
@@ -470,7 +470,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">WhatsApp (Meta)</p>
+                  <p className="ca-eyebrow">WhatsApp (Meta)</p>
                   <input
                     className="ca-input mb-2"
                     placeholder="phone_number_id"
@@ -518,25 +518,25 @@ export default function AdminPage() {
               {actividad[t.id] && (
                 <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Próximas citas</p>
-                    {actividad[t.id]!.citas.length === 0 && <p className="text-xs text-[#8a8378]">Ninguna.</p>}
+                    <p className="ca-eyebrow">Próximas citas</p>
+                    {actividad[t.id]!.citas.length === 0 && <p className="text-xs text-[#6b6459]">Ninguna.</p>}
                     <ul className="space-y-1">
                       {actividad[t.id]!.citas.map((c: any) => (
-                        <li key={c.id} className="rounded bg-[#f2f1ec] px-2 py-1 text-xs text-[#44403c]">
+                        <li key={c.id} className="rounded bg-[#efece4] px-2 py-1 text-xs text-[#44403c]">
                           {new Date(c.start_at).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           {' — '}{c.customers?.name || c.customers?.phone || '¿?'}
-                          <span className="ml-1 text-[#8a8378]">({c.status})</span>
+                          <span className="ml-1 text-[#6b6459]">({c.status})</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                   <div>
-                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Últimos mensajes</p>
-                    {actividad[t.id]!.mensajes.length === 0 && <p className="text-xs text-[#8a8378]">Ninguno.</p>}
+                    <p className="ca-eyebrow">Últimos mensajes</p>
+                    {actividad[t.id]!.mensajes.length === 0 && <p className="text-xs text-[#6b6459]">Ninguno.</p>}
                     <ul className="max-h-64 space-y-1 overflow-y-auto">
                       {actividad[t.id]!.mensajes.map((m: any, i: number) => (
-                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-[#f2f1ec] text-[#8a8378]' : 'bg-blue-900/30 text-[#44403c]'}`}>
-                          <span className="text-[#8a8378]">{m.from_me ? '🤖' : '👤'} </span>
+                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-[#efece4] text-[#6b6459]' : 'bg-[#eef2f6] text-[#1c1917]'}`}>
+                          <span className="text-[#6b6459]">{m.from_me ? '🤖' : '👤'} </span>
                           {String(m.content).slice(0, 120)}
                         </li>
                       ))}
@@ -546,8 +546,8 @@ export default function AdminPage() {
               )}
             </div>
 
-            <div className="mt-4 border-t border-[#e7e5de] pt-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
+            <div className="mt-4 border-t border-[#ddd9d0] pt-3">
+              <p className="ca-eyebrow">
                 Servicios premium (doc 09)
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">

@@ -158,8 +158,11 @@ async function getAppointmentsByDate(storeId, dateIso) {
   try {
     const { data, error } = await supabase
       .from('appointments')
-      .select('*, customers(*)')
+      // El servicio y la profesional son lo que distingue dos citas a la
+      // misma hora: sin ellos, en el panel parecen un duplicado.
+      .select('*, customers(*), services ( name ), resources ( name )')
       .eq('store_id', storeId)
+      .eq('status', 'confirmed')
       .gte('start_at', start.toISOString())
       .lt('start_at', end.toISOString())
       .order('start_at', { ascending: true });
@@ -190,7 +193,22 @@ async function getRecentMessages(storeId, limit = 50) {
       throw error;
     }
 
-    return data || [];
+    // El panel debe decir «Ana Ruiz», no «34610217681». Si conocemos el
+    // nombre de esa clienta, viaja con el mensaje: un teléfono no le dice
+    // nada a la dueña, y ya lo tenemos guardado.
+    const filas = data || [];
+    const telefonos = [...new Set(filas.filter((m) => !m.from_me).map((m) => m.phone))];
+    if (telefonos.length) {
+      const { data: clientas } = await supabase
+        .from('customers')
+        .select('phone, name')
+        .eq('store_id', storeId)
+        .in('phone', telefonos);
+      const porTelefono = new Map((clientas || []).map((c) => [c.phone, c.name]));
+      for (const m of filas) m.nombre = m.from_me ? null : porTelefono.get(m.phone) || null;
+    }
+
+    return filas;
   } catch (err) {
     console.error('[DB] Excepción listando mensajes', { storeId, limit, err });
     throw err;

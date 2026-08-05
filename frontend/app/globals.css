@@ -3,96 +3,121 @@
 @tailwind utilities;
 
 /*
- * SISTEMA VISUAL DE CANALAGENDA — «editorial cálida» (ago-2026).
+ * SISTEMA VISUAL DE CANALAGENDA — «editorial cálida» (rev. 5-ago-2026).
  *
- * Referencia estructural: Fresha. Lo que se copia de ellos NO es el color
- * (azul eléctrico sobre casi-negro) sino la disciplina: mucho blanco, una
- * sola acción destacada por pantalla, cero decoración y jerarquía tipográfica
- * en lugar de cajas de colores.
+ * Referencia estructural: Fresha. Lo que se copia no es el color sino la
+ * disciplina: mucho blanco, una sola acción destacada por pantalla, cero
+ * decoración y jerarquía por tipografía en lugar de cajas de colores.
+ * Nos diferencia la tinta cálida, el fondo hueso, un único acento terracota
+ * y los titulares en serif.
  *
- * Lo que nos diferencia: tinta cálida en vez de azulada, fondo hueso en vez
- * de blanco puro, un único acento terracota, y titulares en serif — un sector
- * estético merece algo con más carácter que otro panel azul de SaaS.
+ * REGLA DE ORO DEL ACENTO: el terracota significa «esta es LA acción, o el
+ * dato que pide actuar». Navegación activa, títulos y datos van en tinta. Si
+ * el acento vuelve a aparecer en cinco sitios de una pantalla, el sistema
+ * está roto (es justo lo que pasaba con el verde antes de agosto de 2026).
  *
- * REGLA DE ORO DEL ACENTO: el terracota significa «esta es la acción
- * principal». Si aparece en cinco sitios de una pantalla, deja de significar
- * nada. Por eso la navegación activa, los títulos y los datos van en tinta,
- * no en color. Antes de agosto de 2026 el verde teñía todo el panel y esa fue
- * exactamente la queja.
+ * --- Auditoría del 5-ago y qué se corrigió -------------------------------
+ * 1. TIPOGRAFÍA. Había trece tamaños distintos en uso y los títulos de
+ *    sección (15 px) eran MÁS PEQUEÑOS que el cuerpo (16 px): la jerarquía
+ *    estaba invertida. Ahora hay una escala de seis pasos y dos pesos.
+ * 2. CONTRASTE. Los metadatos iban en #8a8378 (3,6:1) y las horas de la
+ *    rejilla en #a8a29e (2,6:1): por debajo del mínimo AA de 4,5:1, y encima
+ *    a 11 px. Corregido a #6b6459 (5,9:1) y #57534e (7,5:1).
+ * 3. SUPERFICIES. Tarjeta blanca sobre fondo #faf9f6 daba 1,02:1 — la
+ *    estructura dependía de un borde casi invisible y desaparecía con sol.
+ *    Fondo a #f4f2ec y borde a #ddd9d0.
+ * 4. DEDO. Los botones pequeños medían 27 px de alto. En una peluquería, con
+ *    las manos mojadas, eso no se acierta: mínimo 44 px (36 los compactos).
+ * -------------------------------------------------------------------------
  */
 :root {
+  /* Tinta */
   --ca-tinta: #1c1917;        /* texto principal y acciones oscuras */
-  --ca-tinta-2: #57534e;      /* texto secundario */
-  --ca-tinta-3: #8a8378;      /* pistas, metadatos */
-  --ca-fondo: #faf9f6;        /* lienzo de la página (hueso) */
-  --ca-borde: #e7e5de;        /* hairline por defecto */
-  --ca-borde-2: #d6d3cb;      /* borde de control */
-  --ca-acento: #c2410c;       /* terracota: UNA acción por pantalla */
+  --ca-tinta-2: #57534e;      /* texto secundario · 7,5:1 */
+  --ca-tinta-3: #6b6459;      /* metadatos y etiquetas · 5,9:1 (AA) */
+  --ca-tinta-4: #8a8378;      /* SOLO decorativo: iconos, separadores */
+
+  /* Superficies */
+  --ca-fondo: #f4f2ec;        /* lienzo de la página */
+  --ca-superficie: #ffffff;   /* tarjetas */
+  --ca-borde: #ddd9d0;        /* hairline visible */
+  --ca-borde-suave: #ece9e1;  /* divisiones internas */
+
+  /* Acento: una acción por pantalla */
+  --ca-acento: #c2410c;
   --ca-acento-hover: #9a3412;
   --ca-acento-tinte: #fdf1ea;
   --ca-acento-texto: #7c2d12;
+
+  /* Espaciado: progresión de 4, y nada fuera de ella */
+  --ca-e1: 4px;  --ca-e2: 8px;  --ca-e3: 12px;
+  --ca-e4: 16px; --ca-e5: 24px; --ca-e6: 32px;
 }
 
 body {
-  @apply bg-[#faf9f6] text-[#1c1917] antialiased;
+  @apply bg-[#f4f2ec] text-[#1c1917] antialiased;
+  font-size: 15px;
   font-feature-settings: 'cv02', 'cv03', 'cv11';
 }
 
 /* Las horas son lo que más se lee en una agenda: cifras de ancho fijo para
-   que las columnas no bailen al cambiar de 09:00 a 11:30. */
+   que las columnas no bailen al pasar de 09:00 a 11:30. */
 .ca-cifras { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 
 @layer components {
   /* ---------- Superficies ---------- */
-  .ca-card {
-    @apply rounded-xl border border-[#e7e5de] bg-white;
-  }
-  .ca-card-p { @apply ca-card p-5; }
+  .ca-card   { @apply rounded-xl border border-[#ddd9d0] bg-white; }
+  .ca-card-p { @apply ca-card p-6; }
 
-  /* ---------- Tipografía ---------- */
-  /* El serif es solo para el título de la pantalla y la marca. Todo lo demás
-     va en sans: un panel se lee de un vistazo, no se lee como una revista. */
+  /* ---------- Escala tipográfica (6 pasos, 2 pesos) ----------
+     28 título de pantalla · 18 sección · 15 cuerpo · 13 secundario
+     12 metadato · 13 cifras. Nada más. */
   .ca-h1 {
-    @apply text-[26px] leading-tight text-[#1c1917];
+    @apply text-[28px] leading-[1.15] text-[#1c1917];
     font-family: var(--font-serif), Georgia, serif;
     font-weight: 400;
   }
-  .ca-h2 { @apply text-[15px] font-semibold tracking-tight text-[#1c1917]; }
-  .ca-label { @apply mb-1 block text-xs font-medium text-[#8a8378]; }
-  .ca-hint { @apply text-sm text-[#57534e]; }
-  .ca-eyebrow { @apply text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8378]; }
+  .ca-h2      { @apply text-[18px] font-medium leading-snug tracking-tight text-[#1c1917]; }
+  .ca-h3      { @apply text-[15px] font-medium text-[#1c1917]; }
+  .ca-label   { @apply mb-1 block text-[12px] font-medium text-[#6b6459]; }
+  .ca-hint    { @apply text-[13px] leading-relaxed text-[#57534e]; }
+  .ca-meta    { @apply text-[12px] text-[#6b6459]; }
+  /* Sin versalitas: 11 px + mayúsculas + gris flojo era el texto menos
+     legible de todo el panel. Ahora es un rótulo normal, solo más pequeño. */
+  .ca-eyebrow { @apply mb-3 block text-[12px] font-medium text-[#6b6459]; }
 
   /* ---------- Controles ---------- */
   .ca-input {
-    @apply w-full rounded-lg border border-[#d6d3cb] bg-white px-3 py-2 text-sm text-[#1c1917]
-           placeholder:text-[#a8a29e]
+    @apply w-full min-h-[44px] rounded-lg border border-[#ddd9d0] bg-white px-3 py-2.5 text-[15px] text-[#1c1917]
+           placeholder:text-[#8a8378]
            focus:border-[#1c1917] focus:outline-none focus:ring-2 focus:ring-[#1c1917]/10;
   }
   .ca-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-[14px] font-medium
            transition disabled:cursor-not-allowed disabled:opacity-45;
   }
-  /* La acción principal. Una por pantalla. */
+  /* LA acción de la pantalla. Una, y solo una. */
   .ca-btn-primary { @apply ca-btn bg-[#c2410c] text-white hover:bg-[#9a3412]; }
-  /* Acción de peso pero no destacada (guardar en un formulario secundario) */
+  /* Acción de peso que no compite con la principal */
   .ca-btn-tinta   { @apply ca-btn bg-[#1c1917] text-white hover:bg-[#292524]; }
-  .ca-btn-ghost   { @apply ca-btn border border-[#d6d3cb] bg-white text-[#44403c] hover:bg-[#faf9f6]; }
-  .ca-btn-danger  { @apply ca-btn border border-[#e7c9c1] bg-white text-[#9a3412] hover:bg-[#fdf1ea]; }
-  .ca-btn-sm      { @apply px-3 py-1.5 text-xs; }
+  .ca-btn-ghost   { @apply ca-btn border border-[#ddd9d0] bg-white text-[#44403c] hover:bg-[#f4f2ec]; }
+  /* Destructivo APAGADO: solo enseña su color al pasar por encima. Un botón
+     rojo permanente invita a pulsarlo; este pide intención. */
+  .ca-btn-danger  { @apply ca-btn border border-[#e7e3da] bg-white text-[#6b6459] hover:border-[#e7c9c1] hover:bg-[#fdf1ea] hover:text-[#9a3412]; }
+  /* Compacto: 36 px es el suelo. Por debajo, un dedo mojado no acierta. */
+  .ca-btn-sm      { @apply min-h-[36px] px-3 text-[13px]; }
 
   /* ---------- Etiquetas de estado ---------- */
-  /* Sin anillos ni bordes: tinte plano y texto de la misma familia de color.
-     Menos ruido en una lista de veinte citas. */
-  .ca-badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-medium; }
-  .ca-badge-ok    { @apply ca-badge bg-[#edf4ee] text-[#2f5d3f]; }
+  .ca-badge       { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium; }
+  .ca-badge-ok    { @apply ca-badge bg-[#e9f1ea] text-[#2f5d3f]; }
   .ca-badge-warn  { @apply ca-badge bg-[#fdf1ea] text-[#7c2d12]; }
   .ca-badge-error { @apply ca-badge bg-[#fbeceb] text-[#9f1239]; }
-  .ca-badge-mute  { @apply ca-badge bg-[#f2f1ec] text-[#57534e]; }
+  .ca-badge-mute  { @apply ca-badge bg-[#efece4] text-[#57534e]; }
 
   /* ---------- Avisos ---------- */
-  .ca-alert { @apply rounded-lg border p-3 text-sm; }
-  .ca-alert-info  { @apply ca-alert border-[#e7e5de] bg-white text-[#44403c]; }
+  .ca-alert       { @apply rounded-lg border p-4 text-[14px]; }
+  .ca-alert-info  { @apply ca-alert border-[#ddd9d0] bg-white text-[#44403c]; }
   .ca-alert-warn  { @apply ca-alert border-[#f0dcd0] bg-[#fdf1ea] text-[#7c2d12]; }
   .ca-alert-error { @apply ca-alert border-[#f0d5d3] bg-[#fbeceb] text-[#9f1239]; }
-  .ca-alert-ok    { @apply ca-alert border-[#dbe7de] bg-[#edf4ee] text-[#2f5d3f]; }
+  .ca-alert-ok    { @apply ca-alert border-[#d7e3d9] bg-[#e9f1ea] text-[#2f5d3f]; }
 }

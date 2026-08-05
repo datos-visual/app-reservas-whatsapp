@@ -15,7 +15,7 @@ const NAV = [
   { href: '/', label: 'Inicio', Icon: IconCasa },
   { href: '/agenda', label: 'Agenda', Icon: IconAgenda },
   { href: '/equipo', label: 'Equipo', Icon: IconPersonas },
-  { href: '/catalogo', label: 'Servicios', Icon: IconTijeras },
+  { href: '/catalogo', label: 'Catálogo', Icon: IconTijeras },
   { href: '/horarios', label: 'Horarios', Icon: IconReloj },
   { href: '/servicios', label: 'Mi plan', Icon: IconEstrella }
 ];
@@ -50,7 +50,7 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-[#e7e5de] bg-[#faf9f6]/92 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-[#ddd9d0] bg-[#f4f2ec]/92 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 pt-3.5">
           <div className="flex items-center gap-3">
             {/* La marca en tinta, no en el color de acento: el acento se
@@ -59,10 +59,10 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
               C
             </span>
             <div>
-              <p className="text-[15px] font-semibold leading-tight tracking-tight text-[#1c1917]">
+              <p className="text-[15px] font-medium leading-tight tracking-tight text-[#1c1917]">
                 {negocio || 'CanalAgenda'}
               </p>
-              <p className="text-xs leading-tight text-[#8a8378]">{email}</p>
+              <p className="text-xs leading-tight text-[#6b6459]">{email}</p>
             </div>
           </div>
           <button onClick={salir} className="ca-btn-ghost ca-btn-sm">
@@ -83,7 +83,7 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
                     className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition ${
                       activo
                         ? 'border-[#c2410c] font-medium text-[#1c1917]'
-                        : 'border-transparent text-[#8a8378] hover:text-[#1c1917]'
+                        : 'border-transparent text-[#6b6459] hover:text-[#1c1917]'
                     }`}
                   >
                     <Icon /> {label}
