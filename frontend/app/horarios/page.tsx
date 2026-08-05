@@ -258,10 +258,19 @@ export default function HorariosPage() {
 
           <section className="mt-6 ca-card-p">
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
-              Vacaciones y días cerrados
+              Cierres de todo el negocio
             </p>
+            <p className="mb-1 text-xs text-[#8a8378]">
+              Durante estas fechas el asistente no dará ninguna cita y avisará del motivo.
+            </p>
+            {/* Se confundía con las vacaciones de una persona sola, que viven
+                en otra pantalla. Decirlo aquí ahorra la pregunta. */}
             <p className="mb-3 text-xs text-[#8a8378]">
-              Durante estas fechas el asistente no dará citas y avisará del motivo.
+              ¿Se va de vacaciones solo una persona del equipo?{' '}
+              <a href="/equipo" className="text-[#9a3412] underline underline-offset-2">
+                Ponlo en su ficha, en Equipo
+              </a>
+              {' '}— el resto seguirá dando citas.
             </p>
 
             {cierres.length === 0 && (

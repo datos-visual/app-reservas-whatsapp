@@ -18,6 +18,10 @@ type Aparato = { id: number; name: string; units: number; is_active: boolean };
 type Ajustes = { usarEquipo: boolean; usarAparatos: boolean; sincronizarCalendar?: boolean };
 
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+/** "2026-08-31" → "31 ago" */
+const fechaCorta = (iso: string) =>
+  new Date(iso + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).replace('.', '');
 const ORDEN = [1, 2, 3, 4, 5, 6, 0];
 
 export default function EquipoPage() {
@@ -275,7 +279,17 @@ export default function EquipoPage() {
                         : turnos.map((t) => `${NOMBRES[t.weekday].slice(0, 3)} ${t.open_time.slice(0, 5)}-${t.close_time.slice(0, 5)}`).join(' · ')}
                       {p.ausencias.length > 0 && (
                         <span className="ml-2 text-[#9a3412]">
-                          · {p.ausencias.length} ausencia(s)
+                          · libra {p.ausencias
+                            .slice()
+                            .sort((a, b) => (a.start_date < b.start_date ? -1 : 1))
+                            .slice(0, 2)
+                            .map((a) =>
+                              a.start_date === a.end_date
+                                ? fechaCorta(a.start_date)
+                                : `${fechaCorta(a.start_date)}–${fechaCorta(a.end_date)}`
+                            )
+                            .join(', ')}
+                          {p.ausencias.length > 2 ? ` y ${p.ausencias.length - 2} más` : ''}
                         </span>
                       )}
                     </p>
@@ -291,7 +305,7 @@ export default function EquipoPage() {
                       onClick={() => setAbierta(abierta === p.id ? null : p.id)}
                       className="ca-btn-ghost ca-btn-sm"
                     >
-                      {abierta === p.id ? 'Cerrar' : 'Turnos y ausencias'}
+                      {abierta === p.id ? 'Cerrar' : 'Turnos y vacaciones'}
                     </button>
                   </div>
                 </div>
