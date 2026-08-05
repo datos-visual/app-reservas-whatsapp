@@ -1757,7 +1757,12 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
   // CANCELAR [id]: cancelación con confirmación SI/NO
   if (lower === 'cancelar' || lower.startsWith('cancelar ') || PIDE_ANULAR.test(lower)) {
-    const arg = body.trim().split(/\s+/)[1] || null;
+    // El argumento SOLO existe en la forma de comando («cancelar 2»). Si la
+    // persona lo dijo con sus palabras («no me viene bien, anúlala»), la
+    // segunda palabra es texto normal y tomarla por un número acababa en un
+    // absurdo «No encuentro esa cita» (bug real 5-ago-2026).
+    const esComando = lower === 'cancelar' || lower.startsWith('cancelar ');
+    const arg = esComando ? (body.trim().split(/\s+/)[1] || null) : null;
     const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
 
     if (!citas.length) {
