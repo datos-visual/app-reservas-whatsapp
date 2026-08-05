@@ -24,8 +24,10 @@ type Cita = {
   tramos?: { desde: string; hasta: string }[];
   hueco_libre?: { desde: string; hasta: string; minutos: number } | null;
 };
+type Bloqueo = { event_id: string; titulo: string; desde: string; hasta: string };
 type Agenda = {
   fecha: string;
+  bloqueos?: Bloqueo[];
   cerrado: boolean;
   motivo_cierre: string | null;
   horario: { abre: string | null; cierra: string | null } | null;
@@ -49,6 +51,7 @@ export default function AgendaPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+  const [bloqueo, setBloqueo] = useState({ hora: '', minutos: 30, motivo: '' });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -142,6 +145,36 @@ export default function AgendaPage() {
     } finally {
       setSincronizando(false);
     }
+  }
+
+  // Bloquear un rato: limpiar material, comer, ir al banco. Se guarda como
+  // evento en Google Calendar, así que el asistente deja de ofrecer esas horas.
+  async function bloquear() {
+    if (!bloqueo.hora) { setError('Indica a qué hora empieza el rato que quieres bloquear.'); return; }
+    setGuardando(true);
+    setError('');
+    try {
+      const r = await apiFetch('/api/agenda/bloqueos', {
+        method: 'POST',
+        body: JSON.stringify({ ...bloqueo, fecha })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(body.error || 'No se pudo bloquear ese rato.'); return; }
+      setBloqueo({ hora: '', minutos: 30, motivo: '' });
+      setAviso(`Bloqueado de ${body.desde} a ${body.hasta} ✓`);
+      cargar(fecha);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function liberar(b: Bloqueo) {
+    if (!confirm(`¿Liberar «${b.titulo}» (${b.desde}–${b.hasta})? Esas horas volverán a ofrecerse.`)) return;
+    const r = await apiFetch(`/api/agenda/bloqueos/${encodeURIComponent(b.event_id)}`, { method: 'DELETE' });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { setError(body.error || 'No se pudo liberar.'); return; }
+    setAviso('Rato liberado ✓');
+    cargar(fecha);
   }
 
   async function reasignar(id: number, resourceId: string) {
@@ -322,6 +355,47 @@ export default function AgendaPage() {
                   </li>
                 ))}
             </ul>
+          </div>
+
+          <div className="ca-card-p mt-6">
+            <h2 className="ca-h2">Ratos bloqueados</h2>
+            <p className="mb-4 mt-1 ca-hint">
+              Tiempo que no quieres vender: limpiar material, comer, una gestión. El asistente
+              dejará de ofrecer esas horas mientras el bloqueo exista.
+            </p>
+
+            {agenda.bloqueos && agenda.bloqueos.length > 0 && (
+              <ul className="mb-4 divide-y divide-[#f0efe9] rounded-lg border border-[#e6e4de]">
+                {agenda.bloqueos.map((b) => (
+                  <li key={b.event_id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span className="text-sm text-slate-700">
+                      <span className="font-medium">{b.desde}–{b.hasta}</span>
+                      <span className="ml-2 text-slate-500">{b.titulo}</span>
+                    </span>
+                    <button onClick={() => liberar(b)} className="ca-btn-ghost ca-btn-sm">Liberar</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
+              <input type="time" className={`${inputCls} sm:col-span-3`}
+                value={bloqueo.hora} onChange={(e) => setBloqueo({ ...bloqueo, hora: e.target.value })} />
+              <select className={`${inputCls} sm:col-span-3 h-[38px]`}
+                value={bloqueo.minutos} onChange={(e) => setBloqueo({ ...bloqueo, minutos: Number(e.target.value) })}>
+                <option value={15}>15 minutos</option>
+                <option value={30}>30 minutos</option>
+                <option value={60}>1 hora</option>
+                <option value={90}>1 h 30</option>
+                <option value={120}>2 horas</option>
+                <option value={240}>4 horas</option>
+              </select>
+              <input className={`${inputCls} sm:col-span-6`} placeholder="Motivo (ej. limpiar material)"
+                value={bloqueo.motivo} onChange={(e) => setBloqueo({ ...bloqueo, motivo: e.target.value })} />
+            </div>
+            <button onClick={bloquear} disabled={guardando} className="mt-3 ca-btn-ghost">
+              Bloquear este rato
+            </button>
           </div>
 
           <div className="ca-card-p mt-6">

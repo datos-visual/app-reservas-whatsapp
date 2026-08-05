@@ -81,20 +81,30 @@
         <div class="sub">Reservas por WhatsApp para negocios con cita previa</div>
       </div>
     </div>
-    <div class="fecha">Actualizado<br><strong>3 de agosto de 2026</strong></div>
+    <div class="fecha">Actualizado<br><strong>5 de agosto de 2026</strong></div>
   </header>
 
   <div class="card p">
     <strong>Camino al primer piloto real</strong>
-    <div class="barra"><i style="width:78%"></i></div>
-    <div class="sub">78% · El producto casi está; lo que falta es sobre todo legal y comercial</div>
+    <div class="barra"><i style="width:82%"></i></div>
+    <div class="sub">82% · El motor de agenda ya es de categoría profesional. Lo que falta no es código: es legal, comercial y <strong>probarlo con una peluquería de verdad</strong></div>
     <div class="kpis" style="margin-top:18px">
       <div class="kpi"><div class="n">100%</div><div class="l">Bot de WhatsApp</div><div class="foot">probado con clientas reales</div></div>
-      <div class="kpi"><div class="n">90%</div><div class="l">Panel del negocio</div><div class="foot">faltan métricas</div></div>
+      <div class="kpi"><div class="n">92%</div><div class="l">Panel del negocio</div><div class="foot">faltan métricas</div></div>
       <div class="kpi"><div class="n">95%</div><div class="l">Tu backoffice</div><div class="foot">altas de punta a punta</div></div>
-      <div class="kpi"><div class="n">2 / 7</div><div class="l">Servicios premium</div><div class="foot">el resto, solo el interruptor</div></div>
+      <div class="kpi"><div class="n">3 / 8</div><div class="l">Servicios premium</div><div class="foot">el resto, solo el interruptor</div></div>
       <div class="kpi"><div class="n">0%</div><div class="l">Cobro y RGPD</div><div class="foot">imprescindible para facturar</div></div>
     </div>
+  </div>
+
+  <div class="card p" style="border-left:4px solid var(--ambar);margin-top:16px">
+    <strong>Lo más urgente ahora mismo</strong>
+    <p style="margin:6px 0 0;color:var(--gris);font-size:13.5px">
+      Todo lo de los últimos dos días está probado ejecutando la lógica con datos de prueba,
+      pero <strong>nada de ello ha pasado todavía por una peluquería real</strong>: ni los aparatos,
+      ni los tiempos de espera, ni dos profesionales atendiendo a la vez.
+      Antes de añadir una función más, toca sentarse con dos móviles y probarlo entero.
+    </p>
   </div>
 
   <h2>Por áreas</h2>
@@ -108,7 +118,7 @@
     <div class="card p area">
       <span class="pct" style="color:var(--verde)">90%</span>
       <h3>Panel de la peluquería</h3>
-      <p>Agenda del día, citas por teléfono, equipo con turnos y vacaciones, catálogo, horarios, plan contratado.</p>
+      <p>Agenda del día, citas por teléfono, equipo con turnos y vacaciones, aparatos, catálogo con tramos, horarios y rejilla, plan contratado.</p>
       <p style="margin-top:8px"><span class="tag ok">en uso</span> <span class="tag wip">faltan métricas</span></p>
     </div>
     <div class="card p area">
@@ -118,10 +128,16 @@
       <p style="margin-top:8px"><span class="tag ok">operativo</span></p>
     </div>
     <div class="card p area">
-      <span class="pct" style="color:var(--ambar)">50%</span>
+      <span class="pct" style="color:var(--verde)">85%</span>
       <h3>Multi-profesional</h3>
-      <p>Equipo con turnos, reparto automático, reasignar y traspasar citas. Faltan aparatos con unidades y elegir profesional.</p>
-      <p style="margin-top:8px"><span class="tag wip">entrega 1 de 3</span></p>
+      <p>Equipo con turnos y vacaciones, reparto automático, reasignar y traspasar citas, aparatos con unidades (un solo sillón de color) y tiempos de espera aprovechables. Falta que la clienta pueda elegir profesional.</p>
+      <p style="margin-top:8px"><span class="tag ok">3 entregas de 4</span> <span class="tag wip">sin probar en real</span></p>
+    </div>
+    <div class="card p area">
+      <span class="pct" style="color:var(--verde)">100%</span>
+      <h3>Fiabilidad de la agenda</h3>
+      <p>Si borran una cita en Google Calendar, el hueco vuelve a venderse. Nunca se cancela sin confirmárselo a Google evento por evento.</p>
+      <p style="margin-top:8px"><span class="tag ok">automático cada 10 min</span></p>
     </div>
     <div class="card p area">
       <span class="pct" style="color:var(--rojo)">bloqueado</span>
@@ -143,6 +159,7 @@
       <tr><th>Servicio</th><th>Estado</th><th>Qué falta</th></tr>
       <tr><td><strong>Compactación de agenda</strong> (P1)</td><td><span class="tag ok">funciona</span></td><td>—</td></tr>
       <tr><td><strong>Lista de espera</strong> (P3)</td><td><span class="tag ok">funciona</span></td><td>Plantilla de Meta para avisar fuera de 24 h</td></tr>
+      <tr><td><strong>Aprovechar tiempos de espera</strong> (B5.4)</td><td><span class="tag ok">funciona</span></td><td>Marcar esos huecos con ⭐ · configurar los tramos con la tienda delante</td></tr>
       <tr><td>Reactivación por ciclo (P2)</td><td><span class="tag no">solo interruptor</span></td><td>Motor proactivo + plantilla marketing + consentimiento</td></tr>
       <tr><td>Post-servicio 48 h (P6)</td><td><span class="tag no">solo interruptor</span></td><td>Depende del motor de P2</td></tr>
       <tr><td>Ficha de estilo (P5)</td><td><span class="tag no">solo interruptor</span></td><td>Recibir y guardar fotos + galería en el panel</td></tr>
@@ -150,6 +167,7 @@
       <tr><td>Elegir profesional (B5.3)</td><td><span class="tag no">solo interruptor</span></td><td>"¿Con quién?" en el bot y confirmación con nombre</td></tr>
     </table>
     <p class="nota">⚠️ Activar uno de los cinco pendientes no hace nada ni da error. No enseñarlos como disponibles a una clienta.</p>
+    <p class="nota">Los tres que funcionan se contratan tienda a tienda desde tu backoffice, y la peluquería puede apagarlos desde «Mi plan». Si no están contratados, todo se comporta como en el plan básico.</p>
   </div>
 
   <h2>Cómo hemos llegado hasta aquí</h2>
@@ -169,6 +187,8 @@
         <div class="x">La peluquería edita su horario y sus vacaciones sin depender de ti. Los nombres se toman del perfil de WhatsApp.</div></div>
       <div class="hito"><div class="d">3 AGOSTO</div><div class="t">Agenda, rediseño y equipo</div>
         <div class="x">Citas por teléfono desde el panel con aviso automático, interfaz nueva clara y con navegación, y varias profesionales trabajando a la vez con turnos, vacaciones y reparto automático.</div></div>
+      <div class="hito"><div class="d">4-5 AGOSTO</div><div class="t">La agenda se vuelve profesional</div>
+        <div class="x">Tres hallazgos suyos, tres arreglos de fondo: borrar una cita en Google Calendar ya libera el hueco; las horas se ofrecen cada 30 minutos en vez de en bloques (un sábado con mechas ofrecía <em>una sola</em> hora cuando había cuatro libres); y un tinte deja de bloquear a la peluquera mientras reposa, así que ese rato puede venderse. Esto último pasa a ser servicio premium.</div></div>
       <div class="hito pend"><div class="d">PRÓXIMO</div><div class="t">Primer piloto real</div>
         <div class="x">Textos legales, un alta completa con cuentas de verdad y una peluquería usándolo de lunes a sábado.</div></div>
     </div>

@@ -77,8 +77,10 @@ async function agendaDelDia(storeId, dateIso) {
   // directamente en su Google Calendar, aquí se detecta antes de pintar.
   // Best-effort: sin calendario conectado o con Google caído, se muestra lo
   // que hay en la base de datos en vez de dejar la pantalla en blanco.
+  let eventosCalendar = [];
   try {
-    await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
+    const vistos = await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
+    eventosCalendar = vistos?.todos || vistos || [];
   } catch (err) {
     console.warn('[Agenda] No se pudo contrastar con Google Calendar', {
       storeId, fecha: dia.toISODate(), message: err?.message
@@ -87,7 +89,7 @@ async function agendaDelDia(storeId, dateIso) {
 
   const { data, error } = await supabase
     .from('appointments')
-    .select('id, start_at, end_at, status, source, service_id, resource_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
+    .select('id, start_at, end_at, status, source, service_id, resource_id, google_event_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
     .eq('store_id', storeId)
     .gte('start_at', dia.startOf('day').toUTC().toISO())
     .lt('start_at', dia.plus({ days: 1 }).startOf('day').toUTC().toISO())
@@ -102,8 +104,23 @@ async function agendaDelDia(storeId, dateIso) {
   const fases = await equipo.fasesPorServicio(storeId);
   const margen = await equipo.margenRelleno(storeId);
 
+  // Ratos bloqueados: eventos del calendario que NO son citas nuestras
+  // (limpiar material, comer, el médico...). Se pintan aparte para que la
+  // dueña vea por qué el asistente no ofrece esas horas.
+  const idsDeCitas = new Set((data || []).map((c) => c.google_event_id).filter(Boolean));
+  const bloqueos = (eventosCalendar || [])
+    .filter((e) => e.id && !idsDeCitas.has(e.id) && e.status !== 'cancelled' && e.start?.dateTime)
+    .map((e) => ({
+      event_id: e.id,
+      titulo: e.summary || 'Ocupado',
+      desde: DateTime.fromISO(e.start.dateTime, { setZone: true }).setZone(zone).toFormat('HH:mm'),
+      hasta: DateTime.fromISO(e.end.dateTime, { setZone: true }).setZone(zone).toFormat('HH:mm')
+    }))
+    .sort((a, b) => (a.desde < b.desde ? -1 : 1));
+
   return {
     fecha: dia.toISODate(),
+    bloqueos,
     cerrado: !!horario.isClosed,
     motivo_cierre: horario.motivo || null,
     horario: horario.isClosed ? null : { abre: horario.openTime, cierra: horario.closeTime },
@@ -141,6 +158,62 @@ async function agendaDelDia(storeId, dateIso) {
       };
     })
   };
+}
+
+/**
+ * Bloquea un rato de la agenda (limpiar material, comer, el médico).
+ *
+ * Se crea como evento normal de Google Calendar SIN fila en `appointments`:
+ * así lo trata el sistema como un evento ajeno y tapa el hueco entero, que es
+ * justo lo que se quiere. Y la dueña puede verlo y borrarlo desde su propio
+ * calendario si le resulta más cómodo.
+ */
+async function bloquearRato(storeId, { fecha, hora, minutos, motivo }) {
+  const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) throw errorValidacion('Fecha inválida (AAAA-MM-DD).');
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(hora || ''))) throw errorValidacion('Hora inválida (HH:MM).');
+
+  const dur = parseInt(minutos, 10);
+  if (!Number.isInteger(dur) || dur < 5 || dur > 720) throw errorValidacion('La duración debe estar entre 5 y 720 minutos.');
+
+  const inicio = DateTime.fromISO(`${fecha}T${hora}`, { zone });
+  if (!inicio.isValid) throw errorValidacion('Fecha u hora inválidas.');
+  const fin = inicio.plus({ minutes: dur });
+
+  const titulo = String(motivo || '').trim().slice(0, 80) || 'Ocupado';
+  const evento = await createCalendarEvent(
+    storeId,
+    {
+      summary: `🔒 ${titulo}`,
+      description: 'Rato bloqueado desde el panel de CanalAgenda. Mientras exista, el asistente no ofrecerá estas horas.',
+      start: inicio.toISO(),
+      end: fin.toISO()
+    },
+    zone
+  );
+
+  console.log('[Agenda] Rato bloqueado', { storeId, fecha, hora, minutos: dur, titulo });
+  return { event_id: evento?.id || null, desde: inicio.toFormat('HH:mm'), hasta: fin.toFormat('HH:mm') };
+}
+
+/** Libera un rato bloqueado. Solo borra el evento; no toca citas. */
+async function desbloquearRato(storeId, eventId) {
+  if (!eventId) throw errorValidacion('Falta el identificador del bloqueo.');
+
+  // Guarda de seguridad: jamás borrar por aquí un evento que sea una cita.
+  const { data } = await supabase
+    .from('appointments')
+    .select('id')
+    .eq('store_id', storeId)
+    .eq('google_event_id', eventId)
+    .limit(1)
+    .maybeSingle();
+  if (data) throw errorValidacion('Eso es una cita, no un rato bloqueado. Cancélala desde la propia cita.');
+
+  await deleteCalendarEvent(storeId, eventId);
+  console.log('[Agenda] Rato liberado', { storeId, eventId });
+  return true;
 }
 
 /**
@@ -282,4 +355,7 @@ async function cancelarCitaManual(storeId, appointmentId, { avisar = true } = {}
   return { cita: cancelada, aviso };
 }
 
-module.exports = { agendaDelDia, crearCitaManual, cancelarCitaManual, normalizarTelefono };
+module.exports = {
+  agendaDelDia, crearCitaManual, cancelarCitaManual, normalizarTelefono,
+  bloquearRato, desbloquearRato
+};
