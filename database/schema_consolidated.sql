@@ -435,6 +435,11 @@ alter table public.stores add column if not exists usar_aparatos boolean not nul
 alter table public.stores add column if not exists usar_sync_calendar boolean not null default true;
 -- Rejilla: cada cuántos minutos puede empezar una cita (0 = bloques del servicio)
 alter table public.stores add column if not exists paso_huecos_min smallint not null default 30;
+-- B5.4 — Fases del servicio: la profesional queda libre mientras reposa el tinte
+alter table public.stores   add column if not exists margen_relleno_min  smallint not null default 5;
+alter table public.services add column if not exists trabajo_inicial_min smallint not null default 0;
+alter table public.services add column if not exists espera_min          smallint not null default 0;
+alter table public.services add column if not exists trabajo_final_min   smallint not null default 0;
 
 alter table public.appointments add column if not exists service_id  bigint references public.services(id)  on delete set null;
 alter table public.appointments add column if not exists resource_id bigint references public.resources(id) on delete set null;

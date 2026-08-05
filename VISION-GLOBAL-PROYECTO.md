@@ -714,6 +714,49 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.58 B5.4 — FASES DEL SERVICIO (4-ago-2026)
+
+Lo que estaba marcado como "fuera de alcance consciente" en §10.55 ya está
+construido, porque sin ello la agenda de una peluquería es falsa: un tinte
+bloqueaba 90 min de peluquera cuando solo la ocupa 45.
+
+**Modelo (3 tramos por servicio, editables en el panel):**
+`trabajo_inicial_min` · `espera_min` · `trabajo_final_min`, que deben sumar
+`duration_minutes`. Con `espera_min = 0` el servicio es de trabajo continuo y
+todo se comporta como antes — es el valor por defecto.
+
+**Dos ocupaciones distintas, y esto es la clave:**
+- el **puesto/aparato** se ocupa el rango entero (la clienta está sentada),
+- la **persona** solo en sus tramos activos (`equipo.tramosActivos`).
+
+Así, mientras reposa el tinte de Marta, el bot puede venderle a otra clienta
+un corte en ese hueco; y si solo hay un sillón de color, sigue siendo
+imposible meter un segundo tinte (lo impide B5.2, no B5.1).
+
+**Es PREMIUM (decisión comercial del 4-ago):** flag `fases_servicio`. El admin
+la contrata tienda a tienda desde `/admin`; la tienda puede apagarla en «Mi
+plan». No hay un segundo interruptor propio a propósito: dos switches para lo
+mismo acaban contradiciéndose. Sin contratar, `equipo.usarFases()` devuelve
+false y todo se comporta como antes; los minutos configurados en cada servicio
+se conservan por si se contrata más adelante. La recomendación de esos huecos
+(⭐), cuando se construya, irá bajo ESTE mismo flag — no uno nuevo.
+
+**Margen de seguridad** `stores.margen_relleno_min` (5 min por defecto): solo
+ensancha los tramos de las citas que TIENEN fases, para que encadenar dos
+cortes normales siga siendo posible.
+
+**Cambio delicado asociado:** cuando la tienda gestiona equipo,
+`sincronizacion.filtrarEventosPropios()` quita de la lista de Google Calendar
+las citas propias con profesional asignada, porque las modelamos con mucha más
+precisión que un bloque opaco. Se conservan siempre los eventos ajenos y las
+citas SIN profesional (si no, nadie las filtraría). La lista completa viaja
+igualmente como propiedad `todos` para no romper la puntuación ⭐ de P1.
+
+Verificado ejecutando la lógica (13 reglas) con un salón de una sola peluquera:
+el corte cabe en el reposo, no cabe si pisa el aplicado, el lavado o el margen,
+y si Marta libra a las 12:00 no se le asigna un tinte que hay que lavar a esa
+hora.
+
 ### 10.57 INCIDENTE 4-ago-2026 — la rejilla de huecos perdía dinero
 
 **Qué pasó:** para Mechas (150 min) un sábado de 10:00 a 14:00 el bot ofrecía

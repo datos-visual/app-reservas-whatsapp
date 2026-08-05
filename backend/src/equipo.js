@@ -7,7 +7,7 @@
 // cálculo por persona.
 
 const { DateTime } = require('luxon');
-const { supabase } = require('./db');
+const { supabase, getPremiumFeatures } = require('./db');
 
 /**
  * ¿El error es "esa tabla/columna todavía no existe"? Si la migración de
@@ -179,6 +179,125 @@ function solapa(aIni, aFin, bIni, bFin) {
   return aIni < bFin && aFin > bIni;
 }
 
+// ---------- B5.4: FASES DEL SERVICIO (trabajo · espera · trabajo) ----------
+//
+// Un tinte ocupa el PUESTO 90 min pero a la PROFESIONAL solo 15 al principio
+// y 30 al final. En medio la clienta espera sola y la peluquera puede atender
+// a otra. Modelamos esa diferencia con dos ocupaciones distintas:
+//   · el puesto/aparato → todo el rango (no cambia)
+//   · la persona        → solo sus "tramos activos"
+// Con espera_min = 0 hay un único tramo que cubre todo: comportamiento
+// idéntico al anterior a agosto de 2026.
+
+/**
+ * ¿Están activas las fases AHORA MISMO para esta tienda?
+ *
+ * Es una funcionalidad PREMIUM (flag `fases_servicio`): el admin la contrata
+ * desde el backoffice general y la tienda puede apagarla desde «Mi plan».
+ * `getPremiumFeatures` ya devuelve el efectivo = contratado MENOS desactivado,
+ * así que aquí no hay que sumar interruptores: uno solo, y no contradictorio.
+ *
+ * Apagada (o no contratada) ⇒ cada cita ocupa a la profesional de principio a
+ * fin, exactamente como antes de agosto de 2026. Los minutos configurados en
+ * cada servicio se conservan intactos por si se vuelve a contratar.
+ */
+async function usarFases(storeId) {
+  try {
+    const premium = await getPremiumFeatures(storeId);
+    return premium?.fases_servicio === true;
+  } catch {
+    return false;   // ante la duda, comportamiento clásico
+  }
+}
+
+/** Fases declaradas por la tienda para cada servicio. Map(id → {ini,espera,fin}) */
+async function fasesPorServicio(storeId) {
+  try {
+    if (!(await usarFases(storeId))) return new Map();   // apagado: trabajo continuo
+    const { data, error } = await supabase
+      .from('services')
+      .select('id, duration_minutes, trabajo_inicial_min, espera_min, trabajo_final_min')
+      .eq('store_id', storeId);
+    if (error || !data) return new Map();
+    const m = new Map();
+    for (const s of data) {
+      const espera = Number(s.espera_min || 0);
+      if (espera <= 0) continue;           // trabajo continuo: nada que modelar
+      m.set(Number(s.id), {
+        ini: Number(s.trabajo_inicial_min || 0),
+        espera,
+        fin: Number(s.trabajo_final_min || 0),
+        duracion: Number(s.duration_minutes || 0)
+      });
+    }
+    return m;
+  } catch {
+    return new Map();   // sin migración de fases, todo trabajo continuo
+  }
+}
+
+/**
+ * Tramos en los que la PERSONA está ocupada por una cita.
+ * Sin fases → un único tramo [inicio, fin] (como siempre).
+ * Con fases → [inicio, inicio+ini] y [fin-final, fin].
+ *
+ * `margen` ensancha los tramos de las citas YA EXISTENTES que tienen fases,
+ * para dejar colchón a lo que se encaje en su hueco. No se aplica a las citas
+ * de trabajo continuo: encadenar dos cortes seguidos debe seguir siendo
+ * posible.
+ */
+function tramosActivos(inicio, fin, fases, margen = 0) {
+  if (!fases || fases.espera <= 0) return [{ inicio, fin }];
+
+  const finIni = inicio.plus({ minutes: fases.ini || 0 });
+  const iniFin = fin.minus({ minutes: fases.fin || 0 });
+
+  // Defensa: si los tramos no cuadran (configuración a medias), se trata la
+  // cita como trabajo continuo. Nunca liberar tiempo que no sabemos que esté
+  // libre — el error caro es ofrecer de más, no de menos.
+  if (finIni >= iniFin) return [{ inicio, fin }];
+
+  const m = Math.max(0, Number(margen) || 0);
+  return [
+    { inicio, fin: finIni.plus({ minutes: m }) },
+    { inicio: iniFin.minus({ minutes: m }), fin }
+  ];
+}
+
+/** ¿Chocan dos listas de tramos? */
+function tramosChocan(a, b) {
+  return a.some((x) => b.some((y) => solapa(x.inicio, x.fin, y.inicio, y.fin)));
+}
+
+/** Margen de seguridad de la tienda (minutos). Tolerante: 5 por defecto. */
+async function margenRelleno(storeId) {
+  try {
+    const { data, error } = await supabase
+      .from('stores')
+      .select('margen_relleno_min')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data || data.margen_relleno_min == null) return 5;
+    return Number(data.margen_relleno_min);
+  } catch {
+    return 5;
+  }
+}
+
+async function guardarMargenRelleno(storeId, minutos) {
+  const valor = Number(minutos);
+  if (!Number.isInteger(valor) || valor < 0 || valor > 60) {
+    const e = new Error('El margen debe estar entre 0 y 60 minutos.');
+    e.code = 'VALIDACION';
+    throw e;
+  }
+  const { error } = await supabase.from('stores').update({ margen_relleno_min: valor }).eq('id', storeId);
+  if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  console.log('[Equipo] Margen de relleno', { storeId, minutos: valor });
+  return valor;
+}
+
 // ---------- B5.2: aparatos con unidades limitadas ----------
 
 /** Aparatos de la tienda (todo lo que no son personas). */
@@ -249,7 +368,7 @@ function aparatosDisponibles({ serviceId, inicio, fin, citas, requisitos, aparat
  * hayEquipo=false → la tienda no ha configurado equipo: el llamador debe
  * seguir con el cálculo clásico.
  */
-async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = null) {
+async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = null, serviceId = null) {
   const dt = DateTime.fromISO(inicioIso, { zone });
   const dateIso = dt.toISODate();
 
@@ -257,7 +376,9 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
     personas: await listarPersonas(storeId),
     turnos: await listarTurnos(storeId),
     ausencias: await listarAusencias(storeId, dateIso),
-    citas: await citasDelDia(storeId, dateIso, zone)
+    citas: await citasDelDia(storeId, dateIso, zone),
+    fases: await fasesPorServicio(storeId),
+    margen: await margenRelleno(storeId)
   };
   if (!datos.personas.length) return { total: 0, libres: [], hayEquipo: false };
 
@@ -265,26 +386,43 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
   const weekday = dt.weekday === 7 ? 0 : dt.weekday;
   const hhmm = (d) => d.toFormat('HH:mm');
 
+  const fasesMap = datos.fases || new Map();
+  const margen = datos.margen ?? 0;
+
+  // Tramos que ocuparía la PERSONA con la cita que se está valorando
+  const tramosNuevos = tramosActivos(dt, finDt, fasesMap.get(Number(serviceId)) || null);
+
   const libres = datos.personas.filter((p) => {
     // 1) ¿Está ausente ese día?
     if (datos.ausencias.some((a) => a.resource_id === p.id)) return false;
 
-    // 2) ¿Su turno cubre TODO el servicio? (sin turnos = todo el horario)
+    // 2) ¿Su turno cubre los tramos en los que TRABAJA? (sin turnos = todo)
+    //    Se miran los tramos activos, no el rango entero: mientras el tinte
+    //    reposa la peluquera puede haberse ido, lo que no puede es faltar
+    //    cuando toca aplicar o lavar.
     const susTurnos = datos.turnos.filter((t) => t.resource_id === p.id && t.weekday === weekday);
     if (susTurnos.length) {
-      const cubre = susTurnos.some((t) => {
-        const abre = String(t.open_time).slice(0, 5);
-        const cierra = String(t.close_time).slice(0, 5);
-        return hhmm(dt) >= abre && hhmm(finDt) <= cierra;
-      });
-      if (!cubre) return false;
+      const cubreTodo = tramosNuevos.every((tr) =>
+        susTurnos.some((t) => {
+          const abre = String(t.open_time).slice(0, 5);
+          const cierra = String(t.close_time).slice(0, 5);
+          return hhmm(tr.inicio) >= abre && hhmm(tr.fin) <= cierra;
+        })
+      );
+      if (!cubreTodo) return false;
     }
 
-    // 3) ¿Tiene otra cita solapando?
-    const ocupada = datos.citas.some((c) =>
-      c.resource_id === p.id &&
-      solapa(dt, finDt, DateTime.fromISO(c.start_at, { zone }), DateTime.fromISO(c.end_at, { zone }))
-    );
+    // 3) ¿Chocan sus tramos con los de alguna cita que ya tiene?
+    const ocupada = datos.citas.some((c) => {
+      if (c.resource_id !== p.id) return false;
+      const tramosCita = tramosActivos(
+        DateTime.fromISO(c.start_at, { zone }),
+        DateTime.fromISO(c.end_at, { zone }),
+        fasesMap.get(Number(c.service_id)) || null,
+        margen                        // colchón solo alrededor de citas con fases
+      );
+      return tramosChocan(tramosNuevos, tramosCita);
+    });
     return !ocupada;
   });
 
@@ -315,7 +453,10 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
     personas,
     turnos: await listarTurnos(storeId),
     ausencias: await listarAusencias(storeId, dateIso),
-    citas
+    citas,
+    // B5.4: fases del servicio (una peluquera queda libre mientras el tinte reposa)
+    fases: await fasesPorServicio(storeId),
+    margen: await margenRelleno(storeId)
   };
   const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
@@ -325,7 +466,9 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
 
     // 1) ¿Hay alguien libre? (si no hay equipo dado de alta, no se filtra)
     if (personas.length) {
-      const { libres } = await disponibilidadEnRango(storeId, hueco.startIso, hueco.endIso, zone, cache);
+      const { libres } = await disponibilidadEnRango(
+        storeId, hueco.startIso, hueco.endIso, zone, cache, serviceId
+      );
       if (!libres.length) continue;
       hueco = { ...hueco, personasLibres: libres.length };
     }
@@ -356,7 +499,7 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
  * (reparto equilibrado). Devuelve el id o null (sin equipo → sin asignar,
  * que es como funciona hoy).
  */
-async function elegirPersonaLibre(storeId, inicioIso, finIso, zone) {
+async function elegirPersonaLibre(storeId, inicioIso, finIso, zone, serviceId = null) {
   const { usarEquipo } = await ajustesTienda(storeId);
   if (!usarEquipo) return null;              // sin gestión por profesional
   const dateIso = DateTime.fromISO(inicioIso, { zone }).toISODate();
@@ -364,9 +507,13 @@ async function elegirPersonaLibre(storeId, inicioIso, finIso, zone) {
     personas: await listarPersonas(storeId),
     turnos: await listarTurnos(storeId),
     ausencias: await listarAusencias(storeId, dateIso),
-    citas: await citasDelDia(storeId, dateIso, zone)
+    citas: await citasDelDia(storeId, dateIso, zone),
+    fases: await fasesPorServicio(storeId),
+    margen: await margenRelleno(storeId)
   };
-  const { libres, hayEquipo } = await disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache);
+  const { libres, hayEquipo } = await disponibilidadEnRango(
+    storeId, inicioIso, finIso, zone, cache, serviceId
+  );
   if (!hayEquipo || !libres.length) return null;
 
   const carga = (id) => cache.citas.filter((c) => c.resource_id === id).length;
@@ -710,6 +857,11 @@ module.exports = {
   guardarAjustes,
   pasoHuecos,
   guardarPasoHuecos,
+  usarFases,
+  fasesPorServicio,
+  tramosActivos,
+  margenRelleno,
+  guardarMargenRelleno,
   hayEquipoActivo,
   crearAparato,
   actualizarAparato,

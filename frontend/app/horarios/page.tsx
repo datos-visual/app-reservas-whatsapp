@@ -31,6 +31,8 @@ export default function HorariosPage() {
   const [guardando, setGuardando] = useState(false);
   // Rejilla: cada cuántos minutos puede empezar una cita (0 = bloques)
   const [paso, setPaso] = useState(30);
+  // Colchón al encajar una cita en el hueco de espera de otra (B5.4)
+  const [margen, setMargen] = useState(5);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -61,6 +63,9 @@ export default function HorariosPage() {
         if (body.paso_huecos_min !== undefined && body.paso_huecos_min !== null) {
           setPaso(Number(body.paso_huecos_min));
         }
+        if (body.margen_relleno_min !== undefined && body.margen_relleno_min !== null) {
+          setMargen(Number(body.margen_relleno_min));
+        }
       } else setError('No se pudo cargar el horario.');
       if (rc.ok) setCierres((await rc.json()).closures || []);
     } catch {
@@ -80,7 +85,7 @@ export default function HorariosPage() {
     try {
       const r = await apiFetch('/api/business-hours', {
         method: 'PUT',
-        body: JSON.stringify({ hours: dias, paso_huecos_min: paso })
+        body: JSON.stringify({ hours: dias, paso_huecos_min: paso, margen_relleno_min: margen })
       });
       const body = await r.json().catch(() => null);
       if (!r.ok) {
@@ -89,6 +94,7 @@ export default function HorariosPage() {
       }
       setDias(body.hours || []);
       if (body.paso_huecos_min !== undefined) setPaso(Number(body.paso_huecos_min));
+      if (body.margen_relleno_min !== undefined) setMargen(Number(body.margen_relleno_min));
       setConfigurado(true);
       setAviso('Horario guardado ✓');
       setTimeout(() => setAviso(''), 2500);
@@ -221,6 +227,24 @@ export default function HorariosPage() {
               <p className="ca-hint mt-1">
                 Con media hora, un servicio de 2 h 30 en un sábado de 10:00 a 14:00 se ofrece a las
                 10:00, 10:30, 11:00 y 11:30. En bloques solo se ofrecería las 10:00.
+              </p>
+            </div>
+            <div className="mt-4 border-t border-[#f0efe9] pt-4">
+              <label className="mb-1 block text-sm font-medium text-slate-900">
+                Margen al encajar una cita en un hueco de espera
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={0} max={60} step={5}
+                  className="ca-input w-24"
+                  value={margen}
+                  onChange={(e) => setMargen(parseInt(e.target.value, 10) || 0)}
+                />
+                <span className="text-sm text-slate-600">minutos</span>
+              </div>
+              <p className="ca-hint mt-1">
+                Colchón para no llegar justas: lo que se cuele mientras reposa un tinte
+                terminará con este margen antes de volver a la clienta.
               </p>
             </div>
             <button

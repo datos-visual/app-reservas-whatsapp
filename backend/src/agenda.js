@@ -95,22 +95,51 @@ async function agendaDelDia(storeId, dateIso) {
   if (error) throw error;
 
   const horario = await getDayHours(storeId, dia.toISODate());
+
+  // B5.4: fases. Para la dueña es información de oro: saber que Marta tiene
+  // 45 minutos libres mientras reposa el tinte de las 11:00 es lo que le
+  // permite colar un corte por teléfono sin liarse.
+  const fases = await equipo.fasesPorServicio(storeId);
+  const margen = await equipo.margenRelleno(storeId);
+
   return {
     fecha: dia.toISODate(),
     cerrado: !!horario.isClosed,
     motivo_cierre: horario.motivo || null,
     horario: horario.isClosed ? null : { abre: horario.openTime, cierra: horario.closeTime },
-    citas: (data || []).map((c) => ({
-      id: c.id,
-      start_at: c.start_at,
-      end_at: c.end_at,
-      status: c.status,
-      source: c.source,
-      cliente: c.customers?.name || null,
-      telefono: c.customers?.phone || null,
-      servicio: c.services?.name || null,
-      profesional: c.resources?.name || null   // null = sin asignar (o sin equipo)
-    }))
+    margen_relleno_min: margen,
+    citas: (data || []).map((c) => {
+      const ini = DateTime.fromISO(c.start_at, { zone });
+      const fin = DateTime.fromISO(c.end_at, { zone });
+      const f = fases.get(Number(c.service_id)) || null;
+      const tramos = equipo.tramosActivos(ini, fin, f);
+      const conFases = !!f && tramos.length === 2;
+
+      return {
+        id: c.id,
+        start_at: c.start_at,
+        end_at: c.end_at,
+        status: c.status,
+        source: c.source,
+        cliente: c.customers?.name || null,
+        telefono: c.customers?.phone || null,
+        servicio: c.services?.name || null,
+        profesional: c.resources?.name || null,  // null = sin asignar (o sin equipo)
+        // Franjas en las que la profesional TRABAJA en esta cita
+        tramos: tramos.map((t) => ({ desde: t.inicio.toFormat('HH:mm'), hasta: t.fin.toFormat('HH:mm') })),
+        // Hueco en el que queda libre (mientras la clienta espera)
+        hueco_libre: conFases
+          ? {
+              desde: tramos[0].fin.plus({ minutes: margen }).toFormat('HH:mm'),
+              hasta: tramos[1].inicio.minus({ minutes: margen }).toFormat('HH:mm'),
+              minutos: Math.max(
+                0,
+                Math.round(tramos[1].inicio.diff(tramos[0].fin, 'minutes').minutes) - margen * 2
+              )
+            }
+          : null
+      };
+    })
   };
 }
 
@@ -164,7 +193,7 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
   }
   // Con equipo, "ocupado" = no queda nadie libre; sin equipo, la regla de
   // siempre (una cita por hora). Mismo criterio que el bot.
-  const personaAsignada = await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone);
+  const personaAsignada = await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone, servicio?.id ?? null);
   const conEquipo = await equipo.hayEquipoActivo(storeId);
   if (conEquipo ? !personaAsignada : !!(await getConfirmedAppointmentByStart(storeId, inicio.toISO()))) {
     throw errorValidacion(conEquipo

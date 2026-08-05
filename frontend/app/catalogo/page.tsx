@@ -19,16 +19,25 @@ type Servicio = {
   is_active: boolean;
   sort_order: number;
   recursos?: number[];
+  // B5.4 — tramos: trabajo inicial · espera (profesional libre) · trabajo final
+  trabajo_inicial_min?: number;
+  espera_min?: number;
+  trabajo_final_min?: number;
 };
 type Aparato = { id: number; name: string; units: number };
 
 const inputCls =
   'w-full ca-input focus:border-[#0f7a4f] focus:outline-none';
 
+const sumaTramos = (s: Partial<Servicio>) =>
+  (s.trabajo_inicial_min ?? 0) + (s.espera_min ?? 0) + (s.trabajo_final_min ?? 0);
+
 export default function CatalogoPage() {
   const router = useRouter();
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [aparatos, setAparatos] = useState<Aparato[]>([]);
+  // Premium «fases_servicio»: si no está contratada/activa, ni se enseña
+  const [fasesActivas, setFasesActivas] = useState(false);
   const [edits, setEdits] = useState<Record<number, Partial<Servicio>>>({});
   const [nuevo, setNuevo] = useState({ name: '', duration_minutes: 30, price_eur: '', description: '' });
   const [error, setError] = useState('');
@@ -62,6 +71,7 @@ export default function CatalogoPage() {
       const body = await r.json();
       setServicios(body.services || []);
       setAparatos(body.aparatos || []);
+      setFasesActivas(body.fases_activas === true);
       setEdits({});
       setError('');
     } catch {
@@ -200,6 +210,49 @@ export default function CatalogoPage() {
                       />
                     </div>
                   </div>
+                  {/* B5.4 — Fases: el tinte ocupa el puesto 90 min pero a la
+                      peluquera solo al principio y al final. */}
+                  {fasesActivas && (
+                  <div className="mt-3 border-t border-[#f0efe9] pt-3">
+                    <p className="mb-2 text-xs text-slate-500">
+                      ¿La clienta pasa un rato esperando sin que la atiendan? (tinte, mechas,
+                      permanente). Rellena los tres tramos y podrás atender a otra persona
+                      mientras tanto. Déjalos en 0 si se trabaja sin parar.
+                    </p>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="text-xs text-slate-500">
+                        <span className="mb-1 block">Trabajo inicial</span>
+                        <input
+                          className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
+                          value={v.trabajo_inicial_min ?? 0}
+                          onChange={(ev) => editar(s.id, 'trabajo_inicial_min', parseInt(ev.target.value, 10) || 0)}
+                        />
+                      </label>
+                      <label className="text-xs text-slate-500">
+                        <span className="mb-1 block">Espera (libre)</span>
+                        <input
+                          className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
+                          value={v.espera_min ?? 0}
+                          onChange={(ev) => editar(s.id, 'espera_min', parseInt(ev.target.value, 10) || 0)}
+                        />
+                      </label>
+                      <label className="text-xs text-slate-500">
+                        <span className="mb-1 block">Trabajo final</span>
+                        <input
+                          className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
+                          value={v.trabajo_final_min ?? 0}
+                          onChange={(ev) => editar(s.id, 'trabajo_final_min', parseInt(ev.target.value, 10) || 0)}
+                        />
+                      </label>
+                      <p className={`text-xs ${sumaTramos(v) === v.duration_minutes || (v.espera_min ?? 0) === 0 ? 'text-slate-500' : 'text-amber-700'}`}>
+                        {(v.espera_min ?? 0) === 0
+                          ? 'Trabajo continuo'
+                          : `Suman ${sumaTramos(v)} min · el servicio dura ${v.duration_minutes}`}
+                      </p>
+                    </div>
+                  </div>
+                  )}
+
                   {aparatos.length > 0 && (
                     <div className="mt-3 border-t border-[#f0efe9] pt-3">
                       <p className="mb-2 text-xs text-slate-500">

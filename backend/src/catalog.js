@@ -42,6 +42,35 @@ function validarServicio(data, { parcial = false } = {}) {
     if (!MODOS.includes(data.mode)) throw err(`El modo debe ser uno de: ${MODOS.join(', ')}.`);
     out.mode = data.mode;
   }
+  // B5.4 — Fases: trabajo inicial · espera · trabajo final.
+  // La espera es el tiempo en que la clienta ocupa el puesto pero la
+  // profesional queda libre (el tinte reposando). Con espera 0 el servicio
+  // es de trabajo continuo, que es como se ha comportado siempre.
+  const fases = ['trabajo_inicial_min', 'espera_min', 'trabajo_final_min'];
+  for (const campo of fases) {
+    if (data[campo] === undefined) continue;
+    const v = data[campo] === '' || data[campo] === null ? 0 : parseInt(data[campo], 10);
+    if (!Number.isInteger(v) || v < 0 || v > 480) throw err('Los tramos deben ser minutos entre 0 y 480.');
+    out[campo] = v;
+  }
+  // Si se tocan las fases, los tres tramos tienen que sumar la duración: si
+  // no cuadran, el motor no sabría cuándo está libre la profesional y
+  // acabaría ofreciendo huecos que no existen.
+  if (fases.some((c) => out[c] !== undefined)) {
+    const ini = out.trabajo_inicial_min ?? data.trabajo_inicial_min_actual ?? 0;
+    const esp = out.espera_min ?? data.espera_min_actual ?? 0;
+    const fin = out.trabajo_final_min ?? data.trabajo_final_min_actual ?? 0;
+    const dur = out.duration_minutes ?? parseInt(data.duration_minutes_actual, 10);
+    if (esp > 0) {
+      if (!Number.isInteger(dur)) throw err('Para usar tramos hay que conocer la duración del servicio.');
+      if (ini + esp + fin !== dur) {
+        throw err(`Los tramos suman ${ini + esp + fin} min y el servicio dura ${dur}. Deben coincidir.`);
+      }
+      if (ini <= 0 || fin <= 0) {
+        throw err('Con tiempo de espera hay que indicar trabajo al principio y al final.');
+      }
+    }
+  }
   if (data.is_active !== undefined) out.is_active = data.is_active === true;
   if (data.sort_order !== undefined) {
     const s = parseInt(data.sort_order, 10);
@@ -83,7 +112,27 @@ async function createService(storeId, data) {
 
 /** Actualiza campos whitelist. Devuelve el servicio o null si no es de la tienda. */
 async function updateService(storeId, serviceId, data) {
-  const campos = validarServicio(data, { parcial: true });
+  // Para validar los tramos hace falta la foto actual del servicio: si solo
+  // llega "espera_min", hay que comprobarlo contra la duración y los tramos
+  // que ya tenía guardados.
+  const { data: actual } = await supabase
+    .from('services')
+    .select('duration_minutes, trabajo_inicial_min, espera_min, trabajo_final_min')
+    .eq('store_id', storeId)
+    .eq('id', serviceId)
+    .maybeSingle();
+
+  const conContexto = actual
+    ? {
+        ...data,
+        duration_minutes_actual: actual.duration_minutes,
+        trabajo_inicial_min_actual: actual.trabajo_inicial_min,
+        espera_min_actual: actual.espera_min,
+        trabajo_final_min_actual: actual.trabajo_final_min
+      }
+    : data;
+
+  const campos = validarServicio(conContexto, { parcial: true });
   if (!Object.keys(campos).length) {
     const e = new Error('Nada que actualizar.');
     e.code = 'VALIDACION';

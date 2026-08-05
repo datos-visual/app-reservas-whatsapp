@@ -20,6 +20,9 @@ type Cita = {
   telefono: string | null;
   servicio: string | null;
   profesional: string | null;
+  // B5.4 — tramos en los que la profesional trabaja y hueco en el que queda libre
+  tramos?: { desde: string; hasta: string }[];
+  hueco_libre?: { desde: string; hasta: string; minutos: number } | null;
 };
 type Agenda = {
   fecha: string;
@@ -281,6 +284,21 @@ export default function AgendaPage() {
                             ? <span className="ca-badge-mute">apuntada por ti</span>
                             : <span className="ca-badge-ok">por WhatsApp</span>}
                         </p>
+                        {/* B5.4: un tinte ocupa el puesto todo el rato, pero a
+                            la profesional solo al principio y al final. */}
+                        {c.hueco_libre && c.tramos?.length === 2 && (
+                          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                            <span className="text-slate-500">
+                              {c.profesional || 'La profesional'} trabaja{' '}
+                              {c.tramos[0].desde}–{c.tramos[0].hasta} y {c.tramos[1].desde}–{c.tramos[1].hasta}
+                            </span>
+                            {c.hueco_libre.minutos > 0 && (
+                              <span className="ca-badge bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                                libre {c.hueco_libre.desde}–{c.hueco_libre.hasta} ({c.hueco_libre.minutos} min)
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

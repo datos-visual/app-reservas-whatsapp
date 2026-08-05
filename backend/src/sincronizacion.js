@@ -206,14 +206,61 @@ async function reconciliarDia(storeId, dateIso, eventos, zone) {
 }
 
 /**
+ * Quita de la lista los eventos que son citas NUESTRAS con profesional
+ * asignada, porque a esas las modelamos con muchísima más precisión que un
+ * bloque opaco en el calendario: la persona solo está ocupada en sus tramos
+ * de trabajo (B5.4) y el sillón cuenta por unidades (B5.2). Si se dejaran,
+ * un tinte taparía 90 minutos enteros y el hueco de espera no se ofrecería
+ * jamás.
+ *
+ * Se conservan SIEMPRE:
+ *   · los eventos ajenos (la dueña se bloquea el médico) → siguen tapando
+ *   · nuestras citas SIN profesional asignada → nadie las filtraría después
+ *
+ * Y solo se aplica si la tienda gestiona equipo; si no, todo igual que antes.
+ */
+async function filtrarEventosPropios(storeId, eventos, dateIso, zone) {
+  try {
+    if (!eventos?.length) return eventos;
+    const equipo = require('./equipo');
+    if (!(await equipo.hayEquipoActivo(storeId))) return eventos;
+
+    const tz = zone || 'Europe/Madrid';
+    const dia = DateTime.fromISO(dateIso, { zone: tz }).startOf('day');
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('google_event_id')
+      .eq('store_id', storeId)
+      .eq('status', 'confirmed')
+      .not('google_event_id', 'is', null)
+      .not('resource_id', 'is', null)
+      .gte('start_at', dia.toUTC().toISO())
+      .lt('start_at', dia.plus({ days: 1 }).toUTC().toISO());
+    if (error || !data?.length) return eventos;
+
+    const propios = new Set(data.map((c) => c.google_event_id));
+    const visibles = eventos.filter((e) => !propios.has(e.id));
+    // P1 (⭐ compactar agenda) necesita saber dónde hay citas aunque ya no
+    // tapen: se cuelga la lista completa para puntuar la adyacencia.
+    Object.defineProperty(visibles, 'todos', { value: eventos, enumerable: false });
+    return visibles;
+  } catch (err) {
+    // Ante la duda, que bloqueen: mejor ofrecer de menos que doblar una cita
+    console.warn('[Sync] No se pudieron separar los eventos propios', { storeId, message: err?.message });
+    return eventos;
+  }
+}
+
+/**
  * Sustituto de `listEventsForDay` en todos los caminos de disponibilidad:
- * devuelve los mismos eventos, pero de paso limpia las citas huérfanas.
+ * reconcilia los borrados hechos en Google y devuelve los eventos que de
+ * verdad deben tapar huecos.
  */
 async function eventosDelDia(storeId, dateIso, zone) {
   const { listEventsForDay } = require('./calendar');
   const eventos = await listEventsForDay(storeId, dateIso, zone);
   await reconciliarDia(storeId, dateIso, eventos, zone);
-  return eventos;
+  return filtrarEventosPropios(storeId, eventos, dateIso, zone);
 }
 
 /** Tiendas con calendario conectado (las únicas que hay que reconciliar). */

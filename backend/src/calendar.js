@@ -185,13 +185,21 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
   const start = day.set({ hour: openH, minute: openM || 0, second: 0, millisecond: 0 });
   const end = day.set({ hour: closeH, minute: closeM || 0, second: 0, millisecond: 0 });
 
-  const busyRanges = events.map((e) => {
+  const aRango = (e) => {
     const startIso = e.start.dateTime || e.start.date;
     const endIso = e.end.dateTime || e.end.date;
-    const s = DateTime.fromISO(startIso, { setZone: true }).setZone(tz);
-    const t = DateTime.fromISO(endIso, { setZone: true }).setZone(tz);
-    return { start: s, end: t };
-  });
+    return {
+      start: DateTime.fromISO(startIso, { setZone: true }).setZone(tz),
+      end: DateTime.fromISO(endIso, { setZone: true }).setZone(tz)
+    };
+  };
+
+  // Lo que TAPA un hueco. Ojo: cuando la tienda gestiona equipo, sus propias
+  // citas no vienen en esta lista (las filtra sincronizacion.js) porque se
+  // calculan con precisión por persona y por aparato.
+  const busyRanges = events.map(aRango);
+  // Lo que hay en la agenda AUNQUE no tape: solo para puntuar adyacencia (P1)
+  const rangosAgenda = (events.todos || events).map(aRango);
 
   // [F] No ofrecer huecos ya pasados: si el día solicitado es hoy (en la
   // timezone de la tienda), solo se ofrecen slots que empiecen después de ahora.
@@ -213,7 +221,7 @@ function generateSlots(dateIso, events, { zone, openTime, closeTime, slotDuratio
       // Puntuación de adyacencia (P1): +1 si el hueco empieza justo cuando
       // termina una cita, +1 si termina justo cuando empieza otra.
       let adyacencia = 0;
-      for (const r of busyRanges) {
+      for (const r of rangosAgenda) {
         if (r.end.toMillis() === cursor.toMillis()) adyacencia++;
         if (r.start.toMillis() === slotEnd.toMillis()) adyacencia++;
       }

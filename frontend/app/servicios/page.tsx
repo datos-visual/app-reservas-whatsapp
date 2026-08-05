@@ -41,6 +41,11 @@ const ETIQUETAS: Record<string, { nombre: string; descripcion: string }> = {
     nombre: 'Modo oferta',
     descripcion: 'Rellena huecos de última hora avisando a clientas interesadas.'
   },
+  fases_servicio: {
+    nombre: 'Aprovechar los tiempos de espera',
+    descripcion:
+      'Mientras reposa un tinte, quien lo atiende queda libre y el asistente puede vender ese hueco. Los minutos de cada servicio se ponen en Servicios → tramos.'
+  },
   elegir_profesional: {
     nombre: 'Elegir profesional',
     descripcion: 'Tus clientas podrán pedir cita con quien quieran, y la confirmación dirá con quién es.'

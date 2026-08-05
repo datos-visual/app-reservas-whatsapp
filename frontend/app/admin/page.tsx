@@ -27,6 +27,7 @@ type Tienda = {
 
 const FLAGS: { key: string; label: string }[] = [
   { key: 'smart_slots', label: 'Compactación de agenda (P1)' },
+  { key: 'fases_servicio', label: 'Aprovechar tiempos de espera (B5.4)' },
   { key: 'waitlist', label: 'Lista de espera (P3)' },
   { key: 'reactivation', label: 'Reactivación por ciclo (P2)' },
   { key: 'post_sale', label: 'Post-servicio 48 h (P6)' },

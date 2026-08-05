@@ -1310,7 +1310,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // sin equipo, la de siempre: "no hay ninguna cita a esa hora".
     // (Antes se preguntaba siempre lo segundo, y con dos peluqueras eso
     //  rechazaba la segunda cita de la misma hora — bug real 3-ago-2026.)
-    const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone);
+    const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone, current.serviceId ?? null);
     const conEquipo = await equipo.hayEquipoActivo(storeId);
 
     const ocupado = conEquipo
@@ -2470,13 +2470,14 @@ app.get('/api/equipo', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const [completo, aparatos, ajustes, sincronizarCalendar] = await Promise.all([
+    const [completo, aparatos, ajustes, sincronizarCalendar, fases] = await Promise.all([
       equipo.equipoCompleto(storeId),
       equipo.listarAparatos(storeId, { soloActivos: false }),
       equipo.ajustesTienda(storeId),
-      sincronizacion.sincronizacionActiva(storeId)
+      sincronizacion.sincronizacionActiva(storeId),
+      equipo.usarFases(storeId)
     ]);
-    res.json({ ...completo, aparatos, ajustes: { ...ajustes, sincronizarCalendar } });
+    res.json({ ...completo, aparatos, ajustes: { ...ajustes, sincronizarCalendar, usarFases: fases } });
   } catch (err) {
     console.error('[API] Error en GET /api/equipo', err);
     res.status(500).json({ error: 'Error leyendo el equipo (¿migración de equipo aplicada?)' });
@@ -2497,8 +2498,11 @@ app.put('/api/equipo/ajustes', async (req, res) => {
       usarEquipo: req.body?.usar_equipo,
       usarAparatos: req.body?.usar_aparatos
     });
-    const sincronizarCalendar = await sincronizacion.sincronizacionActiva(storeId);
-    res.json({ ...(r || {}), sincronizarCalendar });
+    const [sincronizarCalendar, fases] = await Promise.all([
+      sincronizacion.sincronizacionActiva(storeId),
+      equipo.usarFases(storeId)
+    ]);
+    res.json({ ...(r || {}), sincronizarCalendar, usarFases: fases });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error guardando ajustes de disponibilidad', err);
@@ -2848,14 +2852,15 @@ app.get('/api/business-hours', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const [hours, configured, paso] = await Promise.all([
+    const [hours, configured, paso, margen] = await Promise.all([
       listBusinessHours(storeId),
       hasBusinessHours(storeId),
-      equipo.pasoHuecos(storeId)
+      equipo.pasoHuecos(storeId),
+      equipo.margenRelleno(storeId)
     ]);
     // configured=false ⇒ los 7 días son propuestas, NO están guardados:
     // el bot no dará citas hasta que la tienda pulse Guardar.
-    res.json({ hours, configured, paso_huecos_min: paso });
+    res.json({ hours, configured, paso_huecos_min: paso, margen_relleno_min: margen });
   } catch (err) {
     console.error('[API] Error en GET /api/business-hours', err);
     res.status(500).json({ error: 'Error leyendo el horario' });
@@ -2872,7 +2877,15 @@ app.put('/api/business-hours', async (req, res) => {
     if (req.body?.paso_huecos_min !== undefined) {
       paso = await equipo.guardarPasoHuecos(storeId, req.body.paso_huecos_min);
     }
-    res.json({ hours, paso_huecos_min: paso ?? (await equipo.pasoHuecos(storeId)) });
+    let margen;
+    if (req.body?.margen_relleno_min !== undefined) {
+      margen = await equipo.guardarMargenRelleno(storeId, req.body.margen_relleno_min);
+    }
+    res.json({
+      hours,
+      paso_huecos_min: paso ?? (await equipo.pasoHuecos(storeId)),
+      margen_relleno_min: margen ?? (await equipo.margenRelleno(storeId))
+    });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error en PUT /api/business-hours', err);
@@ -2932,15 +2945,17 @@ app.get('/api/services', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const [services, requisitos, aparatos] = await Promise.all([
+    const [services, requisitos, aparatos, fasesActivas] = await Promise.all([
       catalog.listServices(storeId),
       equipo.requisitosPorServicio(storeId),
-      equipo.listarAparatos(storeId)
+      equipo.listarAparatos(storeId),
+      equipo.usarFases(storeId)     // premium: aprovechar tiempos de espera
     ]);
     // Cada servicio lleva qué aparatos necesita (B5.2)
     return res.json({
       services: services.map((s) => ({ ...s, recursos: requisitos.get(s.id) || [] })),
-      aparatos
+      aparatos,
+      fases_activas: fasesActivas
     });
   } catch (err) {
     console.error('[API] Error en GET /api/services', err);
