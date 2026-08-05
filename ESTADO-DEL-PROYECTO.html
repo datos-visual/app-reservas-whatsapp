@@ -86,11 +86,11 @@
 
   <div class="card p">
     <strong>Camino al primer piloto real</strong>
-    <div class="barra"><i style="width:82%"></i></div>
-    <div class="sub">82% · El motor de agenda ya es de categoría profesional. Lo que falta no es código: es legal, comercial y <strong>probarlo con una peluquería de verdad</strong></div>
+    <div class="barra"><i style="width:85%"></i></div>
+    <div class="sub">85% · El motor y el panel ya son de categoría profesional. Lo que falta no es código: es legal, comercial y <strong>probarlo con una peluquería de verdad</strong></div>
     <div class="kpis" style="margin-top:18px">
       <div class="kpi"><div class="n">100%</div><div class="l">Bot de WhatsApp</div><div class="foot">probado con clientas reales</div></div>
-      <div class="kpi"><div class="n">92%</div><div class="l">Panel del negocio</div><div class="foot">faltan métricas</div></div>
+      <div class="kpi"><div class="n">96%</div><div class="l">Panel del negocio</div><div class="foot">faltan métricas</div></div>
       <div class="kpi"><div class="n">95%</div><div class="l">Tu backoffice</div><div class="foot">altas de punta a punta</div></div>
       <div class="kpi"><div class="n">3 / 8</div><div class="l">Servicios premium</div><div class="foot">el resto, solo el interruptor</div></div>
       <div class="kpi"><div class="n">0%</div><div class="l">Cobro y RGPD</div><div class="foot">imprescindible para facturar</div></div>
@@ -100,9 +100,9 @@
   <div class="card p" style="border-left:4px solid var(--ambar);margin-top:16px">
     <strong>Lo más urgente ahora mismo</strong>
     <p style="margin:6px 0 0;color:var(--gris);font-size:13.5px">
-      Todo lo de los últimos dos días está probado ejecutando la lógica con datos de prueba,
+      Todo lo de los últimos días está probado ejecutando la lógica con datos de prueba,
       pero <strong>nada de ello ha pasado todavía por una peluquería real</strong>: ni los aparatos,
-      ni los tiempos de espera, ni dos profesionales atendiendo a la vez.
+      ni los tiempos de espera, ni dos profesionales atendiendo a la vez, ni la nueva agenda en rejilla.
       Antes de añadir una función más, toca sentarse con dos móviles y probarlo entero.
     </p>
   </div>
@@ -118,8 +118,8 @@
     <div class="card p area">
       <span class="pct" style="color:var(--verde)">90%</span>
       <h3>Panel de la peluquería</h3>
-      <p>Agenda del día, citas por teléfono, equipo con turnos y vacaciones, aparatos, catálogo con tramos, horarios y rejilla, plan contratado.</p>
-      <p style="margin-top:8px"><span class="tag ok">en uso</span> <span class="tag wip">faltan métricas</span></p>
+      <p>Agenda en rejilla por profesional, citas por teléfono, ratos bloqueados, equipo con turnos y vacaciones, aparatos, catálogo con tramos, horarios y plan contratado.</p>
+      <p style="margin-top:8px"><span class="tag ok">rediseñado</span> <span class="tag wip">faltan métricas</span></p>
     </div>
     <div class="card p area">
       <span class="pct" style="color:var(--verde)">95%</span>
@@ -189,6 +189,8 @@
         <div class="x">Citas por teléfono desde el panel con aviso automático, interfaz nueva clara y con navegación, y varias profesionales trabajando a la vez con turnos, vacaciones y reparto automático.</div></div>
       <div class="hito"><div class="d">4-5 AGOSTO</div><div class="t">La agenda se vuelve profesional</div>
         <div class="x">Tres hallazgos suyos, tres arreglos de fondo: borrar una cita en Google Calendar ya libera el hueco; las horas se ofrecen cada 30 minutos en vez de en bloques (un sábado con mechas ofrecía <em>una sola</em> hora cuando había cuatro libres); y un tinte deja de bloquear a la peluquera mientras reposa, así que ese rato puede venderse. Esto último pasa a ser servicio premium.</div></div>
+      <div class="hito"><div class="d">5 AGOSTO</div><div class="t">El panel se pone a la altura</div>
+        <div class="x">Identidad visual propia —tinta cálida, un solo acento terracota, titulares en serif— y una agenda nueva en rejilla, con una columna por profesional. Lo que no se puede vender sale rayado, así que la pregunta «¿por qué no ofrece esa hora?» se responde mirando. Y las citas con tiempo de espera se pintan huecas por dentro: el hueco vendible se ve. Eso no lo tiene ninguno de los tres grandes del sector.</div></div>
       <div class="hito pend"><div class="d">PRÓXIMO</div><div class="t">Primer piloto real</div>
         <div class="x">Textos legales, un alta completa con cuentas de verdad y una peluquería usándolo de lunes a sábado.</div></div>
     </div>
@@ -201,7 +203,7 @@
       <ul class="limpio">
         <li><strong>Número de voz español</strong> (Twilio) → sin él no hay módulo de llamadas perdidas.</li>
         <li><strong>Aprobación de plantillas</strong> por Meta: 24-72 h por cada tienda nueva.</li>
-        <li><strong>Verificación de empresa</strong> en Meta, con documentación.</li>
+        <li><strong>Verificación de empresa</strong> en Meta: tarda días o semanas y hace falta sociedad constituida. Bloquea los límites de mensajes y, más adelante, el alta automática.</li>
       </ul>
     </div>
     <div class="card p">
@@ -209,6 +211,7 @@
       <ul class="limpio">
         <li>Aviso de privacidad y contrato de encargado del tratamiento (RGPD).</li>
         <li>Rotar el token de administrador y el de GitHub (salieron en capturas).</li>
+        <li>Constituir la sociedad (o decidir alta como autónomo): sin eso no hay verificación en Meta, ni contrato que firmar, ni factura que emitir.</li>
         <li>Encontrar la primera peluquería piloto — <em>el riesgo real ya no es técnico</em>.</li>
       </ul>
     </div>
