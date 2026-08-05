@@ -142,6 +142,7 @@ async function agendaDelDia(storeId, dateIso) {
         telefono: c.customers?.phone || null,
         servicio: c.services?.name || null,
         profesional: c.resources?.name || null,  // null = sin asignar (o sin equipo)
+        resource_id: c.resource_id ?? null,      // la rejilla coloca por columna
         // Franjas en las que la profesional TRABAJA en esta cita
         tramos: tramos.map((t) => ({ desde: t.inicio.toFormat('HH:mm'), hasta: t.fin.toFormat('HH:mm') })),
         // Hueco en el que queda libre (mientras la clienta espera)

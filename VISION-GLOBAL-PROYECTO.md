@@ -714,6 +714,48 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.59 SISTEMA VISUAL «editorial cálida» + rejilla de agenda (5-ago-2026)
+
+**Por qué se cambió:** el panel usaba verde `#0f7a4f` en títulos, botones,
+badges y horas a la vez. Un color que lo tiñe todo deja de señalar nada.
+
+**Sistema nuevo** (`frontend/app/globals.css`): tinta cálida `#1c1917` sobre
+fondo hueso `#faf9f6`, **un único acento terracota `#c2410c`** y tipografía
+Instrument Serif (solo titulares y marca) + Instrument Sans (todo lo demás),
+cargadas con `next/font` — se sirven desde nuestro dominio, sin peticiones del
+navegador de la clienta a Google.
+
+**REGLA DEL ACENTO, no negociable:** el terracota significa «esta es LA acción
+o el dato que exige actuar». Navegación activa, títulos y datos van en tinta.
+Si el acento vuelve a aparecer en cinco sitios de una pantalla, se ha roto el
+sistema.
+
+**Referencias estudiadas:** Fresha (disciplina y contención), GlossGenius
+(el rayado diagonal y la línea de «ahora»), Phorest (*Staff / Rooms /
+Machines* — valida nuestro modelo de aparatos). Descartados a conciencia:
+glassmorphism (pierde contraste con sol, envejece mal y castiga móviles
+viejos), un color por servicio (agotador ocho horas seguidas), temas por salón
+y fotos de clienta en las tarjetas.
+
+**Rejilla de agenda** (`components/RejillaAgenda.tsx` + `lib/rejilla.ts`):
+columna por profesional, tiempo en vertical, y dos ideas que valen más que
+todo lo estético:
+1. **Lo que no se puede vender se ve rayado** — fuera de turno, vacaciones y
+   ratos bloqueados con la misma trama. La pregunta «¿por qué no ofrece esa
+   hora?» se responde mirando, sin soporte.
+2. **Las citas con fases se pintan HUECAS** — el bloque ocupa el sillón dos
+   horas y media y enseña dentro la banda libre. Eso no lo tiene ninguno de
+   los tres competidores estudiados.
+
+La aritmética vive aparte en `lib/rejilla.ts` **precisamente para poder
+ejecutarla**: un error de minutos no da ningún error, solo pinta una cita en
+la hora equivocada. 14 reglas probadas, incluida la más delicada — *sin turnos
+declarados, disponible todo el día*, igual que el motor. Si la pantalla y el
+motor discrepasen, la peluquera dejaría de fiarse de su agenda.
+
+La vista (rejilla o lista) se recuerda en `localStorage`: un salón de una sola
+persona vive mejor con la lista.
+
 ### 10.58 B5.4 — FASES DEL SERVICIO (4-ago-2026)
 
 Lo que estaba marcado como "fuera de alcance consciente" en §10.55 ya está

@@ -9,6 +9,7 @@ import { apiFetch } from '../../lib/api';
 import { supabase } from '../../lib/supabaseClient';
 import AppShell from '../../components/AppShell';
 import { IconMas, IconAviso, IconCheck } from '../../components/icons';
+import RejillaAgenda from '../../components/RejillaAgenda';
 
 type Cita = {
   id: number;
@@ -20,6 +21,7 @@ type Cita = {
   telefono: string | null;
   servicio: string | null;
   profesional: string | null;
+  resource_id?: number | null;
   // B5.4 — tramos en los que la profesional trabaja y hueco en el que queda libre
   tramos?: { desde: string; hasta: string }[];
   hueco_libre?: { desde: string; hasta: string; minutos: number } | null;
@@ -34,7 +36,12 @@ type Agenda = {
   citas: Cita[];
 };
 type Servicio = { id: number; name: string; duration_minutes: number; is_active: boolean };
-type Persona = { id: number; name: string; is_active: boolean };
+type Turno = { weekday: number; open_time: string; close_time: string };
+type Ausencia = { start_date: string; end_date: string; reason: string | null };
+type Persona = {
+  id: number; name: string; is_active: boolean;
+  turnos?: Turno[]; ausencias?: Ausencia[];
+};
 
 const inputCls = 'ca-input';
 
@@ -52,6 +59,19 @@ export default function AgendaPage() {
   const [guardando, setGuardando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [bloqueo, setBloqueo] = useState({ hora: '', minutos: 30, motivo: '' });
+  // La rejilla es la vista natural de un salón con equipo; la lista se queda
+  // para quien trabaja sola, donde una columna única no aporta nada.
+  const [vista, setVista] = useState<'rejilla' | 'lista'>('rejilla');
+  const [seleccionada, setSeleccionada] = useState<Cita | null>(null);
+
+  useEffect(() => {
+    const v = localStorage.getItem('ca_vista_agenda');
+    if (v === 'lista' || v === 'rejilla') setVista(v);
+  }, []);
+  function cambiarVista(v: 'rejilla' | 'lista') {
+    setVista(v);
+    localStorage.setItem('ca_vista_agenda', v);
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -63,7 +83,7 @@ export default function AgendaPage() {
         if (r.ok) setServicios(((await r.json()).services || []).filter((s: Servicio) => s.is_active));
       });
       apiFetch('/api/equipo').then(async (r) => {
-        if (r.ok) setPersonas(((await r.json()).personas || []).filter((p: Persona) => p.is_active));
+        if (r.ok) setPersonas(((await r.json()).personas || []) as Persona[]);
       });
       cargar(fecha);
     });
@@ -288,6 +308,77 @@ export default function AgendaPage() {
             </p>
           )}
 
+          {/* Rejilla o lista: la elección se recuerda. Un salón de una sola
+              persona vive mejor con la lista; con equipo, la rejilla. */}
+          <div className="mb-3 inline-flex rounded-lg border border-[#e7e5de] bg-white p-0.5">
+            {(['rejilla', 'lista'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => cambiarVista(v)}
+                className={`rounded-[6px] px-3 py-1 text-xs capitalize transition ${
+                  vista === v ? 'bg-[#1c1917] text-white' : 'text-[#57534e] hover:text-[#1c1917]'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {vista === 'rejilla' && (
+            <>
+              <RejillaAgenda
+                fecha={agenda.fecha}
+                abre={agenda.horario?.abre ?? null}
+                cierra={agenda.horario?.cierra ?? null}
+                citas={agenda.citas}
+                bloqueos={agenda.bloqueos || []}
+                personas={personas}
+                onSeleccionar={(c) => setSeleccionada(c as Cita)}
+              />
+
+              {/* Detalle de la cita tocada: sin ventanas flotantes, que en
+                  móvil y con las manos mojadas son una tortura. */}
+              {seleccionada && (
+                <div className="ca-card-p mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[15px] text-[#1c1917]">
+                      <span className="ca-cifras">{hora(seleccionada.start_at)}–{hora(seleccionada.end_at)}</span>
+                      <span className="mx-2 text-[#d6d3cb]">·</span>
+                      {seleccionada.cliente || 'Sin nombre'}
+                      {seleccionada.servicio && <span className="text-[#57534e]"> · {seleccionada.servicio}</span>}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#8a8378]">
+                      {seleccionada.telefono}
+                      {seleccionada.profesional ? ` · con ${seleccionada.profesional}` : ' · sin asignar'}
+                      {seleccionada.hueco_libre && seleccionada.hueco_libre.minutos > 0
+                        ? ` · ${seleccionada.hueco_libre.minutos} min libres de ${seleccionada.hueco_libre.desde} a ${seleccionada.hueco_libre.hasta}`
+                        : ''}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {personas.filter((p) => p.is_active).length > 0 && (
+                      <select
+                        className="ca-input w-auto py-1.5 text-xs"
+                        value=""
+                        onChange={(e) => { reasignar(seleccionada.id, e.target.value); setSeleccionada(null); }}
+                      >
+                        <option value="">Cambiar a…</option>
+                        {personas.filter((p) => p.is_active).map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    <button onClick={() => { cancelar(seleccionada.id); setSeleccionada(null); }} className="ca-btn-danger ca-btn-sm">
+                      Cancelar cita
+                    </button>
+                    <button onClick={() => setSeleccionada(null)} className="ca-btn-ghost ca-btn-sm">Cerrar</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {vista === 'lista' && (
           <div className="ca-card overflow-hidden">
             {agenda.citas.filter((c) => c.status === 'confirmed').length === 0 && (
               <p className="px-5 py-10 text-center ca-hint">No hay citas este día.</p>
@@ -356,6 +447,7 @@ export default function AgendaPage() {
                 ))}
             </ul>
           </div>
+          )}
 
           <div className="ca-card-p mt-6">
             <h2 className="ca-h2">Ratos bloqueados</h2>
