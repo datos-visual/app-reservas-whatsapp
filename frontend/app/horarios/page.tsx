@@ -164,15 +164,15 @@ export default function HorariosPage() {
       {!cargando && (
         <>
           <section className="ca-card-p">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Horario semanal</p>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Horario semanal</p>
             <div className="space-y-2">
               {ORDEN.map((weekday) => {
                 const d = dias.find((x) => x.weekday === weekday);
                 if (!d) return null;
                 return (
-                  <div key={weekday} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e6e4de] px-3 py-2">
-                    <span className="w-24 text-sm text-slate-700">{NOMBRES[weekday]}</span>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-500">
+                  <div key={weekday} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e7e5de] px-3 py-2">
+                    <span className="w-24 text-sm text-[#44403c]">{NOMBRES[weekday]}</span>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-[#8a8378]">
                       <input
                         type="checkbox"
                         checked={!d.is_closed}
@@ -198,20 +198,20 @@ export default function HorariosPage() {
                           type="time" className={inputCls} value={d.open_time || '09:00'}
                           onChange={(e) => editarDia(weekday, { open_time: e.target.value })}
                         />
-                        <span className="text-slate-500">a</span>
+                        <span className="text-[#8a8378]">a</span>
                         <input
                           type="time" className={inputCls} value={d.close_time || '19:00'}
                           onChange={(e) => editarDia(weekday, { close_time: e.target.value })}
                         />
                       </div>
                     )}
-                    {d.is_closed && <span className="text-xs text-slate-500">Cerrado todo el día</span>}
+                    {d.is_closed && <span className="text-xs text-[#8a8378]">Cerrado todo el día</span>}
                   </div>
                 );
               })}
             </div>
-            <div className="mt-4 border-t border-[#f0efe9] pt-4">
-              <label className="mb-1 block text-sm font-medium text-slate-900">
+            <div className="mt-4 border-t border-[#f2f1ec] pt-4">
+              <label className="mb-1 block text-sm font-medium text-[#1c1917]">
                 ¿Cada cuánto pueden empezar las citas?
               </label>
               <select
@@ -229,8 +229,8 @@ export default function HorariosPage() {
                 10:00, 10:30, 11:00 y 11:30. En bloques solo se ofrecería las 10:00.
               </p>
             </div>
-            <div className="mt-4 border-t border-[#f0efe9] pt-4">
-              <label className="mb-1 block text-sm font-medium text-slate-900">
+            <div className="mt-4 border-t border-[#f2f1ec] pt-4">
+              <label className="mb-1 block text-sm font-medium text-[#1c1917]">
                 Margen al encajar una cita en un hueco de espera
               </label>
               <div className="flex items-center gap-2">
@@ -240,7 +240,7 @@ export default function HorariosPage() {
                   value={margen}
                   onChange={(e) => setMargen(parseInt(e.target.value, 10) || 0)}
                 />
-                <span className="text-sm text-slate-600">minutos</span>
+                <span className="text-sm text-[#57534e]">minutos</span>
               </div>
               <p className="ca-hint mt-1">
                 Colchón para no llegar justas: lo que se cuele mientras reposa un tinte
@@ -257,22 +257,22 @@ export default function HorariosPage() {
           </section>
 
           <section className="mt-6 ca-card-p">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
               Vacaciones y días cerrados
             </p>
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-3 text-xs text-[#8a8378]">
               Durante estas fechas el asistente no dará citas y avisará del motivo.
             </p>
 
             {cierres.length === 0 && (
-              <p className="mb-3 text-sm text-slate-500">No tienes cierres programados.</p>
+              <p className="mb-3 text-sm text-[#8a8378]">No tienes cierres programados.</p>
             )}
             <ul className="mb-4 space-y-2">
               {cierres.map((c) => (
-                <li key={c.id} className="flex items-center justify-between rounded-lg border border-[#e6e4de] px-3 py-2 text-sm">
-                  <span className="text-slate-700">
+                <li key={c.id} className="flex items-center justify-between rounded-lg border border-[#e7e5de] px-3 py-2 text-sm">
+                  <span className="text-[#44403c]">
                     {c.start_date === c.end_date ? fmt(c.start_date) : `${fmt(c.start_date)} → ${fmt(c.end_date)}`}
-                    {c.reason && <span className="ml-2 text-slate-500">({c.reason})</span>}
+                    {c.reason && <span className="ml-2 text-[#8a8378]">({c.reason})</span>}
                   </span>
                   <button
                     onClick={() => borrarCierre(c.id)}
@@ -286,21 +286,21 @@ export default function HorariosPage() {
 
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs text-slate-500">Desde</label>
+                <label className="mb-1 block text-xs text-[#8a8378]">Desde</label>
                 <input
                   type="date" className={inputCls} value={nuevo.start_date}
                   onChange={(e) => setNuevo({ ...nuevo, start_date: e.target.value })}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-500">Hasta (opcional)</label>
+                <label className="mb-1 block text-xs text-[#8a8378]">Hasta (opcional)</label>
                 <input
                   type="date" className={inputCls} value={nuevo.end_date}
                   onChange={(e) => setNuevo({ ...nuevo, end_date: e.target.value })}
                 />
               </div>
               <div className="grow">
-                <label className="mb-1 block text-xs text-slate-500">Motivo (opcional)</label>
+                <label className="mb-1 block text-xs text-[#8a8378]">Motivo (opcional)</label>
                 <input
                   className={`${inputCls} w-full`} placeholder="Vacaciones, festivo local…"
                   value={nuevo.reason}

@@ -58,15 +58,15 @@ export default function RegisterPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-xl border border-[#e6e4de] bg-white p-6">
+      <div className="w-full max-w-sm rounded-xl border border-[#e7e5de] bg-white p-6">
         <h1 className="mb-1 ca-h2">Crea tu cuenta</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-6 text-sm text-[#8a8378]">
           Paso 1 de 4 — después crearás tu negocio y conectarás tu calendario y WhatsApp.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs text-slate-500" htmlFor="email">Email</label>
+            <label className="mb-1 block text-xs text-[#8a8378]" htmlFor="email">Email</label>
             <input
               id="email" type="email" required autoComplete="email"
               value={email} onChange={(e) => setEmail(e.target.value)}
@@ -74,7 +74,7 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-500" htmlFor="password">Contraseña (mín. 8 caracteres)</label>
+            <label className="mb-1 block text-xs text-[#8a8378]" htmlFor="password">Contraseña (mín. 8 caracteres)</label>
             <input
               id="password" type="password" required autoComplete="new-password"
               value={password} onChange={(e) => setPassword(e.target.value)}
@@ -82,7 +82,7 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-500" htmlFor="password2">Repite la contraseña</label>
+            <label className="mb-1 block text-xs text-[#8a8378]" htmlFor="password2">Repite la contraseña</label>
             <input
               id="password2" type="password" required autoComplete="new-password"
               value={password2} onChange={(e) => setPassword2(e.target.value)}
@@ -90,7 +90,7 @@ export default function RegisterPage() {
             />
           </div>
 
-          {error && <p className="text-xs text-amber-700">{error}</p>}
+          {error && <p className="text-xs text-[#9a3412]">{error}</p>}
 
           <button
             type="submit" disabled={loading}
@@ -100,7 +100,7 @@ export default function RegisterPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[#8a8378]">
           ¿Ya tienes cuenta?{' '}
           <Link href="/login" className="text-blue-400 hover:underline">Inicia sesión</Link>
         </p>

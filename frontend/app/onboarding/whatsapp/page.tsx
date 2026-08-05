@@ -77,9 +77,9 @@ export default function OnboardingWhatsappPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="w-full max-w-md rounded-xl border border-[#e6e4de] bg-white p-6">
+      <div className="w-full max-w-md rounded-xl border border-[#e7e5de] bg-white p-6">
         <h1 className="mb-1 ca-h2">Conecta tu WhatsApp</h1>
-        <p className="mb-4 text-sm text-slate-500">
+        <p className="mb-4 text-sm text-[#8a8378]">
           Paso 4 de 4 — los datos de WhatsApp Cloud API de tu número. Si aún no
           los tienes, el equipo de CanalAgenda te ayuda a conseguirlos en la
           llamada de instalación.
@@ -87,7 +87,7 @@ export default function OnboardingWhatsappPage() {
 
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs text-slate-500">Identificador del número (phone_number_id) *</label>
+            <label className="mb-1 block text-xs text-[#8a8378]">Identificador del número (phone_number_id) *</label>
             <input
               required value={phoneNumberId} onChange={(e) => { setPhoneNumberId(e.target.value); setSaved(false); }}
               placeholder="115205..."
@@ -95,7 +95,7 @@ export default function OnboardingWhatsappPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-500">
+            <label className="mb-1 block text-xs text-[#8a8378]">
               Token de acceso permanente {saved ? '(guardado; pega uno nuevo solo para cambiarlo)' : '*'}
             </label>
             <input
@@ -106,16 +106,16 @@ export default function OnboardingWhatsappPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-500">ID de la cuenta de WhatsApp Business (waba_id, opcional)</label>
+            <label className="mb-1 block text-xs text-[#8a8378]">ID de la cuenta de WhatsApp Business (waba_id, opcional)</label>
             <input
               value={wabaId} onChange={(e) => setWabaId(e.target.value)}
               className="ca-input"
             />
           </div>
 
-          {error && <p className="text-xs text-amber-700">{error}</p>}
+          {error && <p className="text-xs text-[#9a3412]">{error}</p>}
           {testResult && (
-            <p className={`text-xs ${testResult.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+            <p className={`text-xs ${testResult.ok ? 'text-[#2f5d3f]' : 'text-[#9a3412]'}`}>
               {testResult.ok
                 ? `Conexión correcta ✓ ${testResult.display_phone_number || ''} ${testResult.verified_name ? `(${testResult.verified_name})` : ''}`
                 : testResult.error}
@@ -131,7 +131,7 @@ export default function OnboardingWhatsappPage() {
             </button>
             <button
               type="button" onClick={handleTest} disabled={!saved || testing}
-              className="rounded-md border border-[#d9d7d0] px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-md border border-[#d6d3cb] px-4 py-2 text-sm text-[#44403c] transition hover:bg-[#faf9f6] disabled:opacity-50"
             >
               {testing ? 'Probando…' : 'Probar conexión'}
             </button>
@@ -141,7 +141,7 @@ export default function OnboardingWhatsappPage() {
             type="button"
             onClick={() => router.push('/')}
             disabled={!saved}
-            className="w-full rounded-md border border-emerald-700 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-900/30 disabled:opacity-50"
+            className="w-full rounded-md border border-[#2f5d3f] px-4 py-2 text-sm font-medium text-[#c7dbcd] transition hover:bg-[#2f5d3f]/30 disabled:opacity-50"
           >
             Finalizar → Ir a mi panel
           </button>

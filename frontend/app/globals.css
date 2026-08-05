@@ -3,59 +3,96 @@
 @tailwind utilities;
 
 /*
- * Sistema visual de CanalAgenda (rediseño usabilidad, jul-2026).
- * Tema CLARO, tranquilo y con jerarquía: el panel lo usa una peluquera con
- * prisa entre clienta y clienta, así que prioriza legibilidad y toques
- * grandes por encima de la estética oscura.
+ * SISTEMA VISUAL DE CANALAGENDA — «editorial cálida» (ago-2026).
+ *
+ * Referencia estructural: Fresha. Lo que se copia de ellos NO es el color
+ * (azul eléctrico sobre casi-negro) sino la disciplina: mucho blanco, una
+ * sola acción destacada por pantalla, cero decoración y jerarquía tipográfica
+ * en lugar de cajas de colores.
+ *
+ * Lo que nos diferencia: tinta cálida en vez de azulada, fondo hueso en vez
+ * de blanco puro, un único acento terracota, y titulares en serif — un sector
+ * estético merece algo con más carácter que otro panel azul de SaaS.
+ *
+ * REGLA DE ORO DEL ACENTO: el terracota significa «esta es la acción
+ * principal». Si aparece en cinco sitios de una pantalla, deja de significar
+ * nada. Por eso la navegación activa, los títulos y los datos van en tinta,
+ * no en color. Antes de agosto de 2026 el verde teñía todo el panel y esa fue
+ * exactamente la queja.
  */
 :root {
-  --ca-verde: #0f7a4f;
-  --ca-verde-claro: #ecf7f1;
-  --ca-borde: #e6e4de;
+  --ca-tinta: #1c1917;        /* texto principal y acciones oscuras */
+  --ca-tinta-2: #57534e;      /* texto secundario */
+  --ca-tinta-3: #8a8378;      /* pistas, metadatos */
+  --ca-fondo: #faf9f6;        /* lienzo de la página (hueso) */
+  --ca-borde: #e7e5de;        /* hairline por defecto */
+  --ca-borde-2: #d6d3cb;      /* borde de control */
+  --ca-acento: #c2410c;       /* terracota: UNA acción por pantalla */
+  --ca-acento-hover: #9a3412;
+  --ca-acento-tinte: #fdf1ea;
+  --ca-acento-texto: #7c2d12;
 }
 
 body {
-  @apply bg-[#f7f7f4] text-slate-800 antialiased;
+  @apply bg-[#faf9f6] text-[#1c1917] antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv11';
 }
 
+/* Las horas son lo que más se lee en una agenda: cifras de ancho fijo para
+   que las columnas no bailen al cambiar de 09:00 a 11:30. */
+.ca-cifras { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
 @layer components {
-  /* Superficies */
+  /* ---------- Superficies ---------- */
   .ca-card {
-    @apply rounded-xl border border-[#e6e4de] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04)];
+    @apply rounded-xl border border-[#e7e5de] bg-white;
   }
   .ca-card-p { @apply ca-card p-5; }
 
-  /* Tipografía de sección */
-  .ca-h1 { @apply text-[22px] font-semibold tracking-tight text-slate-900; }
-  .ca-h2 { @apply text-base font-semibold text-slate-900; }
-  .ca-label { @apply mb-1 block text-xs font-medium text-slate-500; }
-  .ca-hint { @apply text-sm text-slate-500; }
+  /* ---------- Tipografía ---------- */
+  /* El serif es solo para el título de la pantalla y la marca. Todo lo demás
+     va en sans: un panel se lee de un vistazo, no se lee como una revista. */
+  .ca-h1 {
+    @apply text-[26px] leading-tight text-[#1c1917];
+    font-family: var(--font-serif), Georgia, serif;
+    font-weight: 400;
+  }
+  .ca-h2 { @apply text-[15px] font-semibold tracking-tight text-[#1c1917]; }
+  .ca-label { @apply mb-1 block text-xs font-medium text-[#8a8378]; }
+  .ca-hint { @apply text-sm text-[#57534e]; }
+  .ca-eyebrow { @apply text-[11px] font-medium uppercase tracking-[0.08em] text-[#8a8378]; }
 
-  /* Controles */
+  /* ---------- Controles ---------- */
   .ca-input {
-    @apply w-full rounded-lg border border-[#d9d7d0] bg-white px-3 py-2 text-sm text-slate-800
-           placeholder:text-slate-400 focus:border-[#0f7a4f] focus:outline-none focus:ring-2 focus:ring-[#0f7a4f]/15;
+    @apply w-full rounded-lg border border-[#d6d3cb] bg-white px-3 py-2 text-sm text-[#1c1917]
+           placeholder:text-[#a8a29e]
+           focus:border-[#1c1917] focus:outline-none focus:ring-2 focus:ring-[#1c1917]/10;
   }
   .ca-btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
-           transition disabled:cursor-not-allowed disabled:opacity-50;
+           transition disabled:cursor-not-allowed disabled:opacity-45;
   }
-  .ca-btn-primary { @apply ca-btn bg-[#0f7a4f] text-white hover:bg-[#0c6642] shadow-sm; }
-  .ca-btn-ghost   { @apply ca-btn border border-[#d9d7d0] bg-white text-slate-700 hover:bg-slate-50; }
-  .ca-btn-danger  { @apply ca-btn border border-red-200 bg-white text-red-700 hover:bg-red-50; }
+  /* La acción principal. Una por pantalla. */
+  .ca-btn-primary { @apply ca-btn bg-[#c2410c] text-white hover:bg-[#9a3412]; }
+  /* Acción de peso pero no destacada (guardar en un formulario secundario) */
+  .ca-btn-tinta   { @apply ca-btn bg-[#1c1917] text-white hover:bg-[#292524]; }
+  .ca-btn-ghost   { @apply ca-btn border border-[#d6d3cb] bg-white text-[#44403c] hover:bg-[#faf9f6]; }
+  .ca-btn-danger  { @apply ca-btn border border-[#e7c9c1] bg-white text-[#9a3412] hover:bg-[#fdf1ea]; }
   .ca-btn-sm      { @apply px-3 py-1.5 text-xs; }
 
-  /* Etiquetas de estado */
-  .ca-badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium; }
-  .ca-badge-ok    { @apply ca-badge bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200; }
-  .ca-badge-warn  { @apply ca-badge bg-amber-50 text-amber-800 ring-1 ring-amber-200; }
-  .ca-badge-error { @apply ca-badge bg-red-50 text-red-700 ring-1 ring-red-200; }
-  .ca-badge-mute  { @apply ca-badge bg-slate-100 text-slate-600 ring-1 ring-slate-200; }
+  /* ---------- Etiquetas de estado ---------- */
+  /* Sin anillos ni bordes: tinte plano y texto de la misma familia de color.
+     Menos ruido en una lista de veinte citas. */
+  .ca-badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-medium; }
+  .ca-badge-ok    { @apply ca-badge bg-[#edf4ee] text-[#2f5d3f]; }
+  .ca-badge-warn  { @apply ca-badge bg-[#fdf1ea] text-[#7c2d12]; }
+  .ca-badge-error { @apply ca-badge bg-[#fbeceb] text-[#9f1239]; }
+  .ca-badge-mute  { @apply ca-badge bg-[#f2f1ec] text-[#57534e]; }
 
-  /* Avisos */
+  /* ---------- Avisos ---------- */
   .ca-alert { @apply rounded-lg border p-3 text-sm; }
-  .ca-alert-info  { @apply ca-alert border-sky-200 bg-sky-50 text-sky-900; }
-  .ca-alert-warn  { @apply ca-alert border-amber-200 bg-amber-50 text-amber-900; }
-  .ca-alert-error { @apply ca-alert border-red-200 bg-red-50 text-red-800; }
-  .ca-alert-ok    { @apply ca-alert border-emerald-200 bg-emerald-50 text-emerald-800; }
+  .ca-alert-info  { @apply ca-alert border-[#e7e5de] bg-white text-[#44403c]; }
+  .ca-alert-warn  { @apply ca-alert border-[#f0dcd0] bg-[#fdf1ea] text-[#7c2d12]; }
+  .ca-alert-error { @apply ca-alert border-[#f0d5d3] bg-[#fbeceb] text-[#9f1239]; }
+  .ca-alert-ok    { @apply ca-alert border-[#dbe7de] bg-[#edf4ee] text-[#2f5d3f]; }
 }

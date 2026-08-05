@@ -119,14 +119,14 @@ export default function ServiciosPage() {
       descripcion="Los servicios que tienes contratados. Puedes apagar el que no quieras usar."
     >
       {error && <p className="ca-alert-error mb-4">{error}</p>}
-      {cargando && <p className="text-sm text-slate-500">Cargando…</p>}
+      {cargando && <p className="text-sm text-[#8a8378]">Cargando…</p>}
 
       {!cargando && state && (
         <>
           {contratados.length === 0 ? (
             <div className="ca-card-p text-center">
-              <p className="text-slate-700">Tu plan actual no incluye servicios premium.</p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="text-[#44403c]">Tu plan actual no incluye servicios premium.</p>
+              <p className="mt-1 text-sm text-[#8a8378]">
                 Si quieres probar alguno, escríbenos y te lo activamos.
               </p>
             </div>
@@ -138,16 +138,16 @@ export default function ServiciosPage() {
                 return (
                   <div key={f} className="flex items-center justify-between ca-card-p">
                     <div className="pr-4">
-                      <p className="font-medium text-slate-900">{info.nombre}</p>
-                      <p className="text-sm text-slate-500">{info.descripcion}</p>
+                      <p className="font-medium text-[#1c1917]">{info.nombre}</p>
+                      <p className="text-sm text-[#8a8378]">{info.descripcion}</p>
                     </div>
                     <button
                       onClick={() => toggle(f, !activo)}
                       disabled={guardando === f}
                       className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
                         activo
-                          ? 'bg-[#0f7a4f] text-white hover:bg-[#0c6642]'
-                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                          ? 'bg-[#1c1917] text-white hover:bg-[#292524]'
+                          : 'bg-[#e7e5de] text-[#44403c] hover:bg-[#d6d3cb]'
                       } ${guardando === f ? 'opacity-50' : ''}`}
                     >
                       {guardando === f ? '…' : activo ? 'Activado' : 'Desactivado'}
@@ -160,19 +160,19 @@ export default function ServiciosPage() {
 
           {noContratados.length > 0 && contratados.length > 0 && (
             <div className="mt-8">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
                 Disponibles en planes superiores
               </p>
               <div className="space-y-2">
                 {noContratados.map((f) => {
                   const info = ETIQUETAS[f] || { nombre: f, descripcion: '' };
                   return (
-                    <div key={f} className="flex items-center justify-between rounded-lg border border-dashed border-[#d9d7d0] p-3 opacity-70">
+                    <div key={f} className="flex items-center justify-between rounded-lg border border-dashed border-[#d6d3cb] p-3 opacity-70">
                       <div className="pr-4">
-                        <p className="text-sm font-medium text-slate-700">{info.nombre}</p>
-                        <p className="text-xs text-slate-500">{info.descripcion}</p>
+                        <p className="text-sm font-medium text-[#44403c]">{info.nombre}</p>
+                        <p className="text-xs text-[#8a8378]">{info.descripcion}</p>
                       </div>
-                      <span className="shrink-0 text-xs text-slate-500">🔒 No incluido</span>
+                      <span className="shrink-0 text-xs text-[#8a8378]">🔒 No incluido</span>
                     </div>
                   );
                 })}

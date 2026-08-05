@@ -27,7 +27,7 @@ type Servicio = {
 type Aparato = { id: number; name: string; units: number };
 
 const inputCls =
-  'w-full ca-input focus:border-[#0f7a4f] focus:outline-none';
+  'w-full ca-input focus:border-[#1c1917] focus:outline-none';
 
 const sumaTramos = (s: Partial<Servicio>) =>
   (s.trabajo_inicial_min ?? 0) + (s.espera_min ?? 0) + (s.trabajo_final_min ?? 0);
@@ -178,15 +178,15 @@ export default function CatalogoPage() {
               return (
                 <div
                   key={s.id}
-                  className={`rounded-lg border p-4 ${v.is_active ? 'border-[#e6e4de] bg-white' : 'border-[#e6e4de] bg-slate-50 opacity-70'}`}
+                  className={`rounded-lg border p-4 ${v.is_active ? 'border-[#e7e5de] bg-white' : 'border-[#e7e5de] bg-[#faf9f6] opacity-70'}`}
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
                     <div className="sm:col-span-4">
-                      <label className="mb-1 block text-xs text-slate-500">Servicio</label>
+                      <label className="mb-1 block text-xs text-[#8a8378]">Servicio</label>
                       <input className={inputCls} value={v.name} onChange={(ev) => editar(s.id, 'name', ev.target.value)} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-slate-500">Minutos</label>
+                      <label className="mb-1 block text-xs text-[#8a8378]">Minutos</label>
                       <input
                         className={inputCls} type="number" min={5} max={480} step={5}
                         value={v.duration_minutes}
@@ -194,7 +194,7 @@ export default function CatalogoPage() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-slate-500">Precio €</label>
+                      <label className="mb-1 block text-xs text-[#8a8378]">Precio €</label>
                       <input
                         className={inputCls} type="number" min={0} step={0.5}
                         value={v.price_eur ?? ''}
@@ -203,7 +203,7 @@ export default function CatalogoPage() {
                       />
                     </div>
                     <div className="sm:col-span-4">
-                      <label className="mb-1 block text-xs text-slate-500">Descripción</label>
+                      <label className="mb-1 block text-xs text-[#8a8378]">Descripción</label>
                       <input
                         className={inputCls} value={v.description ?? ''}
                         onChange={(ev) => editar(s.id, 'description', ev.target.value)}
@@ -213,14 +213,14 @@ export default function CatalogoPage() {
                   {/* B5.4 — Fases: el tinte ocupa el puesto 90 min pero a la
                       peluquera solo al principio y al final. */}
                   {fasesActivas && (
-                  <div className="mt-3 border-t border-[#f0efe9] pt-3">
-                    <p className="mb-2 text-xs text-slate-500">
+                  <div className="mt-3 border-t border-[#f2f1ec] pt-3">
+                    <p className="mb-2 text-xs text-[#8a8378]">
                       ¿La clienta pasa un rato esperando sin que la atiendan? (tinte, mechas,
                       permanente). Rellena los tres tramos y podrás atender a otra persona
                       mientras tanto. Déjalos en 0 si se trabaja sin parar.
                     </p>
                     <div className="flex flex-wrap items-end gap-3">
-                      <label className="text-xs text-slate-500">
+                      <label className="text-xs text-[#8a8378]">
                         <span className="mb-1 block">Trabajo inicial</span>
                         <input
                           className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
@@ -228,7 +228,7 @@ export default function CatalogoPage() {
                           onChange={(ev) => editar(s.id, 'trabajo_inicial_min', parseInt(ev.target.value, 10) || 0)}
                         />
                       </label>
-                      <label className="text-xs text-slate-500">
+                      <label className="text-xs text-[#8a8378]">
                         <span className="mb-1 block">Espera (libre)</span>
                         <input
                           className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
@@ -236,7 +236,7 @@ export default function CatalogoPage() {
                           onChange={(ev) => editar(s.id, 'espera_min', parseInt(ev.target.value, 10) || 0)}
                         />
                       </label>
-                      <label className="text-xs text-slate-500">
+                      <label className="text-xs text-[#8a8378]">
                         <span className="mb-1 block">Trabajo final</span>
                         <input
                           className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
@@ -244,7 +244,7 @@ export default function CatalogoPage() {
                           onChange={(ev) => editar(s.id, 'trabajo_final_min', parseInt(ev.target.value, 10) || 0)}
                         />
                       </label>
-                      <p className={`text-xs ${sumaTramos(v) === v.duration_minutes || (v.espera_min ?? 0) === 0 ? 'text-slate-500' : 'text-amber-700'}`}>
+                      <p className={`text-xs ${sumaTramos(v) === v.duration_minutes || (v.espera_min ?? 0) === 0 ? 'text-[#8a8378]' : 'text-[#9a3412]'}`}>
                         {(v.espera_min ?? 0) === 0
                           ? 'Trabajo continuo'
                           : `Suman ${sumaTramos(v)} min · el servicio dura ${v.duration_minutes}`}
@@ -254,19 +254,19 @@ export default function CatalogoPage() {
                   )}
 
                   {aparatos.length > 0 && (
-                    <div className="mt-3 border-t border-[#f0efe9] pt-3">
-                      <p className="mb-2 text-xs text-slate-500">
+                    <div className="mt-3 border-t border-[#f2f1ec] pt-3">
+                      <p className="mb-2 text-xs text-[#8a8378]">
                         ¿Necesita algún aparato? Solo se ofrecerá si queda uno libre.
                       </p>
                       <div className="flex flex-wrap gap-3">
                         {aparatos.map((a) => (
-                          <label key={a.id} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                          <label key={a.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#44403c]">
                             <input
                               type="checkbox"
                               checked={(s.recursos || []).includes(a.id)}
                               onChange={(ev) => cambiarRecurso(s, a.id, ev.target.checked)}
                             />
-                            {a.name} <span className="text-xs text-slate-400">×{a.units}</span>
+                            {a.name} <span className="text-xs text-[#a8a29e]">×{a.units}</span>
                           </label>
                         ))}
                       </div>
@@ -274,7 +274,7 @@ export default function CatalogoPage() {
                   )}
 
                   <div className="mt-3 flex items-center justify-between">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#44403c]">
                       <input
                         type="checkbox" checked={v.is_active}
                         onChange={(ev) => editar(s.id, 'is_active', ev.target.checked)}
@@ -295,14 +295,14 @@ export default function CatalogoPage() {
               );
             })}
             {servicios.length === 0 && (
-              <p className="rounded-lg border border-dashed border-[#d9d7d0] p-6 text-center text-sm text-slate-500">
+              <p className="rounded-lg border border-dashed border-[#d6d3cb] p-6 text-center text-sm text-[#8a8378]">
                 Aún no tienes servicios. Crea el primero aquí abajo. 👇
               </p>
             )}
           </div>
 
           <div className="mt-8 ca-card-p">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">Añadir servicio</p>
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Añadir servicio</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
               <div className="sm:col-span-4">
                 <input

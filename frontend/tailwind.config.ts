@@ -25,7 +25,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Sistema «editorial cálida»: Instrument Sans en toda la interfaz,
+        // Instrument Serif reservado a titulares (clase .ca-h1) y marca.
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["var(--font-serif)", "Georgia", "serif"],
       },
     },
   },

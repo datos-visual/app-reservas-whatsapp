@@ -41,15 +41,15 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-xl border border-[#e6e4de] bg-white p-6">
+      <div className="w-full max-w-sm rounded-xl border border-[#e7e5de] bg-white p-6">
         <h1 className="mb-1 ca-h2">CanalAgenda</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <p className="mb-6 text-sm text-[#8a8378]">
           Accede al panel de tu negocio.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs text-slate-500" htmlFor="email">
+            <label className="mb-1 block text-xs text-[#8a8378]" htmlFor="email">
               Email
             </label>
             <input
@@ -63,7 +63,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-500" htmlFor="password">
+            <label className="mb-1 block text-xs text-[#8a8378]" htmlFor="password">
               Contraseña
             </label>
             <input
@@ -77,7 +77,7 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && <p className="text-xs text-amber-700">{error}</p>}
+          {error && <p className="text-xs text-[#9a3412]">{error}</p>}
 
           <button
             type="submit"
@@ -88,7 +88,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-[#8a8378]">
           ¿Sin cuenta todavía? El alta la gestiona el equipo de CanalAgenda
           durante la instalación.
         </p>

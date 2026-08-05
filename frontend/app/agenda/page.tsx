@@ -253,8 +253,8 @@ export default function AgendaPage() {
               onClick={() => cambiarFecha(iso)}
               className={`rounded-lg border px-1 py-2 text-center transition ${
                 activo
-                  ? 'border-[#0f7a4f] bg-[#ecf7f1] text-[#0f7a4f]'
-                  : 'border-[#e6e4de] bg-white text-slate-600 hover:border-slate-300'
+                  ? 'border-[#1c1917] bg-[#f2f1ec] text-[#1c1917]'
+                  : 'border-[#e7e5de] bg-white text-[#57534e] hover:border-[#d6d3cb]'
               }`}
             >
               <span className="block text-[11px] uppercase tracking-wide">
@@ -264,7 +264,7 @@ export default function AgendaPage() {
                 {d.getDate()}
               </span>
               {iso === hoy && !activo && (
-                <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-[#0f7a4f]" aria-label="hoy" />
+                <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-[#1c1917]" aria-label="hoy" />
               )}
             </button>
           );
@@ -283,7 +283,7 @@ export default function AgendaPage() {
               Ese día el negocio está cerrado{agenda.motivo_cierre ? ` (${agenda.motivo_cierre})` : ''}.
             </p>
           ) : (
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-3 text-xs text-[#8a8378]">
               Abierto de {agenda.horario?.abre} a {agenda.horario?.cierra}
             </p>
           )}
@@ -292,24 +292,24 @@ export default function AgendaPage() {
             {agenda.citas.filter((c) => c.status === 'confirmed').length === 0 && (
               <p className="px-5 py-10 text-center ca-hint">No hay citas este día.</p>
             )}
-            <ul className="divide-y divide-[#f0efe9]">
+            <ul className="divide-y divide-[#f2f1ec]">
               {agenda.citas
                 .filter((c) => c.status === 'confirmed')
                 .map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
                     <div className="flex items-center gap-4">
-                      <span className="w-[104px] shrink-0 rounded-lg bg-[#ecf7f1] px-2 py-1.5 text-center text-sm font-semibold text-[#0f7a4f]">
+                      <span className="ca-cifras w-[104px] shrink-0 rounded-lg bg-[#f2f1ec] px-2 py-1.5 text-center text-sm font-medium text-[#1c1917]">
                         {hora(c.start_at)}–{hora(c.end_at)}
                       </span>
                       <div>
-                        <p className="font-medium text-slate-900">
+                        <p className="font-medium text-[#1c1917]">
                           {c.cliente || 'Sin nombre'}
-                          {c.servicio && <span className="ml-2 font-normal text-slate-600">· {c.servicio}</span>}
+                          {c.servicio && <span className="ml-2 font-normal text-[#57534e]">· {c.servicio}</span>}
                         </p>
-                        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                        <p className="flex flex-wrap items-center gap-2 text-sm text-[#8a8378]">
                           {c.telefono}
                           {c.profesional
-                            ? <span className="ca-badge bg-[#ecf7f1] text-[#0f7a4f] ring-1 ring-[#0f7a4f]/20">
+                            ? <span className="ca-badge-mute">
                                 con {c.profesional}
                               </span>
                             : <span className="ca-badge-warn">sin asignar</span>}
@@ -321,12 +321,12 @@ export default function AgendaPage() {
                             la profesional solo al principio y al final. */}
                         {c.hueco_libre && c.tramos?.length === 2 && (
                           <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                            <span className="text-slate-500">
+                            <span className="text-[#8a8378]">
                               {c.profesional || 'La profesional'} trabaja{' '}
                               {c.tramos[0].desde}–{c.tramos[0].hasta} y {c.tramos[1].desde}–{c.tramos[1].hasta}
                             </span>
                             {c.hueco_libre.minutos > 0 && (
-                              <span className="ca-badge bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                              <span className="ca-badge-warn">
                                 libre {c.hueco_libre.desde}–{c.hueco_libre.hasta} ({c.hueco_libre.minutos} min)
                               </span>
                             )}
@@ -365,12 +365,12 @@ export default function AgendaPage() {
             </p>
 
             {agenda.bloqueos && agenda.bloqueos.length > 0 && (
-              <ul className="mb-4 divide-y divide-[#f0efe9] rounded-lg border border-[#e6e4de]">
+              <ul className="mb-4 divide-y divide-[#f2f1ec] rounded-lg border border-[#e7e5de]">
                 {agenda.bloqueos.map((b) => (
                   <li key={b.event_id} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <span className="text-sm text-slate-700">
+                    <span className="text-sm text-[#44403c]">
                       <span className="font-medium">{b.desde}–{b.hasta}</span>
-                      <span className="ml-2 text-slate-500">{b.titulo}</span>
+                      <span className="ml-2 text-[#8a8378]">{b.titulo}</span>
                     </span>
                     <button onClick={() => liberar(b)} className="ca-btn-ghost ca-btn-sm">Liberar</button>
                   </li>
@@ -420,7 +420,7 @@ export default function AgendaPage() {
                 value={nueva.hora} onChange={(e) => setNueva({ ...nueva, hora: e.target.value })} />
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-[#44403c]">
                 <input type="checkbox" checked={nueva.avisar}
                   onChange={(e) => setNueva({ ...nueva, avisar: e.target.checked })} />
                 Avisar a la clienta por WhatsApp

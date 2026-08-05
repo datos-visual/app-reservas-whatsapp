@@ -105,10 +105,10 @@ export default function DashboardPage() {
       <section className="mb-5 grid gap-4 sm:grid-cols-3">
         <div className="ca-card-p">
           <p className="ca-hint flex items-center gap-2"><IconAgenda /> Citas hoy</p>
-          <p className="mt-1 text-3xl font-semibold text-slate-900">{appointments.length}</p>
+          <p className="mt-1 text-3xl font-semibold text-[#1c1917]">{appointments.length}</p>
           {proxima && (
-            <p className="mt-1 text-sm text-slate-500">
-              La próxima, a las <span className="font-medium text-slate-700">{hora(proxima.start_at)}</span>
+            <p className="mt-1 text-sm text-[#8a8378]">
+              La próxima, a las <span className="font-medium text-[#44403c]">{hora(proxima.start_at)}</span>
             </p>
           )}
         </div>
@@ -120,21 +120,21 @@ export default function DashboardPage() {
               ? <span className="ca-badge-ok">Funcionando</span>
               : <span className="ca-badge-error">Sin conectar</span>}
           </p>
-          <p className="mt-2 text-xs text-slate-400">
+          <p className="mt-2 text-xs text-[#a8a29e]">
             {status?.ready ? 'Respondiendo a tus clientas en WhatsApp' : 'Contacta con CanalAgenda'}
           </p>
         </div>
 
         <div className="ca-card-p">
           <p className="ca-hint flex items-center gap-2"><IconPersonas /> Mensajes recientes</p>
-          <p className="mt-1 text-3xl font-semibold text-slate-900">{messages.length}</p>
-          <p className="mt-1 text-xs text-slate-400">últimas conversaciones</p>
+          <p className="mt-1 text-3xl font-semibold text-[#1c1917]">{messages.length}</p>
+          <p className="mt-1 text-xs text-[#a8a29e]">últimas conversaciones</p>
         </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="ca-card">
-          <div className="border-b border-[#e6e4de] px-5 py-3">
+          <div className="border-b border-[#e7e5de] px-5 py-3">
             <h2 className="ca-h2">Citas de hoy</h2>
           </div>
           {loading && <p className="px-5 py-4 ca-hint">Cargando…</p>}
@@ -146,14 +146,14 @@ export default function DashboardPage() {
               </button>
             </div>
           )}
-          <ul className="divide-y divide-[#f0efe9]">
+          <ul className="divide-y divide-[#f2f1ec]">
             {appointments.map((c) => (
               <li key={c.id} className="flex items-center justify-between px-5 py-3">
                 <div>
-                  <p className="font-medium text-slate-900">{c.customers?.name || 'Sin nombre'}</p>
-                  <p className="text-sm text-slate-500">{c.customers?.phone}</p>
+                  <p className="font-medium text-[#1c1917]">{c.customers?.name || 'Sin nombre'}</p>
+                  <p className="text-sm text-[#8a8378]">{c.customers?.phone}</p>
                 </div>
-                <span className="rounded-lg bg-[#ecf7f1] px-3 py-1 text-sm font-medium text-[#0f7a4f]">
+                <span className="rounded-lg bg-[#f2f1ec] px-3 py-1 text-sm font-medium text-[#1c1917]">
                   {hora(c.start_at)}
                 </span>
               </li>
@@ -162,21 +162,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="ca-card">
-          <div className="border-b border-[#e6e4de] px-5 py-3">
+          <div className="border-b border-[#e7e5de] px-5 py-3">
             <h2 className="ca-h2">Últimas conversaciones</h2>
           </div>
-          <ul className="max-h-[420px] divide-y divide-[#f0efe9] overflow-y-auto">
+          <ul className="max-h-[420px] divide-y divide-[#f2f1ec] overflow-y-auto">
             {messages.map((m) => (
               <li key={m.id} className="px-5 py-3">
                 <div className="flex items-center justify-between">
-                  <span className={`text-xs font-medium ${m.from_me ? 'text-slate-400' : 'text-[#0f7a4f]'}`}>
+                  <span className={`text-xs font-medium ${m.from_me ? 'text-[#a8a29e]' : 'text-[#1c1917]'}`}>
                     {m.from_me ? 'Asistente' : m.phone}
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-[#a8a29e]">
                     {new Date(m.created_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <p className="mt-1 line-clamp-2 text-sm text-slate-700">{m.content}</p>
+                <p className="mt-1 line-clamp-2 text-sm text-[#44403c]">{m.content}</p>
               </li>
             ))}
             {!loading && messages.length === 0 && (

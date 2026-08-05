@@ -212,36 +212,36 @@ export default function EquipoPage() {
 
       {!cargando && (
         <div className="ca-card-p mb-5">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
             Cómo se calculan tus huecos
           </p>
           <label className="flex cursor-pointer items-start gap-3 py-2">
             <input type="checkbox" className="mt-1" checked={ajustes.usarEquipo}
               onChange={(e) => cambiarAjuste('usar_equipo', e.target.checked)} />
             <span>
-              <span className="font-medium text-slate-900">Tener en cuenta a mi equipo</span>
+              <span className="font-medium text-[#1c1917]">Tener en cuenta a mi equipo</span>
               <span className="block ca-hint">
                 Se dan tantas citas a la vez como personas estén trabajando, respetando turnos y vacaciones.
                 Si lo apagas, se vuelve a <strong>una cita a la vez</strong> sin borrar nada.
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f0efe9] py-2 pt-3">
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f2f1ec] py-2 pt-3">
             <input type="checkbox" className="mt-1" checked={ajustes.usarAparatos}
               onChange={(e) => cambiarAjuste('usar_aparatos', e.target.checked)} />
             <span>
-              <span className="font-medium text-slate-900">Tener en cuenta mis aparatos</span>
+              <span className="font-medium text-[#1c1917]">Tener en cuenta mis aparatos</span>
               <span className="block ca-hint">
                 Un servicio que necesite sillón de color o lavacabezas solo se ofrece si queda uno libre.
                 Si lo apagas, los aparatos dejan de limitar.
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f0efe9] py-2 pt-3">
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#f2f1ec] py-2 pt-3">
             <input type="checkbox" className="mt-1" checked={ajustes.sincronizarCalendar !== false}
               onChange={(e) => cambiarAjuste('usar_sync_calendar', e.target.checked)} />
             <span>
-              <span className="font-medium text-slate-900">Vigilar mi Google Calendar</span>
+              <span className="font-medium text-[#1c1917]">Vigilar mi Google Calendar</span>
               <span className="block ca-hint">
                 Si borras una cita directamente en Google Calendar, esa hora vuelve a ofrecerse
                 por WhatsApp. Si lo apagas, las citas solo se anulan desde aquí o desde el chat.
@@ -268,13 +268,13 @@ export default function EquipoPage() {
               <div key={p.id} className={`ca-card ${p.is_active ? '' : 'opacity-60'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div>
-                    <p className="font-medium text-slate-900">{p.name}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="font-medium text-[#1c1917]">{p.name}</p>
+                    <p className="text-xs text-[#8a8378]">
                       {turnos.length === 0
                         ? 'Todo el horario del negocio'
                         : turnos.map((t) => `${NOMBRES[t.weekday].slice(0, 3)} ${t.open_time.slice(0, 5)}-${t.close_time.slice(0, 5)}`).join(' · ')}
                       {p.ausencias.length > 0 && (
-                        <span className="ml-2 text-amber-700">
+                        <span className="ml-2 text-[#9a3412]">
                           · {p.ausencias.length} ausencia(s)
                         </span>
                       )}
@@ -297,9 +297,9 @@ export default function EquipoPage() {
                 </div>
 
                 {abierta === p.id && (
-                  <div className="border-t border-[#e6e4de] px-5 py-4">
-                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Turnos</p>
-                    <p className="mb-3 text-xs text-slate-500">
+                  <div className="border-t border-[#e7e5de] px-5 py-4">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#8a8378]">Turnos</p>
+                    <p className="mb-3 text-xs text-[#8a8378]">
                       Marca los días que trabaja y sus horas. Si no marcas ninguno, se entiende que
                       trabaja todo el horario del negocio.
                     </p>
@@ -307,8 +307,8 @@ export default function EquipoPage() {
                       {ORDEN.map((wd) => {
                         const t = turnos.find((x) => x.weekday === wd);
                         return (
-                          <div key={wd} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e6e4de] px-3 py-2">
-                            <label className="flex w-32 cursor-pointer items-center gap-2 text-sm text-slate-700">
+                          <div key={wd} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#e7e5de] px-3 py-2">
+                            <label className="flex w-32 cursor-pointer items-center gap-2 text-sm text-[#44403c]">
                               <input
                                 type="checkbox" checked={!!t}
                                 onChange={(e) =>
@@ -326,7 +326,7 @@ export default function EquipoPage() {
                                   value={t.open_time.slice(0, 5)}
                                   onChange={(e) => editarTurnos(p.id, turnos.map((x) => x.weekday === wd ? { ...x, open_time: e.target.value } : x))}
                                 />
-                                <span className="text-slate-500">a</span>
+                                <span className="text-[#8a8378]">a</span>
                                 <input
                                   type="time" className="ca-input w-auto py-1.5"
                                   value={t.close_time.slice(0, 5)}
@@ -347,16 +347,16 @@ export default function EquipoPage() {
                       </button>
                     )}
 
-                    <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-[#8a8378]">
                       Vacaciones y días libres
                     </p>
                     {p.ausencias.length === 0 && <p className="mb-2 ca-hint">Ninguna programada.</p>}
                     <ul className="mb-3 space-y-1">
                       {p.ausencias.map((a) => (
-                        <li key={a.id} className="flex items-center justify-between rounded-lg border border-[#e6e4de] px-3 py-1.5 text-sm">
-                          <span className="text-slate-700">
+                        <li key={a.id} className="flex items-center justify-between rounded-lg border border-[#e7e5de] px-3 py-1.5 text-sm">
+                          <span className="text-[#44403c]">
                             {fmt(a.start_date)}{a.end_date !== a.start_date && ` → ${fmt(a.end_date)}`}
-                            {a.reason && <span className="ml-2 text-slate-500">({a.reason})</span>}
+                            {a.reason && <span className="ml-2 text-[#8a8378]">({a.reason})</span>}
                           </span>
                           <button onClick={() => quitarAusencia(a.id)} className="ca-btn-ghost ca-btn-sm">Quitar</button>
                         </li>
@@ -415,10 +415,10 @@ export default function EquipoPage() {
             )}
             <ul className="mb-4 space-y-2">
               {aparatos.map((a) => (
-                <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e6e4de] px-3 py-2">
-                  <span className="font-medium text-slate-900">{a.name}</span>
+                <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e7e5de] px-3 py-2">
+                  <span className="font-medium text-[#1c1917]">{a.name}</span>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-slate-500">Unidades</label>
+                    <label className="text-xs text-[#8a8378]">Unidades</label>
                     <input
                       type="number" min={1} max={50} defaultValue={a.units}
                       className="ca-input w-20 py-1.5"

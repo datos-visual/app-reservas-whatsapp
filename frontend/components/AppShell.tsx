@@ -50,17 +50,19 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-[#e6e4de] bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+      <header className="sticky top-0 z-30 border-b border-[#e7e5de] bg-[#faf9f6]/92 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 pt-3.5">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f7a4f] text-sm font-bold text-white">
-              CA
+            {/* La marca en tinta, no en el color de acento: el acento se
+                reserva para la acción principal de cada pantalla. */}
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1c1917] font-serif text-base leading-none text-white">
+              C
             </span>
             <div>
-              <p className="text-sm font-semibold leading-tight text-slate-900">
+              <p className="text-[15px] font-semibold leading-tight tracking-tight text-[#1c1917]">
                 {negocio || 'CanalAgenda'}
               </p>
-              <p className="text-xs leading-tight text-slate-500">{email}</p>
+              <p className="text-xs leading-tight text-[#8a8378]">{email}</p>
             </div>
           </div>
           <button onClick={salir} className="ca-btn-ghost ca-btn-sm">
@@ -68,8 +70,10 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
           </button>
         </div>
 
-        <nav className="mx-auto max-w-5xl px-3">
-          <ul className="flex gap-1 overflow-x-auto">
+        {/* Pestaña activa en tinta con subrayado de acento: un solo toque de
+            color, suficiente para orientarse sin teñir la pantalla. */}
+        <nav className="mx-auto max-w-5xl px-3 pt-1">
+          <ul className="flex gap-0.5 overflow-x-auto">
             {NAV.map(({ href, label, Icon }) => {
               const activo = pathname === href;
               return (
@@ -78,8 +82,8 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
                     onClick={() => router.push(href)}
                     className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition ${
                       activo
-                        ? 'border-[#0f7a4f] font-medium text-[#0f7a4f]'
-                        : 'border-transparent text-slate-600 hover:text-slate-900'
+                        ? 'border-[#c2410c] font-medium text-[#1c1917]'
+                        : 'border-transparent text-[#8a8378] hover:text-[#1c1917]'
                     }`}
                   >
                     <Icon /> {label}
@@ -91,11 +95,11 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-6">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+      <main className="mx-auto max-w-5xl px-5 py-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="ca-h1">{titulo}</h1>
-            {descripcion && <p className="mt-1 ca-hint">{descripcion}</p>}
+            {descripcion && <p className="mt-1.5 ca-hint">{descripcion}</p>}
           </div>
           {acciones && <div className="flex flex-wrap gap-2">{acciones}</div>}
         </div>
