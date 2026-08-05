@@ -1735,8 +1735,23 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     return;
   }
 
+  // Cómo lo dice la gente de verdad. Antes solo se reconocía «cancelar» a
+  // secas, así que «no me viene bien, anúlala» acababa en «no te he
+  // entendido» — con la cita recién creada delante. Estas formas son
+  // inequívocas y no chocan con nada del resto del flujo.
+  const PIDE_ANULAR = new RegExp(
+    '\\b(?:' +
+      'an[uú]la(?:la|r|me|melo|mela)?|' +
+      'canc[eé]la(?:la|me|melo|mela)?|' +
+      'b[oó]rra(?:la|mela)|elim[ií]na(?:la|mela)?|qu[ií]ta(?:la|mela)|' +
+      'no\\s+puedo\\s+ir|no\\s+podr[ée]\\s+ir|no\\s+voy\\s+a\\s+poder|' +
+      'no\\s+me\\s+viene\\s+bien|d[ée]jalo|olv[ií]dalo' +
+    ')\\b',
+    'i'
+  );
+
   // CANCELAR [id]: cancelación con confirmación SI/NO
-  if (lower === 'cancelar' || lower.startsWith('cancelar ')) {
+  if (lower === 'cancelar' || lower.startsWith('cancelar ') || PIDE_ANULAR.test(lower)) {
     const arg = body.trim().split(/\s+/)[1] || null;
     const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
 
@@ -2005,7 +2020,21 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
   }
 
-  // Último recurso: menú de bienvenida con botones (B1) en vez de texto seco
+  // Último recurso. Si la persona TIENE citas próximas, lo más probable es
+  // que estuviera hablando de una de ellas: enseñarle sus citas es mucho más
+  // útil que devolverla al menú de bienvenida como si acabara de llegar.
+  try {
+    const suyas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
+    if (suyas.length) {
+      return handleIncomingText({
+        storeId, phoneNumberId, accessToken, from,
+        body: 'mis citas', nluAttempted: true, profileName
+      });
+    }
+  } catch (err) {
+    console.warn('[Flujo] No se pudieron leer las citas para el fallback', { storeId, err });
+  }
+
   await sendWelcomeMenu({
     storeId, phoneNumberId, accessToken, to: from,
     headerText: 'Perdona, no te he entendido bien.'
