@@ -19,7 +19,7 @@
 
 const { DateTime } = require('luxon');
 const { supabase, getStoreConfig, getWhatsappAccountByStoreId, logMessage } = require('./db');
-const { sendInteractiveButtons, sendTextMessage } = require('./whatsappCloud');
+const { sendInteractiveButtons, sendInteractiveList, sendTextMessage } = require('./whatsappCloud');
 const equipo = require('./equipo');
 
 const DIAS_VISTA = 21;
@@ -46,9 +46,10 @@ async function citasConProfesional(storeId, { dias = DIAS_VISTA } = {}) {
   return data || [];
 }
 
-/** Alguien libre para ese hueco que NO sea la persona que ya no puede. */
-async function otraPersonaLibre(storeId, cita, zone) {
+/** TODAS las que podrían atender ese hueco menos la que ya no puede. */
+async function personasLibresPara(storeId, cita, zone) {
   const candidatas = await equipo.listarPersonas(storeId);
+  const libres = [];
   for (const p of candidatas) {
     if (p.id === cita.resource_id) continue;
     const libre = await equipo.puedeAtender(storeId, {
@@ -59,9 +60,15 @@ async function otraPersonaLibre(storeId, cita, zone) {
       serviceId: cita.service_id,
       excluirCitaId: cita.id
     });
-    if (libre) return p;
+    if (libre) libres.push(p);
   }
-  return null;
+  return libres;
+}
+
+/** La primera libre (para la reasignación automática). */
+async function otraPersonaLibre(storeId, cita, zone) {
+  const libres = await personasLibresPara(storeId, cita, zone);
+  return libres[0] || null;
 }
 
 async function marcarAvisada(id) {
@@ -76,7 +83,7 @@ async function marcarAvisada(id) {
  * a esa hora, se le ofrecen solo dos: no tiene sentido proponerle «otra
  * profesional» cuando no queda ninguna.
  */
-async function preguntarQueHacer({ storeId, cita, zone, otra }) {
+async function preguntarQueHacer({ storeId, cita, zone, libres }) {
   const cuenta = await getWhatsappAccountByStoreId(storeId);
   if (!cuenta?.access_token) {
     console.warn('[Profesional] Sin WhatsApp conectado: no se puede avisar', { storeId, citaId: cita.id });
@@ -84,41 +91,72 @@ async function preguntarQueHacer({ storeId, cita, zone, otra }) {
   }
 
   const cuando = DateTime.fromISO(cita.start_at, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
-  const quien = cita.resources?.name || 'tu profesional';
-  const servicio = cita.services?.name ? `«${cita.services.name}» ` : '';
+  const quien = cita.resources?.name || 'la profesional con la que tenías la cita';
+  const servicio = cita.services?.name ? `de ${cita.services.name} ` : '';
+  const to = cita.customers.phone;
 
-  const botones = [];
-  if (otra) botones.push({ id: `ca:prof:otra:${cita.id}`, title: `Con ${otra.name}`.slice(0, 20) });
-  botones.push({ id: `ca:prof:hueco:${cita.id}`, title: 'Otro día u hora' });
-  botones.push({ id: `ca:prof:anular:${cita.id}`, title: 'Anular la cita' });
-
+  // Se dice el motivo en genérico: «no va a estar disponible». Ni vacaciones
+  // ni bajas — eso es información interna del salón y no le corresponde a la
+  // clienta, que además puede malinterpretarla.
   const texto =
-    `Te escribo por tu cita ${servicio}del ${cuando}: ${quien} finalmente no va a poder atenderte. ` +
-    (otra
-      ? `Puedo dejarte la misma hora con ${otra.name}, buscarte otro hueco con ${quien}, o anularla. ¿Qué prefieres?`
-      : `Puedo buscarte otro hueco con ${quien} o anularla. ¿Qué prefieres?`);
+    `Te escribo por tu cita ${servicio}del ${cuando}: ${quien} finalmente no va a estar disponible ` +
+    'ese día. Dime qué prefieres y lo arreglo.';
+
+  // Con varias libres, LISTA (caben 10 filas y puede elegir a quién quiere).
+  // Con una o ninguna, BOTONES, que se tocan de una vez.
+  const filas = [
+    ...libres.slice(0, 8).map((p) => ({
+      id: `ca:prof:con:${cita.id}:${p.id}`,
+      title: `Con ${p.name}`.slice(0, 24),
+      description: 'Misma hora, otra profesional'
+    })),
+    { id: `ca:prof:hueco:${cita.id}`, title: 'Otro día u hora', description: `Busco huecos con ${quien}` },
+    { id: `ca:prof:anular:${cita.id}`, title: 'Anular la cita', description: 'La quito y ya está' }
+  ];
+  if (libres.length > 1) {
+    filas.splice(libres.length, 0, {
+      id: `ca:prof:cualquiera:${cita.id}`,
+      title: 'Me da igual quién',
+      description: 'La primera que esté libre'
+    });
+  }
 
   try {
-    await sendInteractiveButtons({
-      phoneNumberId: cuenta.phone_number_id,
-      accessToken: cuenta.access_token,
-      to: cita.customers.phone,
-      bodyText: texto,
-      buttons: botones
-    });
-    await logMessage({ storeId, phone: cita.customers.phone, body: texto, fromMe: true });
+    if (libres.length > 1) {
+      await sendInteractiveList({
+        phoneNumberId: cuenta.phone_number_id,
+        accessToken: cuenta.access_token,
+        to,
+        bodyText: texto,
+        buttonText: 'Ver opciones',
+        sections: [{ title: 'Qué hacemos', rows: filas.slice(0, 10) }]
+      });
+    } else {
+      const botones = [];
+      if (libres.length === 1) {
+        botones.push({ id: `ca:prof:con:${cita.id}:${libres[0].id}`, title: `Con ${libres[0].name}`.slice(0, 20) });
+      }
+      botones.push({ id: `ca:prof:hueco:${cita.id}`, title: 'Otro día u hora' });
+      botones.push({ id: `ca:prof:anular:${cita.id}`, title: 'Anular la cita' });
+      await sendInteractiveButtons({
+        phoneNumberId: cuenta.phone_number_id,
+        accessToken: cuenta.access_token,
+        to, bodyText: texto, buttons: botones
+      });
+    }
+    await logMessage({ storeId, phone: to, body: texto, fromMe: true });
     return true;
   } catch (err) {
-    // Fuera de la ventana de 24 h los botones fallan: al menos que se entere
-    console.warn('[Profesional] Botones no disponibles, se intenta texto', { storeId, citaId: cita.id, message: err?.message });
+    // Fuera de la ventana de 24 h lo interactivo falla: que al menos se entere
+    console.warn('[Profesional] Interactivo no disponible, se intenta texto', { storeId, citaId: cita.id, message: err?.message });
     try {
       await sendTextMessage({
         phoneNumberId: cuenta.phone_number_id,
         accessToken: cuenta.access_token,
-        to: cita.customers.phone,
-        text: `${texto} Respóndeme y lo arreglamos.`
+        to,
+        text: `${texto} Puedo cambiarte de profesional, buscarte otro hueco o anularla — respóndeme y lo vemos.`
       });
-      await logMessage({ storeId, phone: cita.customers.phone, body: texto, fromMe: true });
+      await logMessage({ storeId, phone: to, body: texto, fromMe: true });
       return true;
     } catch (err2) {
       console.error('[Profesional] No se pudo avisar a la clienta', { storeId, citaId: cita.id, err: err2?.message });
@@ -159,7 +197,8 @@ async function revisarTienda(storeId, { dias = DIAS_VISTA } = {}) {
     }
     if (sigueEnPie) continue;
 
-    const otra = await otraPersonaLibre(storeId, cita, zone);
+    const libres = await personasLibresPara(storeId, cita, zone);
+    const otra = libres[0] || null;
 
     // Nosotros la asignamos → reasignar en silencio si hay quien
     if (!cita.resource_pedido && otra) {
@@ -179,7 +218,7 @@ async function revisarTienda(storeId, { dias = DIAS_VISTA } = {}) {
 
     // La clienta la pidió, o no queda nadie: decide ella
     if (cita.aviso_profesional_at) continue;      // ya se le preguntó
-    const avisada = await preguntarQueHacer({ storeId, cita, zone, otra });
+    const avisada = await preguntarQueHacer({ storeId, cita, zone, libres });
     if (avisada) {
       await marcarAvisada(cita.id);
       resumen.avisadas++;
@@ -244,4 +283,4 @@ async function citasAfectadas(storeId, resourceId, { desde = null, hasta = null 
   return data || [];
 }
 
-module.exports = { revisarTienda, revisarTodas, citasAfectadas, otraPersonaLibre };
+module.exports = { revisarTienda, revisarTodas, citasAfectadas, otraPersonaLibre, personasLibresPara };

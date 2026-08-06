@@ -27,6 +27,12 @@ const { sendTextMessage } = require('./whatsappCloud');
 
 const DIAS_POR_DEFECTO = 30;
 
+// Una cita recién creada NO puede estar huérfana. Google Calendar tarda a
+// veces en incluir un evento nuevo en los listados, y sin esta guarda una
+// reserva podía anularse sola segundos después de confirmarse — que es el
+// peor fallo imaginable: la clienta recibe «confirmada» y «anulada» seguidos.
+const GRACIA_MIN = 15;
+
 /**
  * ¿La tienda quiere que vigilemos su calendario? Tolerante: si la columna
  * todavía no existe (migración sin aplicar), activado.
@@ -105,7 +111,7 @@ async function avisarCancelacion(storeId, cita, zone) {
 async function citasVigilables(storeId, { desde, hasta }) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('id, start_at, end_at, google_event_id, customer_id, service_id, customers ( phone, name )')
+    .select('id, start_at, end_at, google_event_id, customer_id, service_id, created_at, customers ( phone, name )')
     .eq('store_id', storeId)
     .eq('status', 'confirmed')
     .not('google_event_id', 'is', null)
@@ -157,7 +163,10 @@ async function reconciliarTienda(storeId, { dias = DIAS_POR_DEFECTO, requestId }
   }
 
   // 2) Solo las sospechosas se confirman una a una contra Google.
-  const sospechosas = citas.filter((c) => !vivos.has(c.google_event_id));
+  const limite = DateTime.now().minus({ minutes: GRACIA_MIN });
+  const sospechosas = citas.filter(
+    (c) => !vivos.has(c.google_event_id) && DateTime.fromISO(c.created_at) < limite
+  );
   const liberadas = [];
 
   for (const cita of sospechosas) {
@@ -208,7 +217,7 @@ async function reconciliarDia(storeId, dateIso, eventos, zone) {
 
     const { data, error } = await supabase
       .from('appointments')
-      .select('id, start_at, google_event_id, customers ( phone, name )')
+      .select('id, start_at, google_event_id, created_at, customers ( phone, name )')
       .eq('store_id', storeId)
       .eq('status', 'confirmed')
       .not('google_event_id', 'is', null)
@@ -220,7 +229,10 @@ async function reconciliarDia(storeId, dateIso, eventos, zone) {
     const vivos = new Set(
       (eventos || []).filter((e) => e.status !== 'cancelled').map((e) => e.id)
     );
-    const sospechosas = data.filter((c) => !vivos.has(c.google_event_id));
+    const limite = DateTime.now().minus({ minutes: GRACIA_MIN });
+    const sospechosas = data.filter(
+      (c) => !vivos.has(c.google_event_id) && DateTime.fromISO(c.created_at) < limite
+    );
     if (!sospechosas.length) return [];
 
     if (!(await sincronizacionActiva(storeId))) return [];

@@ -979,7 +979,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
 
   // --- B5.3: la clienta responde al aviso de «tu profesional no puede» ---
   if (payload.startsWith('ca:prof:')) {
-    const [, , accion, idTxt] = payload.split(':');
+    const [, , accion, idTxt, personaTxt] = payload.split(':');
     const citaId = parseInt(idTxt, 10);
 
     // El id viene del cliente: se valida SIEMPRE contra su propia tienda y
@@ -1002,8 +1002,24 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     const storeConfig = await getStoreConfig(storeId);
     const zone = storeConfig?.timezone || 'Europe/Madrid';
 
-    if (accion === 'otra') {
-      const otra = await profesional.otraPersonaLibre(storeId, cita, zone);
+    // La clienta elige a QUIÉN quiere («con Laura») o le da igual
+    if (accion === 'con' || accion === 'cualquiera' || accion === 'otra') {
+      const libres = await profesional.personasLibresPara(storeId, cita, zone);
+      // Si pidió una concreta, se valida que siga libre: entre el aviso y su
+      // respuesta pueden pasar horas.
+      const otra = accion === 'con'
+        ? libres.find((p) => p.id === parseInt(personaTxt, 10)) || null
+        : libres[0] || null;
+
+      if (!otra && accion === 'con') {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: libres.length
+            ? `Esa persona ya no tiene libre esa hora. Puedo dejártela con ${libres[0].name} — dime si te vale, o te busco otro día.`
+            : 'Esa persona ya no tiene libre esa hora. Dime otro día u hora y te busco hueco.'
+        });
+        return true;
+      }
       if (!otra) {
         await sendAndLog({
           storeId, phoneNumberId, accessToken, to: from,
