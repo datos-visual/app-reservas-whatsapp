@@ -714,6 +714,27 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.62 LIMITACIONES CONOCIDAS — doc 13 (6-ago-2026)
+
+`docs/13-guia-configuracion-tienda.md` es **el documento que se entrega a la
+peluquería**: configuración paso a paso, día a día, y una sección entera de
+«lo que NO hace». Estaba todo repartido entre esta visión, el runbook y
+conversaciones sueltas — y una limitación que la dueña no puede leer es una
+limitación que no existe hasta que le explota en la cara un sábado.
+
+**REGLA: cuando se descubra una limitación nueva, va al doc 13 el mismo día.**
+Las principales hoy:
+
+1. Un evento escrito a mano en Google Calendar consume UNA plaza del equipo
+   pero no se asigna a nadie → con «elegir profesional» el bot puede ofrecer
+   justo a quien está ocupado. Se arregla del todo con un calendario por
+   profesional (cambio de arquitectura, no antes del piloto).
+2. Todas las profesionales hacen todos los servicios (no hay habilidades).
+3. Aparatos y tramos no limitan hasta que se marcan servicio por servicio.
+4. Ventana de 24 h de Meta para escribir libremente.
+5. Arranque en frío de Render: 30-60 s la primera consulta del día.
+6. Detección de citas huérfanas: hasta 10 minutos, no instantánea.
+
 ### 10.61 B5.3 — ELEGIR PROFESIONAL, funcionalidad PREMIUM (5-ago-2026)
 
 **Cómo se activa (y cómo se activará con el pago):** flag premium
