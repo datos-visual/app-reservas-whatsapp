@@ -62,6 +62,15 @@ pueden dar a la vez**: con tres peluqueras, tres citas simultáneas.
 - **Aparece al reservar** (solo si tienes contratado *Elegir profesional*):
   quítalo a quien no quieras que salga en la lista de las clientas. Sigue
   trabajando y contando para la capacidad — simplemente no la eligen.
+- **Servicios que hace** (solo si tienes contratado *Servicios por
+  profesional*): dentro de *Turnos y vacaciones*. Misma regla que los turnos:
+  a quien no le marques nada **los hace todos**, y en cuanto marcas algo pasa
+  a hacer **solo lo marcado**. Márcalo únicamente donde haya una excepción
+  real («Borja no hace color»).
+
+  Si al marcar dejas un servicio que **no lo puede hacer nadie**, el panel te
+  avisa en rojo arriba del todo y no se quita hasta que lo arregles: ese
+  servicio deja de ofrecerse por WhatsApp.
 
 ### 2.3 Aparatos
 
@@ -173,17 +182,19 @@ profesional lo resolvería del todo, y está en la lista de mejoras futuras.
 
 ### Quién sabe hacer qué
 
-**Todas las profesionales pueden hacer todos los servicios.** Si en tu salón
-solo dos hacen color, el sistema no lo sabe y podría ofrecer un tinte con
-quien no lo hace. Por ahora hay que vigilarlo a mano. Está previsto añadirlo.
+Sin la función *Servicios por profesional*, **todas las profesionales pueden
+hacer todos los servicios** y el asistente puede asignar un tinte a quien no
+lo hace. Con ella contratada se resuelve, pero hay que marcarlo (punto 2.2).
 
 ### La configuración no se adivina
 
-Estas tres cosas **no funcionan solas**, hay que marcarlas:
+Estas cuatro cosas **no funcionan solas**, hay que marcarlas:
 
 - Un aparato no limita nada hasta que marcas qué servicios lo usan.
 - Los tiempos de espera no existen hasta que rellenas los tres tramos.
 - Un día sin horario guardado está cerrado, no abierto.
+- Una profesional sin turnos trabaja siempre; con **un solo** turno marcado,
+  libra todos los días que no le marques.
 
 ### WhatsApp y sus reglas
 
@@ -254,6 +265,9 @@ dueña delante**, no por correo.
    aparatos de cada uno**. Este paso se olvida siempre.
 7. Si contrata *tiempos de espera*: rellenar los tres tramos servicio por
    servicio. **No dejar que lo haga sola después.**
+7 bis. Si contrata *servicios por profesional*: preguntar «¿hay alguien que
+   NO haga algo?» y marcar solo eso. Si la respuesta es «todas hacen todo»,
+   no tocar nada. Antes de irse, comprobar que no hay aviso rojo.
 8. Activar en `/admin` las funciones premium contratadas.
 9. **Prueba delante de ella**: reservar por WhatsApp desde su móvil, cancelar,
    y ver la cita aparecer en su panel y en su calendario.

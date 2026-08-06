@@ -13,9 +13,18 @@ import { IconMas, IconAviso, IconCheck } from '../../components/icons';
 
 type Turno = { id?: number; weekday: number; open_time: string; close_time: string };
 type Ausencia = { id: number; start_date: string; end_date: string; reason: string | null };
-type Persona = { id: number; name: string; is_active: boolean; elegible?: boolean; turnos: Turno[]; ausencias: Ausencia[] };
+type Persona = {
+  id: number; name: string; is_active: boolean; elegible?: boolean;
+  turnos: Turno[]; ausencias: Ausencia[];
+  // B5.5: [] significa «hace TODOS los servicios», no «no hace ninguno»
+  servicios?: number[];
+};
 type Aparato = { id: number; name: string; units: number; is_active: boolean };
-type Ajustes = { usarEquipo: boolean; usarAparatos: boolean; sincronizarCalendar?: boolean; elegirProfesional?: boolean };
+type Servicio = { id: number; name: string };
+type Ajustes = {
+  usarEquipo: boolean; usarAparatos: boolean; sincronizarCalendar?: boolean;
+  elegirProfesional?: boolean; serviciosPorProfesional?: boolean;
+};
 
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -33,6 +42,10 @@ export default function EquipoPage() {
   const [nueva, setNueva] = useState('');
   const [abierta, setAbierta] = useState<number | null>(null);
   const [borrador, setBorrador] = useState<Record<number, Turno[]>>({});
+  // B5.5: catálogo para las casillas y servicios que se han quedado sin nadie
+  const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [sinNadie, setSinNadie] = useState<Servicio[]>([]);
+  const [borradorSrv, setBorradorSrv] = useState<Record<number, number[]>>({});
   const [ausencia, setAusencia] = useState({ start_date: '', end_date: '', reason: '' });
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
@@ -56,8 +69,11 @@ export default function EquipoPage() {
       const body = await r.json();
       setPersonas(body.personas || []);
       setAparatos(body.aparatos || []);
+      setServicios(body.servicios || []);
+      setSinNadie(body.serviciosSinNadie || []);
       if (body.ajustes) setAjustes(body.ajustes);
       setBorrador({});
+      setBorradorSrv({});
       setError('');
     } finally {
       setCargando(false);
@@ -136,6 +152,41 @@ export default function EquipoPage() {
       await cargar();
       setAviso('Turnos guardados ✓');
       setTimeout(() => setAviso(''), 2500);
+    } finally { setGuardando(null); }
+  }
+
+  // B5.5 — qué servicios sabe hacer. Lista vacía = los hace TODOS, que es
+  // como está todo el mundo hasta que la dueña marca una excepción real.
+  function serviciosDe(p: Persona): number[] {
+    return borradorSrv[p.id] ?? p.servicios ?? [];
+  }
+  function editarServicios(id: number, ids: number[]) {
+    setBorradorSrv((b) => ({ ...b, [id]: ids }));
+  }
+
+  async function guardarServicios(p: Persona) {
+    setGuardando('srv' + p.id);
+    try {
+      const r = await apiFetch(`/api/equipo/${p.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ servicios: serviciosDe(p) })
+      });
+      const cuerpo = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(cuerpo.error || 'No se pudieron guardar los servicios.'); return; }
+      await cargar();
+      // Si esto deja un servicio sin nadie, se dice AQUÍ y no en un log:
+      // el asistente dejaría de ofrecerlo y nadie se enteraría.
+      const huerfanos: Servicio[] = cuerpo.serviciosSinNadie || [];
+      if (huerfanos.length) {
+        setError(
+          `Ojo: ${huerfanos.map((s) => s.name).join(', ')} ya no lo puede hacer nadie, ` +
+          'así que el asistente dejará de ofrecerlo.'
+        );
+      } else {
+        setError('');
+        setAviso('Servicios guardados ✓');
+        setTimeout(() => setAviso(''), 2500);
+      }
     } finally { setGuardando(null); }
   }
 
@@ -225,6 +276,22 @@ export default function EquipoPage() {
       {aviso && <p className="ca-alert-ok mb-4 flex items-center gap-2"><IconCheck />{aviso}</p>}
       {cargando && <p className="ca-hint">Cargando…</p>}
 
+      {/* B5.5 — El riesgo de esta función no es marcar de más: es dejar un
+          servicio sin nadie que lo haga. El asistente dejaría de ofrecerlo y
+          la peluquería lo descubriría por una clienta. Se avisa arriba y
+          permanente, no en un mensaje que se desvanece. */}
+      {!cargando && sinNadie.length > 0 && (
+        <p className="ca-alert-error mb-4 flex items-start gap-2">
+          <IconAviso />
+          <span>
+            <strong>{sinNadie.map((s) => s.name).join(', ')}</strong>
+            {sinNadie.length === 1 ? ' no lo puede hacer nadie' : ' no los puede hacer nadie'} del
+            equipo, así que el asistente no {sinNadie.length === 1 ? 'lo ofrece' : 'los ofrece'}.
+            Marca a alguien en «Servicios que hace».
+          </span>
+        </p>
+      )}
+
       {!cargando && (
         <div className="ca-card-p mb-5">
           <p className="ca-eyebrow">
@@ -279,6 +346,8 @@ export default function EquipoPage() {
           {personas.map((p) => {
             const turnos = turnosDe(p);
             const sucio = borrador[p.id] !== undefined;
+            const sucioSrv = borradorSrv[p.id] !== undefined;
+            const misServicios = serviciosDe(p);
             return (
               <div key={p.id} className={`ca-card ${p.is_active ? '' : 'opacity-60'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
@@ -304,6 +373,16 @@ export default function EquipoPage() {
                         </span>
                       )}
                     </p>
+                    {/* Solo se dice algo cuando hay límite. «Hace todos los
+                        servicios» en cuatro fichas es ruido que nadie lee. */}
+                    {ajustes.serviciosPorProfesional && (p.servicios?.length ?? 0) > 0 && (
+                      <p className="text-xs text-[#6b6459]">
+                        Solo hace: {p.servicios!
+                          .map((id) => servicios.find((s) => s.id === id)?.name)
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    )}
                   </div>
                   {/* Lo destructivo va el ÚLTIMO y apagado. Tenerlo primero,
                       con el mismo peso que lo demás, era un accidente
@@ -339,8 +418,9 @@ export default function EquipoPage() {
                   <div className="border-t border-[#ddd9d0] px-5 py-4">
                     <p className="ca-eyebrow">Turnos</p>
                     <p className="mb-3 text-xs text-[#6b6459]">
-                      Marca los días que trabaja y sus horas. Si no marcas ninguno, se entiende que
-                      trabaja todo el horario del negocio.
+                      Si no marcas ningún día, trabaja todo el horario del negocio. En cuanto marcas
+                      uno, <strong>los días que no marques los libra</strong>: o se los pones todos, o
+                      no le pongas ninguno.
                     </p>
                     <div className="space-y-2">
                       {ORDEN.map((wd) => {
@@ -384,6 +464,58 @@ export default function EquipoPage() {
                       >
                         {guardando === 'turnos' + p.id ? 'Guardando…' : 'Guardar turnos'}
                       </button>
+                    )}
+
+                    {/* B5.5 — Servicios que hace. Solo aparece si la tienda lo
+                        tiene contratado; sin contratar, esta sección no existe
+                        y todas hacen todo, como siempre. */}
+                    {ajustes.serviciosPorProfesional && servicios.length > 0 && (
+                      <>
+                        <p className="ca-eyebrow">Servicios que hace</p>
+                        <p className="mb-3 text-xs text-[#6b6459]">
+                          {misServicios.length === 0
+                            ? 'Ahora mismo los hace todos. Marca solo si hay algo que NO hace.'
+                            : 'Solo se le asignarán los marcados. Desmárcalos todos para que vuelva a hacer de todo.'}
+                        </p>
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {servicios.map((s) => {
+                            const marcado = misServicios.includes(s.id);
+                            return (
+                              <label
+                                key={s.id}
+                                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${
+                                  marcado
+                                    ? 'border-[#1c1917] bg-[#1c1917] text-white'
+                                    : 'border-[#ddd9d0] text-[#44403c] hover:border-[#a8a29e]'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={marcado}
+                                  onChange={(e) =>
+                                    editarServicios(
+                                      p.id,
+                                      e.target.checked
+                                        ? [...misServicios, s.id]
+                                        : misServicios.filter((x) => x !== s.id)
+                                    )
+                                  }
+                                />
+                                {s.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {sucioSrv && (
+                          <button
+                            onClick={() => guardarServicios(p)} disabled={guardando === 'srv' + p.id}
+                            className="ca-btn-primary mb-1"
+                          >
+                            {guardando === 'srv' + p.id ? 'Guardando…' : 'Guardar servicios'}
+                          </button>
+                        )}
+                      </>
                     )}
 
                     <p className="ca-eyebrow">

@@ -99,12 +99,19 @@ async function guardarAjustes(storeId, { usarEquipo, usarAparatos }) {
 }
 
 /**
- * Personas que la clienta puede ELEGIR: activas y marcadas como elegibles.
+ * Personas que la clienta puede ELEGIR: activas, marcadas como elegibles y
+ * —si la tienda tiene B5.5— que sepan hacer ESE servicio. Enseñar a alguien
+ * que no lo hace es peor que no enseñarlo: la clienta lo elige, no encuentra
+ * ni un hueco y se queda sin entender por qué.
  * Tolerante: si falta la columna (migración sin aplicar), todas valen.
  */
-async function listarElegibles(storeId) {
+async function listarElegibles(storeId, serviceId = null) {
   const personas = await listarPersonas(storeId);
-  return personas.filter((p) => p.elegible !== false);
+  const elegibles = personas.filter((p) => p.elegible !== false);
+  if (!serviceId) return elegibles;
+  const habilidades = await habilidadesPorPersona(storeId);
+  if (!habilidades.size) return elegibles;
+  return elegibles.filter((p) => sabeHacer(habilidades, p.id, serviceId));
 }
 
 /**
@@ -128,7 +135,8 @@ async function puedeAtender(storeId, { resourceId, inicioIso, finIso, zone, serv
     ausencias: await listarAusencias(storeId, dateIso),
     citas,
     fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId)
+    margen: await margenRelleno(storeId),
+    habilidades: await habilidadesPorPersona(storeId)
   };
   const { libres } = await disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache, serviceId);
   return libres.some((p) => p.id === Number(resourceId));
@@ -270,6 +278,114 @@ async function fasesPorServicio(storeId) {
   } catch {
     return new Map();   // sin migración de fases, todo trabajo continuo
   }
+}
+
+// ---------- B5.5: qué sabe hacer cada profesional (premium) ----------
+
+/** ¿Está contratada Y activa la gestión de servicios por profesional? */
+async function usarHabilidades(storeId) {
+  try {
+    const premium = await getPremiumFeatures(storeId);
+    return premium?.servicios_por_profesional === true;
+  } catch {
+    return false;   // ante la duda, comportamiento clásico: todas hacen todo
+  }
+}
+
+/**
+ * Map(resource_id → Set(service_id)) con las personas que TIENEN límite.
+ *
+ * Quien no aparece en el mapa hace todos los servicios. Es la misma regla que
+ * la de los turnos, y a propósito: dos reglas parecidas con comportamientos
+ * distintos es como se fabrica un bug que nadie encuentra.
+ *
+ * Tolerante en ambos sentidos: sin la funcionalidad contratada, o sin la
+ * migración aplicada, devuelve un mapa vacío y nada cambia.
+ */
+async function habilidadesPorPersona(storeId) {
+  try {
+    if (!(await usarHabilidades(storeId))) return new Map();
+    const { data, error } = await supabase
+      .from('resource_skills')
+      .select('resource_id, service_id')
+      .eq('store_id', storeId);
+    if (error || !data) return new Map();
+    const m = new Map();
+    for (const r of data) {
+      const id = Number(r.resource_id);
+      if (!m.has(id)) m.set(id, new Set());
+      m.get(id).add(Number(r.service_id));
+    }
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * ¿Sabe esta persona hacer este servicio?
+ * Sin servicio concreto (agenda genérica) o sin límites declarados → sí.
+ */
+function sabeHacer(habilidades, resourceId, serviceId) {
+  if (!serviceId) return true;
+  const suyos = habilidades?.get(Number(resourceId));
+  if (!suyos || suyos.size === 0) return true;    // sin marcar = lo hace todo
+  return suyos.has(Number(serviceId));
+}
+
+/**
+ * Servicios que NO puede hacer NADIE del equipo. Es la red de seguridad de
+ * toda esta funcionalidad: el peligro no es marcar de más, es dejar un
+ * servicio sin nadie y que el asistente deje de ofrecerlo en silencio.
+ * El panel lo enseña en rojo; que la dueña se entere en el panel y no por
+ * una clienta que no encuentra hueco.
+ */
+async function serviciosSinNadie(storeId) {
+  const habilidades = await habilidadesPorPersona(storeId);
+  if (!habilidades.size) return [];               // nadie tiene límites
+
+  const personas = await listarPersonas(storeId);
+  if (!personas.length) return [];
+
+  const { data, error } = await supabase
+    .from('services')
+    .select('id, name')
+    .eq('store_id', storeId)
+    .eq('is_active', true);
+  if (error || !data) return [];
+
+  return data
+    .filter((s) => !personas.some((p) => sabeHacer(habilidades, p.id, s.id)))
+    .map((s) => ({ id: s.id, name: s.name }));
+}
+
+/** Guarda los servicios de una persona. Lista vacía = vuelve a hacerlos todos. */
+async function guardarHabilidades(storeId, resourceId, serviceIds) {
+  const ids = [...new Set((serviceIds || []).map((n) => parseInt(n, 10)).filter(Number.isInteger))];
+
+  const { error: delErr } = await supabase
+    .from('resource_skills')
+    .delete()
+    .eq('store_id', storeId)
+    .eq('resource_id', resourceId);
+  if (delErr) throw faltaMigracion(delErr) ? errorMigracionHabilidades() : delErr;
+
+  if (ids.length) {
+    const filas = ids.map((service_id) => ({ store_id: storeId, resource_id: resourceId, service_id }));
+    const { error } = await supabase.from('resource_skills').insert(filas);
+    if (error) throw faltaMigracion(error) ? errorMigracionHabilidades() : error;
+  }
+  console.log('[Equipo] Servicios de la persona actualizados', { storeId, resourceId, servicios: ids.length });
+  return ids;
+}
+
+function errorMigracionHabilidades() {
+  const e = new Error(
+    'Falta aplicar database/migration_servicios_por_profesional.sql en la base de datos. ' +
+    'Hasta entonces no se puede guardar qué servicios hace cada persona.'
+  );
+  e.code = 'VALIDACION';
+  return e;
 }
 
 /**
@@ -414,7 +530,8 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
     ausencias: await listarAusencias(storeId, dateIso),
     citas: await citasDelDia(storeId, dateIso, zone),
     fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId)
+    margen: await margenRelleno(storeId),
+    habilidades: await habilidadesPorPersona(storeId)
   };
   if (!datos.personas.length) return { total: 0, libres: [], hayEquipo: false };
 
@@ -428,7 +545,12 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
   // Tramos que ocuparía la PERSONA con la cita que se está valorando
   const tramosNuevos = tramosActivos(dt, finDt, fasesMap.get(Number(serviceId)) || null);
 
+  const habilidades = datos.habilidades || new Map();
+
   const libres = datos.personas.filter((p) => {
+    // 0) ¿Sabe hacer ESTE servicio? (B5.5, premium; sin marcar = lo hace todo)
+    if (!sabeHacer(habilidades, p.id, serviceId)) return false;
+
     // 1) ¿Está ausente ese día?
     if (datos.ausencias.some((a) => a.resource_id === p.id)) return false;
 
@@ -509,7 +631,8 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
     citas,
     // B5.4: fases del servicio (una peluquera queda libre mientras el tinte reposa)
     fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId)
+    margen: await margenRelleno(storeId),
+    habilidades: await habilidadesPorPersona(storeId)
   };
   const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
@@ -581,7 +704,8 @@ async function elegirPersonaLibre(storeId, inicioIso, finIso, zone, serviceId = 
     ausencias: await listarAusencias(storeId, dateIso),
     citas: await citasDelDia(storeId, dateIso, zone),
     fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId)
+    margen: await margenRelleno(storeId),
+    habilidades: await habilidadesPorPersona(storeId)
   };
   const { libres, hayEquipo } = await disponibilidadEnRango(
     storeId, inicioIso, finIso, zone, cache, serviceId
@@ -898,7 +1022,7 @@ async function equipoCompleto(storeId) {
   if (!personas.length) return { personas: [] };
 
   const hoy = DateTime.now().toISODate();
-  const [turnos, ausencias] = await Promise.all([
+  const [turnos, ausencias, habilidades] = await Promise.all([
     listarTurnos(storeId),
     (async () => {
       const { data } = await supabase
@@ -908,14 +1032,18 @@ async function equipoCompleto(storeId) {
         .gte('end_date', hoy)
         .order('start_date', { ascending: true });
       return data || [];
-    })()
+    })(),
+    habilidadesPorPersona(storeId)
   ]);
 
   return {
     personas: personas.map((p) => ({
       ...p,
       turnos: turnos.filter((t) => t.resource_id === p.id).sort((a, b) => a.weekday - b.weekday),
-      ausencias: ausencias.filter((a) => a.resource_id === p.id)
+      ausencias: ausencias.filter((a) => a.resource_id === p.id),
+      // [] significa «los hace todos», no «no hace ninguno». El panel lo dice
+      // con palabras para que no haya que deducirlo de una lista vacía.
+      servicios: [...(habilidades.get(p.id) || [])]
     }))
   };
 }
@@ -936,6 +1064,11 @@ module.exports = {
   guardarPasoHuecos,
   usarFases,
   fasesPorServicio,
+  usarHabilidades,
+  habilidadesPorPersona,
+  sabeHacer,
+  guardarHabilidades,
+  serviciosSinNadie,
   tramosActivos,
   margenRelleno,
   guardarMargenRelleno,

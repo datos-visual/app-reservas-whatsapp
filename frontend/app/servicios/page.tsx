@@ -54,6 +54,10 @@ const ETIQUETAS: Record<string, { nombre: string; descripcion: string }> = {
   elegir_profesional: {
     nombre: 'Elegir profesional',
     descripcion: 'Tus clientas eligen con quién quieren la cita. Si esa persona no puede, se les avisa y deciden ellas: otra profesional, otro hueco o anular.'
+  },
+  servicios_por_profesional: {
+    nombre: 'Servicios por profesional',
+    descripcion: 'Marca qué sabe hacer cada persona y el asistente dejará de asignarle lo que no hace. Se configura en Equipo. A quien no le marques nada, lo hace todo.'
   }
 };
 

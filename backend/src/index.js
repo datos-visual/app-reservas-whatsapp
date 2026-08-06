@@ -620,9 +620,10 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
     // ¿Le dejamos elegir profesional? Premium + al menos dos elegibles.
+    // B5.5: y solo las que SEPAN hacer este servicio (si la tienda lo usa)
     const premium = await getPremiumFeatures(storeId);
     const elegibles = premium?.elegir_profesional === true
-      ? await equipo.listarElegibles(storeId)
+      ? await equipo.listarElegibles(storeId, svc.id)
       : [];
 
     if (elegibles.length >= 2) {
@@ -2802,24 +2803,41 @@ app.get('/api/equipo', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const [completo, aparatos, ajustes, sincronizarCalendar, fases] = await Promise.all([
+    const [completo, aparatos, ajustes, sincronizarCalendar, fases, habilidades] = await Promise.all([
       equipo.equipoCompleto(storeId),
       equipo.listarAparatos(storeId, { soloActivos: false }),
       equipo.ajustesTienda(storeId),
       sincronizacion.sincronizacionActiva(storeId),
-      equipo.usarFases(storeId)
+      equipo.usarFases(storeId),
+      equipo.usarHabilidades(storeId)
     ]);
     // B5.3: solo tiene sentido enseñar «aparece al reservar» si la tienda
     // tiene contratada la función de elegir profesional
     const premiumEquipo = await getPremiumFeatures(storeId);
+
+    // B5.5: el catálogo para las casillas, y el aviso de servicio huérfano.
+    // Lo segundo es lo importante: marcar de más deja un servicio sin nadie y
+    // el asistente dejaría de ofrecerlo sin decir nada.
+    let servicios = [];
+    let sinNadie = [];
+    if (habilidades) {
+      [servicios, sinNadie] = await Promise.all([
+        catalog.listServices(storeId).catch(() => []),
+        equipo.serviciosSinNadie(storeId).catch(() => [])
+      ]);
+    }
+
     res.json({
       ...completo,
       aparatos,
+      servicios: servicios.map((s) => ({ id: s.id, name: s.name })),
+      serviciosSinNadie: sinNadie,
       ajustes: {
         ...ajustes,
         sincronizarCalendar,
         usarFases: fases,
-        elegirProfesional: premiumEquipo?.elegir_profesional === true
+        elegirProfesional: premiumEquipo?.elegir_profesional === true,
+        serviciosPorProfesional: habilidades
       }
     });
   } catch (err) {
@@ -2938,6 +2956,11 @@ app.put('/api/equipo/:id', async (req, res) => {
     if (Array.isArray(req.body?.turnos)) {
       await equipo.guardarTurnos(storeId, id, req.body.turnos);
     }
+    // B5.5: qué servicios sabe hacer. Lista vacía = vuelve a hacerlos todos,
+    // así que se distingue «me han mandado []» de «no me han mandado nada».
+    if (Array.isArray(req.body?.servicios)) {
+      await equipo.guardarHabilidades(storeId, id, req.body.servicios);
+    }
     const actualizada = await equipo.actualizarPersona(storeId, id, {
       nombre: req.body?.nombre,
       is_active: req.body?.is_active,
@@ -2958,8 +2981,10 @@ app.put('/api/equipo/:id', async (req, res) => {
         console.log('[Equipo] Baja con citas futuras', { storeId, resourceId: id, ...afectadas });
       }
     }
-    res.json({ ...(actualizada || { ok: true }), afectadas });
-    res.json(actualizada || { ok: true });
+    // B5.5: al cambiar sus servicios puede haber quedado alguno sin nadie
+    const sinNadie = await equipo.serviciosSinNadie(storeId).catch(() => []);
+
+    res.json({ ...(actualizada || { ok: true }), afectadas, serviciosSinNadie: sinNadie });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     console.error('[API] Error actualizando persona', err);

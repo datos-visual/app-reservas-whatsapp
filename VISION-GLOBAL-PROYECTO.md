@@ -714,6 +714,51 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.64 B5.5 — SERVICIOS POR PROFESIONAL, PREMIUM (6-ago-2026)
+
+«Es que Borja no hace color.» Tabla `resource_skills` (store/resource/service)
+y flag premium `servicios_por_profesional`.
+
+**Una sola regla, deliberadamente idéntica a la de los turnos:**
+
+> Sin ninguna fila = hace TODOS los servicios.
+> Con alguna fila = hace SOLO los marcados.
+
+Dos reglas parecidas con comportamientos distintos es como se fabrica un bug
+que nadie encuentra. Instalarlo no cambia nada: la tabla nace vacía.
+
+Un punto de filtrado — `equipo.disponibilidadEnRango`, paso 0 — del que
+cuelgan solos los huecos, el reparto automático, `puedeAtender` y por tanto el
+barrido B5.3. `listarElegibles(storeId, serviceId)` además esconde de la lista
+de WhatsApp a quien no hace ese servicio: enseñarla sería peor, la clienta la
+elige y no encuentra ni un hueco.
+
+**La red de seguridad es lo importante.** El riesgo no es marcar de más, es
+dejar un servicio sin nadie: el asistente dejaría de ofrecerlo EN SILENCIO.
+`serviciosSinNadie()` lo detecta y el panel lo enseña en rojo, arriba y
+permanente, hasta que se arregla.
+
+Tabla aparte de `service_resources` a conciencia: mismas dos columnas,
+significado opuesto («este servicio NECESITA este aparato» vs «esta persona
+SABE hacer este servicio»).
+
+### 10.63 BUG — «SIN TURNOS = TRABAJA SIEMPRE» SE APLICABA AL DÍA (6-ago-2026)
+
+`disponibilidadEnRango` filtraba `turnos.filter(t => t.resource === p.id && t.weekday === hoy)`
+y, si no encontraba fila, se saltaba la comprobación entera. Traducción: quien
+tenía horario propio quedaba **libre todos los días que no tiene turno**. Marta,
+con turno solo los martes, salía disponible el resto de la semana.
+
+El mismo criterio estaba **duplicado en `frontend/lib/rejilla.ts`**, así que la
+pantalla confirmaba el error en vez de delatarlo.
+
+Corregido: la regla se aplica **a la persona, no al día**. Con algún turno
+declarado, los días que no aparecen los libra.
+
+**Lección (la tercera del mismo tipo):** un default tolerante puesto en el
+sitio equivocado no da error, da permiso. Y una regla replicada en dos
+lenguajes es una regla que se corrige a medias.
+
 ### 10.62 LIMITACIONES CONOCIDAS — doc 13 (6-ago-2026)
 
 `docs/13-guia-configuracion-tienda.md` es **el documento que se entrega a la
@@ -729,7 +774,9 @@ Las principales hoy:
    pero no se asigna a nadie → con «elegir profesional» el bot puede ofrecer
    justo a quien está ocupado. Se arregla del todo con un calendario por
    profesional (cambio de arquitectura, no antes del piloto).
-2. Todas las profesionales hacen todos los servicios (no hay habilidades).
+2. ~~Todas las profesionales hacen todos los servicios~~ → resuelto en B5.5
+   (§10.64) como premium `servicios_por_profesional`. Sin contratar, sigue
+   siendo cierto.
 3. Aparatos y tramos no limitan hasta que se marcan servicio por servicio.
 4. Ventana de 24 h de Meta para escribir libremente.
 5. Arranque en frío de Render: 30-60 s la primera consulta del día.
