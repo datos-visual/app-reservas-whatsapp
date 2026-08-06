@@ -94,34 +94,55 @@ async function getCustomerByPhone(storeId, phone) {
   }
 }
 
+/** ¿El error es «esa columna todavía no existe»? (migración sin aplicar) */
+function faltaColumna(error) {
+  const m = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+  return m.includes('pgrst204') || m.includes('42703') ||
+         (m.includes('column') && m.includes('does not exist')) ||
+         m.includes('could not find the');
+}
+
 async function createAppointment({ storeId, customerId, start, end, googleEventId, source, serviceId = null, resourceId = null, resourcePedido = false, extra = null }) {
+  const base = {
+    store_id: storeId,
+    customer_id: customerId,
+    start_at: start,
+    end_at: end,
+    google_event_id: googleEventId,
+    source: source || 'whatsapp',
+    // Las columnas de funcionalidades posteriores solo se envían si tienen
+    // valor: así una BD sin esa migración aplicada sigue reservando.
+    ...(serviceId != null ? { service_id: serviceId } : {}),
+    ...(resourceId != null ? { resource_id: resourceId } : {}),
+    ...(extra != null ? { extra } : {})
+  };
+  // B5.3: la preferencia de profesional va aparte para poder reintentar sin
+  // ella. TOLERANCIA BIEN HECHA: si falta la migración, la cita se guarda
+  // igual (perdiendo la preferencia) en vez de dejar a la clienta sin poder
+  // reservar. Lo contrario — que un despliegue a medias impida reservar — es
+  // el peor resultado posible para el negocio.
+  const opcionales = resourcePedido === true ? { resource_pedido: true } : {};
+
+  async function insertar(fila) {
+    return supabase.from('appointments').insert(fila).select('*').single();
+  }
+
   try {
-    const { data, error } = await supabase
-      .from('appointments')
-      .insert({
-        store_id: storeId,
-        customer_id: customerId,
-        start_at: start,
-        end_at: end,
-        google_event_id: googleEventId,
-        source: source || 'whatsapp',
-        // B2: las columnas del catálogo solo se envían si tienen valor —
-        // así una BD sin la migración aplicada sigue reservando sin romper
-        ...(serviceId != null ? { service_id: serviceId } : {}),
-        ...(resourceId != null ? { resource_id: resourceId } : {}),
-        // B5.3: solo se envía cuando es true, para que una BD sin la
-        // migración aplicada siga reservando sin romper
-        ...(resourcePedido === true ? { resource_pedido: true } : {}),
-        ...(extra != null ? { extra } : {})
-      })
-      .select('*')
-      .single();
+    let { data, error } = await insertar({ ...base, ...opcionales });
+
+    if (error && Object.keys(opcionales).length && faltaColumna(error)) {
+      console.warn(
+        '[DB] Falta la migración de «elegir profesional» (database/migration_elegir_profesional.sql). ' +
+        'La cita se guarda SIN la preferencia para no dejar a la clienta sin reservar.',
+        { storeId, message: error.message }
+      );
+      ({ data, error } = await insertar(base));
+    }
 
     if (error) {
       console.error('[DB] Error creando cita', { storeId, customerId, start, end, error });
       throw error;
     }
-
     return data;
   } catch (err) {
     console.error('[DB] Excepción creando cita', { storeId, customerId, start, end, err });

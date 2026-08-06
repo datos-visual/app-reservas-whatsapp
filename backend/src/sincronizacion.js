@@ -18,8 +18,12 @@
 // y todo vuelve a comportarse exactamente como antes.
 
 const { DateTime } = require('luxon');
-const { supabase, cancelAppointment, getStoreConfig } = require('./db');
+const {
+  supabase, cancelAppointment, getStoreConfig,
+  getWhatsappAccountByStoreId, logMessage
+} = require('./db');
 const { listEventsForRange, getCalendarEvent } = require('./calendar');
+const { sendTextMessage } = require('./whatsappCloud');
 
 const DIAS_POR_DEFECTO = 30;
 
@@ -58,11 +62,50 @@ async function guardarAjusteSync(storeId, activo) {
   return activo === true;
 }
 
+/**
+ * Avisa a la clienta de que su cita se ha anulado.
+ *
+ * Esto faltaba y era un agujero de los feos: la tienda borraba el evento en
+ * su Google Calendar, nosotros liberábamos el hueco… y la clienta seguía
+ * creyendo que tenía cita. Se presentaba en la peluquería.
+ *
+ * Best-effort: si está fuera de la ventana de 24 h de Meta el envío falla y
+ * queda en el log, pero la cancelación NUNCA se ve afectada por esto.
+ */
+async function avisarCancelacion(storeId, cita, zone) {
+  try {
+    const telefono = cita?.customers?.phone;
+    if (!telefono) return;
+
+    const cuenta = await getWhatsappAccountByStoreId(storeId);
+    if (!cuenta?.access_token) return;
+
+    const cuando = DateTime.fromISO(cita.start_at, { zone: zone || 'Europe/Madrid' })
+      .setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+    const texto =
+      `Te aviso de que tu cita del ${cuando} ha quedado anulada. ` +
+      'Si quieres otra, dime qué día te viene bien y miramos huecos.';
+
+    await sendTextMessage({
+      phoneNumberId: cuenta.phone_number_id,
+      accessToken: cuenta.access_token,
+      to: telefono,
+      text: texto
+    });
+    await logMessage({ storeId, phone: telefono, body: texto, fromMe: true });
+    console.log('[Sync] Clienta avisada de la anulación', { storeId, citaId: cita.id });
+  } catch (err) {
+    console.warn('[Sync] No se pudo avisar a la clienta de la anulación', {
+      storeId, citaId: cita?.id, message: err?.message
+    });
+  }
+}
+
 /** Citas confirmadas futuras que tienen evento en Google. */
 async function citasVigilables(storeId, { desde, hasta }) {
   const { data, error } = await supabase
     .from('appointments')
-    .select('id, start_at, end_at, google_event_id, customer_id, service_id')
+    .select('id, start_at, end_at, google_event_id, customer_id, service_id, customers ( phone, name )')
     .eq('store_id', storeId)
     .eq('status', 'confirmed')
     .not('google_event_id', 'is', null)
@@ -138,6 +181,7 @@ async function reconciliarTienda(storeId, { dias = DIAS_POR_DEFECTO, requestId }
     console.log('[Sync] Cita liberada: el evento se borró en Google Calendar', {
       storeId, citaId: cita.id, inicio: cita.start_at, requestId
     });
+    await avisarCancelacion(storeId, cita, zone);
     liberadas.push(cancelada);
   }
 
@@ -164,7 +208,7 @@ async function reconciliarDia(storeId, dateIso, eventos, zone) {
 
     const { data, error } = await supabase
       .from('appointments')
-      .select('id, start_at, google_event_id')
+      .select('id, start_at, google_event_id, customers ( phone, name )')
       .eq('store_id', storeId)
       .eq('status', 'confirmed')
       .not('google_event_id', 'is', null)
@@ -196,6 +240,7 @@ async function reconciliarDia(storeId, dateIso, eventos, zone) {
       console.log('[Sync] Hueco recuperado al vuelo (evento borrado en Calendar)', {
         storeId, citaId: cita.id, inicio: cita.start_at
       });
+      await avisarCancelacion(storeId, cita, tz);
       liberadas.push(cancelada);
     }
     return liberadas;
