@@ -471,7 +471,15 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
  * huecos TAL CUAL (comportamiento histórico).
  * Añade a cada hueco `personasLibres` para poder mostrarlo si interesa.
  */
-async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId = null, resourceId = null) {
+/**
+ * @param eventosAjenos Eventos del Google Calendar de la tienda que NO son
+ *   citas nuestras: los que la dueña escribe a mano («Cita con Sra. Marina»)
+ *   y nuestras citas sin profesional asignada. Cada uno CONSUME UNA PLAZA del
+ *   equipo aunque no sepamos de quién es. Sin esto, con tres peluqueras y una
+ *   cita escrita a mano, el asistente seguía ofreciendo tres citas más a esa
+ *   hora: cuatro clientas y tres manos.
+ */
+async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId = null, resourceId = null, eventosAjenos = []) {
   if (!Array.isArray(slots) || !slots.length) return slots;
 
   // Interruptores de la tienda: si están apagados, esto no filtra nada
@@ -496,6 +504,14 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
   };
   const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
+  // Rangos ocupados por eventos ajenos (ver comentario de la firma)
+  const ajenos = (eventosAjenos || [])
+    .filter((e) => e?.start?.dateTime && e?.end?.dateTime && e.status !== 'cancelled')
+    .map((e) => ({
+      inicio: DateTime.fromISO(e.start.dateTime, { setZone: true }).setZone(zone),
+      fin: DateTime.fromISO(e.end.dateTime, { setZone: true }).setZone(zone)
+    }));
+
   const resultado = [];
   for (const original of slots) {
     let hueco = original;   // OJO: nunca reasignar la variable del for...of
@@ -506,6 +522,15 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
         storeId, hueco.startIso, hueco.endIso, zone, cache, serviceId
       );
       if (!libres.length) continue;
+
+      // Cada evento ajeno que solape se lleva una plaza. No sabemos de quién,
+      // así que se descuenta del total: es lo único honesto que se puede
+      // hacer con un calendario compartido.
+      const ini = DateTime.fromISO(hueco.startIso, { zone });
+      const fin = DateTime.fromISO(hueco.endIso, { zone });
+      const plazasTomadas = ajenos.filter((a) => solapa(ini, fin, a.inicio, a.fin)).length;
+      if (libres.length <= plazasTomadas) continue;
+
       // B5.3: si la clienta pidió a alguien, solo valen SUS huecos
       if (resourceId && !libres.some((p) => p.id === Number(resourceId))) continue;
       hueco = { ...hueco, personasLibres: libres.length };

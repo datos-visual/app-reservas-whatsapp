@@ -261,7 +261,7 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
     capacity: await equipo.capacidadTienda(storeId),
     // Misma rejilla que el bot: si no, el panel ofrecería horas distintas
     stepMinutes: await equipo.pasoHuecos(storeId)
-  }), zone, servicio?.id ?? null);
+  }), zone, servicio?.id ?? null, null, eventos);
   if (!huecos.some((h) => h.label === inicio.toFormat('HH:mm'))) {
     throw errorValidacion(`A las ${inicio.toFormat('HH:mm')} no cabe ${servicio ? `«${servicio.name}» (${duracion} min)` : `una cita de ${duracion} min`}: está ocupado o fuera de horario.`);
   }

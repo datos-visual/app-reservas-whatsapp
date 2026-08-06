@@ -423,7 +423,7 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
   // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
   // (quién está de turno y libre). Sin equipo, todo sigue igual que antes.
   const slots = await equipo.filtrarHuecosPorEquipo(
-    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone, service.serviceId, service.resourceId ?? null
+    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone, service.serviceId, service.resourceId ?? null, events
   );
 
   if (!slots.length) {
@@ -747,7 +747,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     };
     const events = await sincronizacion.eventosDelDia(storeId, d.dateIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone, d.serviceId, d.resourceId ?? null
+      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone, d.serviceId, d.resourceId ?? null, events
     );
     const match = slots.find((s) => s.label === timeLabel);
 
@@ -1166,7 +1166,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     };
     const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone
+      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone, null, null, events
     );
     const slotMatch = slots.find((s) => s.label === normalizedTime);
 
@@ -1527,7 +1527,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const events = await sincronizacion.eventosDelDia(storeId, startIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, DateTime.fromISO(startIso, { zone }).toISODate(),
-      generate30MinSlots(startIso, events, slotOptions), zone, current.serviceId, current.resourceId ?? null
+      generate30MinSlots(startIso, events, slotOptions), zone, current.serviceId, current.resourceId ?? null, events
     );
     const startDt = DateTime.fromISO(startIso, { zone });
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
@@ -1792,7 +1792,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const events = await sincronizacion.eventosDelDia(storeId, iso, zone);
     let slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, iso, generate30MinSlots(iso, events, slotOptions), zone
+      storeId, iso, generate30MinSlots(iso, events, slotOptions), zone, null, null, events
     );
 
     // Franja horaria (viene del NLU: "por la tarde" → TARDE)
@@ -1914,7 +1914,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone
+      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone, null, null, events
     );
     const match = slots.find((s) => s.label === normalizedTime);
 
