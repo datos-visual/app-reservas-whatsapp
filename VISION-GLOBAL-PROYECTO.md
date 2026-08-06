@@ -714,6 +714,50 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.61 B5.3 — ELEGIR PROFESIONAL, funcionalidad PREMIUM (5-ago-2026)
+
+**Cómo se activa (y cómo se activará con el pago):** flag premium
+`elegir_profesional` en `stores.premium_features`. Hoy lo enciende el admin
+desde `/admin`; la tienda puede apagarlo desde «Mi plan». **El día que haya
+cobro, el webhook de Stripe solo tiene que llamar a la MISMA función**
+(`admin.updateStoreFeatures`) — no hay una segunda vía de activación, a
+propósito. Sin contratar, el bot no pregunta y todo funciona como antes.
+
+**El flujo:** tras elegir servicio, si hay ≥2 personas elegibles se ofrece una
+lista con «Me da igual» **la primera** (es lo que responde la mayoría) y los
+nombres detrás. A partir de ahí, los huecos que se enseñan son SOLO los de esa
+persona (`filtrarHuecosPorEquipo(..., resourceId)`), y la confirmación dice con
+quién queda la cita.
+
+**Lo que hacía falta modelar y no existía** (`migration_elegir_profesional.sql`):
+- `appointments.resource_pedido` — distingue «se lo asignamos» de «lo pidió
+  ella». Sin esto no se puede decidir nada sin pisar preferencias.
+- `appointments.aviso_profesional_at` — el barrido corre cada 10 min; sin esta
+  marca la clienta recibiría el mismo WhatsApp seis veces por hora.
+- `resources.elegible` — la dueña atiende pero no quiere salir en la lista.
+
+**AGUJERO PREEXISTENTE QUE ESTO CIERRA:** si una profesional se iba de
+vacaciones, sus citas seguían asignadas a ella y **nadie avisaba a nadie**. No
+se notaba porque el reparto era automático y cualquiera atendía. En cuanto la
+clienta elige, deja de valer. `profesional.revisarTodas()` (en el cron) hace:
+
+- persona asignada por nosotros y hay alguien libre → **reasigna en silencio**
+  (la clienta pidió hora, no persona);
+- persona **pedida** por la clienta, o nadie libre → **le escribe con tres
+  salidas**: otra profesional a la misma hora, otro hueco con la suya, o
+  anular. Y si no queda nadie libre, solo se le ofrecen dos: proponer algo
+  imposible es peor que no proponer nada.
+
+Ante un error de lectura NO se toca la cita: mover o avisar por un fallo
+transitorio sería peor que no hacer nada. Probado ejecutando la lógica con
+dobles (9 reglas: reasignación silenciosa, respeto a la preferencia, tres
+salidas, dos cuando no hay nadie, no repetir aviso, tienda sin equipo).
+
+**Decisiones conscientes que quedan fuera:** qué servicios sabe hacer cada
+persona (hoy todas hacen todo). Cuando una peluquería lo pida, es otra tabla y
+otra pantalla — y otro sitio donde la dueña puede olvidarse de marcar algo y
+quedarse sin huecos.
+
 ### 10.60 AUDITORÍA DE DISEÑO Y ACCESIBILIDAD (5-ago-2026)
 
 Revisión de las seis pantallas del panel por los cuatro ejes (tipografía,

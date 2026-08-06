@@ -13,9 +13,9 @@ import { IconMas, IconAviso, IconCheck } from '../../components/icons';
 
 type Turno = { id?: number; weekday: number; open_time: string; close_time: string };
 type Ausencia = { id: number; start_date: string; end_date: string; reason: string | null };
-type Persona = { id: number; name: string; is_active: boolean; turnos: Turno[]; ausencias: Ausencia[] };
+type Persona = { id: number; name: string; is_active: boolean; elegible?: boolean; turnos: Turno[]; ausencias: Ausencia[] };
 type Aparato = { id: number; name: string; units: number; is_active: boolean };
-type Ajustes = { usarEquipo: boolean; usarAparatos: boolean; sincronizarCalendar?: boolean };
+type Ajustes = { usarEquipo: boolean; usarAparatos: boolean; sincronizarCalendar?: boolean; elegirProfesional?: boolean };
 
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -137,6 +137,17 @@ export default function EquipoPage() {
       setAviso('Turnos guardados ✓');
       setTimeout(() => setAviso(''), 2500);
     } finally { setGuardando(null); }
+  }
+
+  // B5.3: sigue trabajando y contando para la capacidad, pero no aparece en
+  // la lista que ve la clienta al elegir profesional.
+  async function cambiarElegible(p: Persona, valor: boolean) {
+    const r = await apiFetch(`/api/equipo/${p.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ elegible: valor })
+    });
+    if (!r.ok) { setError('No se pudo guardar.'); return; }
+    cargar();
   }
 
   async function cambiarActiva(p: Persona) {
@@ -298,6 +309,16 @@ export default function EquipoPage() {
                       con el mismo peso que lo demás, era un accidente
                       esperando: se lee de izquierda a derecha. */}
                   <div className="flex items-center gap-2">
+                    {ajustes.elegirProfesional && (
+                      <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#57534e]">
+                        <input
+                          type="checkbox"
+                          checked={p.elegible !== false}
+                          onChange={(e) => cambiarElegible(p, e.target.checked)}
+                        />
+                        Aparece al reservar
+                      </label>
+                    )}
                     <button
                       onClick={() => setAbierta(abierta === p.id ? null : p.id)}
                       className="ca-btn-ghost ca-btn-sm"

@@ -440,6 +440,10 @@ alter table public.stores   add column if not exists margen_relleno_min  smallin
 alter table public.services add column if not exists trabajo_inicial_min smallint not null default 0;
 alter table public.services add column if not exists espera_min          smallint not null default 0;
 alter table public.services add column if not exists trabajo_final_min   smallint not null default 0;
+-- B5.3 — Elegir profesional (premium «elegir_profesional»)
+alter table public.appointments add column if not exists resource_pedido      boolean not null default false;
+alter table public.appointments add column if not exists aviso_profesional_at timestamptz;
+alter table public.resources    add column if not exists elegible             boolean not null default true;
 
 alter table public.appointments add column if not exists service_id  bigint references public.services(id)  on delete set null;
 alter table public.appointments add column if not exists resource_id bigint references public.resources(id) on delete set null;

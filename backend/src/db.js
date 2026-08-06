@@ -94,7 +94,7 @@ async function getCustomerByPhone(storeId, phone) {
   }
 }
 
-async function createAppointment({ storeId, customerId, start, end, googleEventId, source, serviceId = null, resourceId = null, extra = null }) {
+async function createAppointment({ storeId, customerId, start, end, googleEventId, source, serviceId = null, resourceId = null, resourcePedido = false, extra = null }) {
   try {
     const { data, error } = await supabase
       .from('appointments')
@@ -109,6 +109,9 @@ async function createAppointment({ storeId, customerId, start, end, googleEventI
         // así una BD sin la migración aplicada sigue reservando sin romper
         ...(serviceId != null ? { service_id: serviceId } : {}),
         ...(resourceId != null ? { resource_id: resourceId } : {}),
+        // B5.3: solo se envía cuando es true, para que una BD sin la
+        // migración aplicada siga reservando sin romper
+        ...(resourcePedido === true ? { resource_pedido: true } : {}),
         ...(extra != null ? { extra } : {})
       })
       .select('*')

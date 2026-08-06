@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { DateTime } = require('luxon');
 const config = require('./config');
 const {
+  supabase,
   logMessage,
   createOrGetCustomer,
   getCustomerByPhone,
@@ -58,6 +59,8 @@ const equipo = require('./equipo');
 // Sincronización con Google Calendar: si la tienda borra un evento en su
 // calendario, el hueco tiene que volver a ofrecerse (ver sincronizacion.js).
 const sincronizacion = require('./sincronizacion');
+// B5.3: citas cuya profesional deja de poder atender
+const profesional = require('./profesional');
 const {
   REMINDER_PAYLOADS,
   dispatchReminders,
@@ -420,7 +423,7 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
   // B5.1: si la tienda tiene equipo, la disponibilidad la manda el equipo
   // (quién está de turno y libre). Sin equipo, todo sigue igual que antes.
   const slots = await equipo.filtrarHuecosPorEquipo(
-    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone, service.serviceId
+    storeId, dateIso, generate30MinSlots(dateIso, events, slotOptions), zone, service.serviceId, service.resourceId ?? null
   );
 
   if (!slots.length) {
@@ -544,6 +547,32 @@ async function notificarListaEspera({ storeId, phoneNumberId, accessToken, start
 }
 
 /**
+ * B5.3 — «¿Con quién?». Solo aparece si la tienda tiene contratada la función
+ * premium `elegir_profesional` Y hay al menos DOS personas elegibles: con una
+ * sola, preguntar es hacerle perder el tiempo a la clienta.
+ *
+ * «Me da igual» va la PRIMERA a propósito: es lo que responde la mayoría, y
+ * en una lista de WhatsApp lo primero es lo que menos cuesta tocar.
+ */
+async function sendProfessionalList({ storeId, phoneNumberId, accessToken, to, service }) {
+  const rows = [
+    { id: 'ca:res:prof:0', title: 'Me da igual', description: 'Quien esté libre a esa hora' },
+    ...service.elegibles.map((p) => ({ id: `ca:res:prof:${p.id}`, title: String(p.name).slice(0, 24) }))
+  ];
+
+  await sendInteractiveList({
+    phoneNumberId, accessToken, to,
+    bodyText: `«${service.serviceName}» (${service.durationMinutes} min). ¿Con quién quieres la cita?`,
+    buttonText: 'Elegir profesional',
+    sections: [{ title: 'Profesionales', rows: rows.slice(0, 10) }]
+  });
+  await logMessage({
+    storeId, phone: to, fromMe: true,
+    body: `¿Con quién quieres la cita de «${service.serviceName}»? — ${service.elegibles.map((p) => p.name).join(', ')} o quien esté libre`
+  });
+}
+
+/**
  * Router de payloads del flujo guiado (`ca:*`, B1/B2). Devuelve true si el
  * payload era conocido y se ha respondido. Los ids se validan siempre contra
  * el store_id resuelto por webhook — nunca se confía en el payload.
@@ -587,6 +616,59 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       serviceName: svc.name,
       durationMinutes: svc.duration_minutes,
       priceEur: svc.price_eur
+    };
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    // ¿Le dejamos elegir profesional? Premium + al menos dos elegibles.
+    const premium = await getPremiumFeatures(storeId);
+    const elegibles = premium?.elegir_profesional === true
+      ? await equipo.listarElegibles(storeId)
+      : [];
+
+    if (elegibles.length >= 2) {
+      const conElegibles = { ...service, elegibles: elegibles.map((p) => ({ id: p.id, name: p.name })) };
+      await setConversationState(storeId, from, {
+        flow: { name: 'reserva', step: 'SELECT_PROF', data: conElegibles, expiresAt }
+      }, expiresAt);
+      try {
+        await sendProfessionalList({ storeId, phoneNumberId, accessToken, to: from, service: conElegibles });
+        return true;
+      } catch (err) {
+        // Si la lista falla, seguir sin preguntar es mejor que dejarla colgada
+        console.warn('[Flujo] No se pudo ofrecer la elección de profesional', { storeId, err: err?.message });
+      }
+    }
+
+    await setConversationState(storeId, from, {
+      flow: { name: 'reserva', step: 'SELECT_DATE', data: service, expiresAt }
+    }, expiresAt);
+    await sendDateButtons({ storeId, phoneNumberId, accessToken, to: from, service });
+    return true;
+  }
+
+  // Ha elegido profesional (o «me da igual») → seguir con el día
+  if (payload.startsWith('ca:res:prof:')) {
+    const elegido = parseInt(payload.slice('ca:res:prof:'.length), 10);
+    const pending = await getConversationState(storeId, from);
+    const data = pending?.state?.flow?.data;
+    if (!data) {
+      await sendWelcomeMenu({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: 'Se me ha pasado el hilo de la conversación. Empezamos de nuevo:'
+      });
+      return true;
+    }
+
+    // 0 = «me da igual». Se valida contra las elegibles que le enseñamos:
+    // el payload viene del cliente y nunca se confía en él.
+    const valida = Number.isInteger(elegido) && elegido > 0
+      ? (data.elegibles || []).find((p) => p.id === elegido)
+      : null;
+
+    const service = {
+      ...data,
+      resourceId: valida ? valida.id : null,
+      resourceName: valida ? valida.name : null
     };
     const expiresAt = Date.now() + 10 * 60 * 1000;
     await setConversationState(storeId, from, {
@@ -665,7 +747,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     };
     const events = await sincronizacion.eventosDelDia(storeId, d.dateIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone, d.serviceId
+      storeId, d.dateIso, generate30MinSlots(d.dateIso, events, slotOptions), zone, d.serviceId, d.resourceId ?? null
     );
     const match = slots.find((s) => s.label === timeLabel);
 
@@ -876,6 +958,87 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       text: 'Sin problema. Si te encaja otro día, dímelo y miramos huecos.'
     });
     return true;
+  }
+
+  // --- B5.3: la clienta responde al aviso de «tu profesional no puede» ---
+  if (payload.startsWith('ca:prof:')) {
+    const [, , accion, idTxt] = payload.split(':');
+    const citaId = parseInt(idTxt, 10);
+
+    // El id viene del cliente: se valida SIEMPRE contra su propia tienda y
+    // su propio teléfono antes de tocar nada.
+    const { data: cita } = await supabase
+      .from('appointments')
+      .select('id, start_at, end_at, service_id, resource_id, status, customers ( phone ), resources ( name )')
+      .eq('id', citaId)
+      .eq('store_id', storeId)
+      .maybeSingle();
+
+    if (!cita || cita.status !== 'confirmed' || cita.customers?.phone !== from) {
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: 'Esa cita ya no está activa. Escríbeme y miramos qué hacemos.'
+      });
+      return true;
+    }
+
+    const storeConfig = await getStoreConfig(storeId);
+    const zone = storeConfig?.timezone || 'Europe/Madrid';
+
+    if (accion === 'otra') {
+      const otra = await profesional.otraPersonaLibre(storeId, cita, zone);
+      if (!otra) {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: 'Vaya, justo ahora no queda nadie libre a esa hora. Dime otro día u hora y te busco hueco.'
+        });
+        return true;
+      }
+      await supabase
+        .from('appointments')
+        // Deja de ser una preferencia de la clienta: ha aceptado un cambio
+        .update({ resource_id: otra.id, resource_pedido: false })
+        .eq('id', cita.id)
+        .eq('store_id', storeId);
+      console.log('[Profesional] La clienta acepta otra profesional', { storeId, citaId: cita.id, a: otra.id });
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Perfecto, tu cita del ${fmtHuman(cita.start_at)} queda con ${otra.name}. ¡Te esperamos!`
+      });
+      return true;
+    }
+
+    if (accion === 'hueco') {
+      // Mismo circuito que CAMBIAR cita: no se duplica lógica de reserva
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        pendingRescheduleFrom: {
+          appointmentId: cita.id,
+          startIso: cita.start_at,
+          serviceId: cita.service_id ?? null,
+          resourceId: cita.resource_id ?? null,
+          expiresAt
+        }
+      }, expiresAt);
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Dime qué día y hora te vendrían bien con ${cita.resources?.name || 'tu profesional'} y miro sus huecos.`
+      });
+      return true;
+    }
+
+    if (accion === 'anular') {
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      await setConversationState(storeId, from, {
+        pendingCancellation: { appointmentId: cita.id, startIso: cita.start_at, expiresAt }
+      }, expiresAt);
+      await preguntarSiNo({
+        storeId, phoneNumberId, accessToken, to: from,
+        pregunta: `¿Anulo tu cita del ${fmtHuman(cita.start_at)}?`,
+        siTitulo: 'Sí, anúlala', noTitulo: 'No, la mantengo'
+      });
+      return true;
+    }
   }
 
   if (payload === 'ca:apt:si' || payload === 'ca:apt:no') {
@@ -1331,7 +1494,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const events = await sincronizacion.eventosDelDia(storeId, startIso, zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
       storeId, DateTime.fromISO(startIso, { zone }).toISODate(),
-      generate30MinSlots(startIso, events, slotOptions), zone, current.serviceId
+      generate30MinSlots(startIso, events, slotOptions), zone, current.serviceId, current.resourceId ?? null
     );
     const startDt = DateTime.fromISO(startIso, { zone });
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
@@ -1343,7 +1506,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         phoneNumberId,
         accessToken,
         to: from,
-        text: 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
+        text: current.resourceId && !pedida
+          ? `Vaya, ${current.resourceName || 'esa profesional'} acaba de quedarse sin ese hueco. Dime otra hora y miro cuándo puede.`
+          : 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
       });
       return;
     }
@@ -1352,7 +1517,21 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // sin equipo, la de siempre: "no hay ninguna cita a esa hora".
     // (Antes se preguntaba siempre lo segundo, y con dos peluqueras eso
     //  rechazaba la segunda cita de la misma hora — bug real 3-ago-2026.)
-    const personaAsignada = await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone, current.serviceId ?? null);
+    // B5.3: si la clienta pidió a alguien, esa manda; si no, reparto normal.
+    // Se vuelve a comprobar que sigue libre — entre que vio el hueco y
+    // confirmó pueden haber pasado minutos.
+    const pedida = current.resourceId
+      ? await equipo.puedeAtender(storeId, {
+          resourceId: current.resourceId,
+          inicioIso: startIso,
+          finIso: endIso,
+          zone,
+          serviceId: current.serviceId ?? null
+        })
+      : false;
+    const personaAsignada = pedida
+      ? Number(current.resourceId)
+      : await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone, current.serviceId ?? null);
     const conEquipo = await equipo.hayEquipoActivo(storeId);
 
     const ocupado = conEquipo
@@ -1403,7 +1582,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           googleEventId: calendarEvent.id,
           source: 'whatsapp',
           serviceId: current.serviceId ?? null,
-          resourceId: personaAsignada
+          resourceId: personaAsignada,
+          // Deja constancia de que la eligió la clienta: si esa persona no
+          // puede más adelante, se le pregunta en vez de reasignar sin más.
+          resourcePedido: pedida
         });
 
         await deleteConversationState(storeId, from);
@@ -1416,10 +1598,13 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         // instante que ninguna: primero se reserva la nueva, luego se anula la vieja)
         // Cliente conocido → confirmar indicando a nombre de quién queda
         // (y dejar la puerta abierta a corregirlo si es para otra persona)
+        // Si eligió profesional, la confirmación lo dice: es media razón por
+        // la que pidió cita con esa persona.
+        const conQuien = pedida && current.resourceName ? ` con ${current.resourceName}` : '';
         let textoConfirmacion = customer?.name
-          ? `¡Hecho, ${customer.name}! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
+          ? `¡Hecho, ${customer.name}! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''}${conQuien} ` +
             `queda confirmada para el ${fmtHuman(startIso)}, a tu nombre. ¡Te esperamos!`
-          : `¡Hecho! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''} ` +
+          : `¡Hecho! Tu cita${current.serviceName ? ` de ${current.serviceName}` : ''}${conQuien} ` +
             `queda confirmada para el ${fmtHuman(startIso)}. Te esperamos.`;
 
         // Primera reserva sin nombre → pedirlo (para la agenda del negocio).
@@ -2532,11 +2717,22 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
       console.error('[Sync] Error en la reconciliación con Calendar', { requestId, err });
     }
 
+    // B5.3: citas cuya profesional ya no puede atenderlas (baja, vacaciones
+    // o cambio de turno). Reasigna sola las que puede y pregunta a la clienta
+    // las que eligió persona.
+    let profesionales = null;
+    try {
+      profesionales = await profesional.revisarTodas();
+    } catch (err) {
+      console.error('[Profesional] Error en el barrido de citas', { requestId, err });
+    }
+
     res.json({
       ...resumen,
       tokens_por_caducar: tokensPorCaducar,
       recordatorios,
-      sincronizacion_calendar: sincronizacionCalendar
+      sincronizacion_calendar: sincronizacionCalendar,
+      profesionales
     });
   } catch (err) {
     console.error('[MissedCall] Error en despacho', { requestId, err });
@@ -2562,7 +2758,19 @@ app.get('/api/equipo', async (req, res) => {
       sincronizacion.sincronizacionActiva(storeId),
       equipo.usarFases(storeId)
     ]);
-    res.json({ ...completo, aparatos, ajustes: { ...ajustes, sincronizarCalendar, usarFases: fases } });
+    // B5.3: solo tiene sentido enseñar «aparece al reservar» si la tienda
+    // tiene contratada la función de elegir profesional
+    const premiumEquipo = await getPremiumFeatures(storeId);
+    res.json({
+      ...completo,
+      aparatos,
+      ajustes: {
+        ...ajustes,
+        sincronizarCalendar,
+        usarFases: fases,
+        elegirProfesional: premiumEquipo?.elegir_profesional === true
+      }
+    });
   } catch (err) {
     console.error('[API] Error en GET /api/equipo', err);
     res.status(500).json({ error: 'Error leyendo el equipo (¿migración de equipo aplicada?)' });
@@ -2680,8 +2888,26 @@ app.put('/api/equipo/:id', async (req, res) => {
       await equipo.guardarTurnos(storeId, id, req.body.turnos);
     }
     const actualizada = await equipo.actualizarPersona(storeId, id, {
-      nombre: req.body?.nombre, is_active: req.body?.is_active
+      nombre: req.body?.nombre,
+      is_active: req.body?.is_active,
+      elegible: req.body?.elegible          // B5.3: ¿sale en la lista al reservar?
     });
+
+    // Dar de baja a alguien con citas futuras no es inocuo: se dice cuántas
+    // hay y cuántas las pidió expresamente la clienta, para que la dueña
+    // sepa lo que acaba de provocar. El barrido del cron hará el resto.
+    let afectadas = null;
+    if (req.body?.is_active === false) {
+      const citas = await profesional.citasAfectadas(storeId, id);
+      if (citas.length) {
+        afectadas = {
+          total: citas.length,
+          pedidas: citas.filter((c) => c.resource_pedido).length
+        };
+        console.log('[Equipo] Baja con citas futuras', { storeId, resourceId: id, ...afectadas });
+      }
+    }
+    res.json({ ...(actualizada || { ok: true }), afectadas });
     res.json(actualizada || { ok: true });
   } catch (err) {
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });

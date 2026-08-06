@@ -19,7 +19,7 @@ type FeatureState = {
 // Honestidad de catálogo: estas cinco están diseñadas pero NO construidas.
 // Enseñarlas como «disponibles en planes superiores» sería vender humo, y
 // además contratarlas no haría nada — que es peor que no ofrecerlas.
-const SIN_CONSTRUIR = ['reactivation', 'post_sale', 'style_file', 'flash_offers', 'elegir_profesional'];
+const SIN_CONSTRUIR = ['reactivation', 'post_sale', 'style_file', 'flash_offers'];
 
 const ETIQUETAS: Record<string, { nombre: string; descripcion: string }> = {
   smart_slots: {
@@ -53,7 +53,7 @@ const ETIQUETAS: Record<string, { nombre: string; descripcion: string }> = {
   },
   elegir_profesional: {
     nombre: 'Elegir profesional',
-    descripcion: 'Tus clientas podrán pedir cita con quien quieran, y la confirmación dirá con quién es.'
+    descripcion: 'Tus clientas eligen con quién quieren la cita. Si esa persona no puede, se les avisa y deciden ellas: otra profesional, otro hueco o anular.'
   }
 };
 

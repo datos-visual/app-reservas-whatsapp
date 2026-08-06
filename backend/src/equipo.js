@@ -98,6 +98,42 @@ async function guardarAjustes(storeId, { usarEquipo, usarAparatos }) {
   return ajustesTienda(storeId);
 }
 
+/**
+ * Personas que la clienta puede ELEGIR: activas y marcadas como elegibles.
+ * Tolerante: si falta la columna (migración sin aplicar), todas valen.
+ */
+async function listarElegibles(storeId) {
+  const personas = await listarPersonas(storeId);
+  return personas.filter((p) => p.elegible !== false);
+}
+
+/**
+ * ¿Puede ESTA persona atender un rango concreto? Se usa para detectar citas
+ * que se han quedado huérfanas (baja, vacaciones o cambio de turno) sin
+ * repetir la lógica de disponibilidad, que es la parte delicada del sistema.
+ * `excluirCita` evita que la propia cita cuente como conflicto consigo misma.
+ */
+async function puedeAtender(storeId, { resourceId, inicioIso, finIso, zone, serviceId = null, excluirCitaId = null }) {
+  const dateIso = DateTime.fromISO(inicioIso, { zone }).toISODate();
+  const personas = await listarPersonas(storeId);
+  const persona = personas.find((p) => p.id === Number(resourceId));
+  if (!persona) return false;               // borrada o dada de baja
+
+  const citas = (await citasDelDia(storeId, dateIso, zone))
+    .filter((c) => c.id !== excluirCitaId);
+
+  const cache = {
+    personas: [persona],
+    turnos: await listarTurnos(storeId),
+    ausencias: await listarAusencias(storeId, dateIso),
+    citas,
+    fases: await fasesPorServicio(storeId),
+    margen: await margenRelleno(storeId)
+  };
+  const { libres } = await disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache, serviceId);
+  return libres.some((p) => p.id === Number(resourceId));
+}
+
 /** ¿Se está gestionando la disponibilidad por profesional AHORA MISMO? */
 async function hayEquipoActivo(storeId) {
   const { usarEquipo } = await ajustesTienda(storeId);
@@ -435,7 +471,7 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
  * huecos TAL CUAL (comportamiento histórico).
  * Añade a cada hueco `personasLibres` para poder mostrarlo si interesa.
  */
-async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId = null) {
+async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId = null, resourceId = null) {
   if (!Array.isArray(slots) || !slots.length) return slots;
 
   // Interruptores de la tienda: si están apagados, esto no filtra nada
@@ -470,6 +506,8 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
         storeId, hueco.startIso, hueco.endIso, zone, cache, serviceId
       );
       if (!libres.length) continue;
+      // B5.3: si la clienta pidió a alguien, solo valen SUS huecos
+      if (resourceId && !libres.some((p) => p.id === Number(resourceId))) continue;
       hueco = { ...hueco, personasLibres: libres.length };
     }
 
@@ -540,10 +578,13 @@ async function crearPersona(storeId, { nombre }) {
   return data;
 }
 
-async function actualizarPersona(storeId, id, { nombre, is_active }) {
+async function actualizarPersona(storeId, id, { nombre, is_active, elegible }) {
   const patch = {};
   if (nombre !== undefined) patch.name = String(nombre).trim().slice(0, 40);
   if (is_active !== undefined) patch.is_active = is_active === true;
+  // B5.3: sigue trabajando y contando para la capacidad, pero no sale en la
+  // lista que ve la clienta (la dueña que atiende, alguien en formación...)
+  if (elegible !== undefined) patch.elegible = elegible === true;
   if (!Object.keys(patch).length) return null;
 
   const { data, error } = await supabase
@@ -847,6 +888,8 @@ async function equipoCompleto(storeId) {
 
 module.exports = {
   listarPersonas,
+  listarElegibles,
+  puedeAtender,
   capacidadTienda,
   borrarPersona,
   reasignarCita,
