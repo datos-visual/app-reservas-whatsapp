@@ -773,7 +773,13 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
         serviceId: d.serviceId,
         serviceName: d.serviceName,
         durationMinutes: d.durationMinutes,
-        priceEur: d.priceEur ?? null
+        priceEur: d.priceEur ?? null,
+        // B5.3 — SIN ESTO la preferencia se pierde en el último salto y el
+        // reparto automático asigna a otra persona (bug real 6-ago-2026).
+        // Si tocas los campos de este estado, revisa TODOS los saltos:
+        // servicio → profesional → día → hora → confirmación.
+        resourceId: d.resourceId ?? null,
+        resourceName: d.resourceName ?? null
       }
     }, expiresAt);
 
@@ -782,7 +788,10 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
     try {
       await sendInteractiveButtons({
         phoneNumberId, accessToken, to: from,
-        bodyText: `Resumen de tu cita:\n${d.serviceName} (${d.durationMinutes} min)${precio}\nEl ${fecha}.\n\n¿Confirmamos?`,
+        bodyText:
+          `Resumen de tu cita:\n${d.serviceName} (${d.durationMinutes} min)${precio}` +
+          `${d.resourceName ? `\nCon ${d.resourceName}` : ''}` +
+          `\nEl ${fecha}.\n\n¿Confirmamos?`,
         buttons: [
           { id: 'ca:res:confirm', title: 'Confirmar ✓' },
           { id: 'ca:res:back', title: 'Cambiar hora' },
@@ -791,7 +800,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       });
       await logMessage({
         storeId, phone: from, fromMe: true,
-        body: `Resumen: ${d.serviceName} el ${fecha}. ¿Lo confirmo?`
+        body: `Resumen: ${d.serviceName}${d.resourceName ? ` con ${d.resourceName}` : ''} el ${fecha}. ¿Lo confirmo?`
       });
     } catch (err) {
       console.error('[Flujo] Error enviando resumen de confirmación', { storeId, err });
@@ -813,7 +822,15 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       await sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to: from, headerText: 'Esa selección ya caducó — empecemos de nuevo.' });
       return true;
     }
-    const service = { serviceId: pa.serviceId, serviceName: pa.serviceName, durationMinutes: pa.durationMinutes, priceEur: pa.priceEur };
+    const service = {
+      serviceId: pa.serviceId,
+      serviceName: pa.serviceName,
+      durationMinutes: pa.durationMinutes,
+      priceEur: pa.priceEur,
+      // Volver atrás NO puede perder con quién quería la cita
+      resourceId: pa.resourceId ?? null,
+      resourceName: pa.resourceName ?? null
+    };
     const expiresAt = Date.now() + 10 * 60 * 1000;
     await setConversationState(storeId, from, {
       flow: { name: 'reserva', step: 'SELECT_SLOT', data: { ...service, dateIso: pa.datePart }, expiresAt }
