@@ -156,6 +156,46 @@ async function sendAndLog({ storeId, phoneNumberId, accessToken, to, text }) {
 }
 
 /**
+ * Pregunta de SÍ o NO con botones nativos.
+ *
+ * Escribir «si» con el móvil en la mano, entre clienta y clienta, es la
+ * última fricción que quedaba en un flujo que ya va con botones. Los ids son
+ * los MISMOS que usa la lista de «Mis citas» (ca:apt:si / ca:apt:no), que el
+ * router ya reencamina al circuito de texto de siempre — así no se duplica
+ * lógica de confirmación, que es donde se cancelan citas de verdad.
+ *
+ * Si el envío interactivo falla (plantilla, ventana de 24 h, red), cae al
+ * texto de siempre: la persona SIEMPRE puede responder escribiendo SI o NO.
+ */
+async function preguntarSiNo({
+  storeId, phoneNumberId, accessToken, to,
+  pregunta, siTitulo = 'Sí', noTitulo = 'No', textoAlterno
+}) {
+  try {
+    const sentToday = await getMessagesSentToday(storeId, to);
+    if (sentToday >= config.maxMessagesPerDay) {
+      console.log('[RateLimit] Límite diario alcanzado', { storeId, to, sentToday });
+      return;
+    }
+    await sendInteractiveButtons({
+      phoneNumberId, accessToken, to,
+      bodyText: pregunta,
+      buttons: [
+        { id: 'ca:apt:si', title: siTitulo },
+        { id: 'ca:apt:no', title: noTitulo }
+      ]
+    });
+    await logMessage({ storeId, phone: to, body: pregunta, fromMe: true });
+  } catch (err) {
+    console.warn('[Flujo] Botones no disponibles, se pregunta por texto', { storeId, to, message: err?.message });
+    await sendAndLog({
+      storeId, phoneNumberId, accessToken, to,
+      text: textoAlterno || `${pregunta} Responde SI o NO.`
+    });
+  }
+}
+
+/**
  * Menú de bienvenida con botones nativos (B1). Es el destino de "hola",
  * AYUDA y del "no te he entendido" — sustituye a los textos con comandos.
  * Gratis: es respuesta de servicio dentro de la ventana de 24 h.
@@ -959,9 +999,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         durationMinutes: service?.duration_minutes ?? null
       }
     }, expiresAt);
-    await sendAndLog({
+    await preguntarSiNo({
       storeId, phoneNumberId, accessToken, to: from,
-      text: `¿Te cambio la cita del ${fmtHuman(oldCita.startIso)} al ${fmtHuman(startNew.toISO())}? Responde SI para confirmar o NO para dejarla como está.`
+      pregunta: `¿Te cambio la cita del ${fmtHuman(oldCita.startIso)} al ${fmtHuman(startNew.toISO())}?`,
+      siTitulo: 'Sí, cámbiala', noTitulo: 'No, déjala'
     });
   }
 
@@ -1056,9 +1097,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       await setConversationState(storeId, from, {
         pendingCancellation: { appointmentId: chosen.id, startIso: chosen.startIso, expiresAt }
       }, expiresAt);
-      await sendAndLog({
+      await preguntarSiNo({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `¿Cancelo tu cita del ${chosen.label}? Responde SI para cancelarla o NO para mantenerla.`
+        pregunta: `¿Cancelo tu cita del ${chosen.label}?`,
+        siTitulo: 'Sí, cancélala', noTitulo: 'No, la mantengo'
       });
       return;
     }
@@ -1683,12 +1725,13 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       }
     }, expiresAt);
 
-    await sendAndLog({
+    await preguntarSiNo({
       storeId,
       phoneNumberId,
       accessToken,
       to: from,
-      text: `¿Te reservo el ${fmtHuman(start.toISO())}? Responde SI para confirmar o NO para dejarlo.`
+      pregunta: `¿Te reservo el ${fmtHuman(start.toISO())}?`,
+      siTitulo: 'Sí, resérvala', noTitulo: 'No, déjalo'
     });
     return;
   }
@@ -1816,9 +1859,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       }
     }, expiresAt);
 
-    await sendAndLog({
+    await preguntarSiNo({
       storeId, phoneNumberId, accessToken, to: from,
-      text: `¿Cancelo tu cita del ${fmtHuman(target.start_at)}? Responde SI para cancelarla o NO para mantenerla.`
+      pregunta: `¿Cancelo tu cita del ${fmtHuman(target.start_at)}?`,
+      siTitulo: 'Sí, cancélala', noTitulo: 'No, la mantengo'
     });
     return;
   }
@@ -1915,9 +1959,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           await setConversationState(storeId, from, {
             pendingCancellation: { appointmentId: target.id, startIso: target.start_at, expiresAt }
           }, expiresAt);
-          await sendAndLog({
+          await preguntarSiNo({
             storeId, phoneNumberId, accessToken, to: from,
-            text: `¿Cancelo tu cita del ${fmtHuman(target.start_at)}? Responde SI o NO.`
+            pregunta: `¿Cancelo tu cita del ${fmtHuman(target.start_at)}?`,
+            siTitulo: 'Sí, cancélala', noTitulo: 'No, la mantengo'
           });
           return;
         }
@@ -2118,9 +2163,10 @@ async function handleReminderButton({ storeId, phoneNumberId, accessToken, from,
     await setConversationState(storeId, from, {
       pendingCancellation: { appointmentId: cita.id, startIso: cita.start_at, expiresAt }
     }, expiresAt);
-    await sendAndLog({
+    await preguntarSiNo({
       storeId, phoneNumberId, accessToken, to: from,
-      text: `¿Seguro que cancelo tu cita del ${fmtHuman(cita.start_at)}? Responde SI para cancelarla o NO para mantenerla.`
+      pregunta: `¿Seguro que cancelo tu cita del ${fmtHuman(cita.start_at)}?`,
+      siTitulo: 'Sí, cancélala', noTitulo: 'No, la mantengo'
     });
     return true;
   }
