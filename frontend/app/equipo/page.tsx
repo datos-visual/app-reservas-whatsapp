@@ -174,16 +174,13 @@ export default function EquipoPage() {
       const cuerpo = await r.json().catch(() => ({}));
       if (!r.ok) { setError(cuerpo.error || 'No se pudieron guardar los servicios.'); return; }
       await cargar();
-      // Si esto deja un servicio sin nadie, se dice AQUÍ y no en un log:
-      // el asistente dejaría de ofrecerlo y nadie se enteraría.
+      setError('');
+      // Si el guardado deja algún servicio sin nadie, ya lo canta el aviso
+      // rojo permanente de arriba (se recalcula en cargar()). Repetirlo aquí
+      // era decir dos veces lo mismo con dos redacciones distintas, que es
+      // peor que no decirlo: parecen dos problemas.
       const huerfanos: Servicio[] = cuerpo.serviciosSinNadie || [];
-      if (huerfanos.length) {
-        setError(
-          `Ojo: ${huerfanos.map((s) => s.name).join(', ')} ya no lo puede hacer nadie, ` +
-          'así que el asistente dejará de ofrecerlo.'
-        );
-      } else {
-        setError('');
+      if (!huerfanos.length) {
         setAviso('Servicios guardados ✓');
         setTimeout(() => setAviso(''), 2500);
       }
