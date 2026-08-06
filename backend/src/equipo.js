@@ -432,12 +432,21 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
     // 1) ¿Está ausente ese día?
     if (datos.ausencias.some((a) => a.resource_id === p.id)) return false;
 
-    // 2) ¿Su turno cubre los tramos en los que TRABAJA? (sin turnos = todo)
+    // 2) ¿Su turno cubre los tramos en los que TRABAJA?
+    //
+    //    «Sin turnos = trabaja todo el horario» se aplica A LA PERSONA, no al
+    //    día. Es la diferencia entre «no le hemos puesto horario, que atienda
+    //    siempre» y «tiene horario y el sábado no entra». Mirarlo por día hacía
+    //    que Marta, con turno solo los martes, saliera libre el resto de la
+    //    semana — y el asistente ofrecía citas con quien no está (bug 6-ago).
+    //
     //    Se miran los tramos activos, no el rango entero: mientras el tinte
     //    reposa la peluquera puede haberse ido, lo que no puede es faltar
     //    cuando toca aplicar o lavar.
-    const susTurnos = datos.turnos.filter((t) => t.resource_id === p.id && t.weekday === weekday);
-    if (susTurnos.length) {
+    const todosSusTurnos = datos.turnos.filter((t) => t.resource_id === p.id);
+    if (todosSusTurnos.length) {
+      const susTurnos = todosSusTurnos.filter((t) => t.weekday === weekday);
+      if (!susTurnos.length) return false;      // tiene horario propio y hoy libra
       const cubreTodo = tramosNuevos.every((tr) =>
         susTurnos.some((t) => {
           const abre = String(t.open_time).slice(0, 5);

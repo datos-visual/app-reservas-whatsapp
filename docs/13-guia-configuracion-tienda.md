@@ -46,10 +46,17 @@ otro sitio (siguiente punto).
 Da de alta a cada persona con su nombre. De aquí sale **cuántas citas se
 pueden dar a la vez**: con tres peluqueras, tres citas simultáneas.
 
-- **Turnos**: marca los días y horas de cada una. Si no marcas ninguno, se
-  entiende que trabaja todo el horario del negocio. El turno tiene que cubrir
-  el servicio **entero**: si Marta sale a las 14:00, no se le asignará un tinte
-  de dos horas que empieza a las 13:00.
+- **Turnos**: marca los días y horas de cada una. Funciona así, y conviene
+  entenderlo bien:
+  - Si **no le marcas ningún turno**, trabaja todo el horario del negocio,
+    todos los días que abres.
+  - En cuanto le marcas **aunque sea un solo turno**, pasa a tener horario
+    propio: **los días que no aparecen, libra**. Si a Marta le pones solo
+    «martes 10:00–14:00», Marta no atiende el resto de la semana.
+  - El turno tiene que cubrir el servicio **entero**: si Marta sale a las
+    14:00, no se le asignará un tinte de dos horas que empieza a las 13:00.
+
+  Es decir: o le pones **todos** sus días, o no le pongas ninguno.
 - **Vacaciones**: en la ficha de cada persona, botón *Turnos y vacaciones*.
   Es lo que hay que usar cuando libra una sola persona.
 - **Aparece al reservar** (solo si tienes contratado *Elegir profesional*):

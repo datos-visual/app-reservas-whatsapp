@@ -54,8 +54,10 @@ export function ventanaDelDia({
  * Franjas en las que una persona NO puede atender: vacaciones o fuera de
  * turno.
  *
- * REGLA CRÍTICA: sin turnos declarados para ese día, se considera disponible
- * todo el horario — exactamente como lo calcula el motor en el backend
+ * REGLA CRÍTICA: «sin turnos = todo el horario» se aplica A LA PERSONA, no al
+ * día. Quien no tiene NINGÚN turno declarado atiende siempre; quien tiene
+ * horario propio y ese día no aparece, LIBRA — el día entero va rayado. Es
+ * exactamente lo que calcula el motor en el backend
  * (equipo.disponibilidadEnRango). Si la pantalla pintara otra cosa estaría
  * mintiendo, y una peluquera que no se fía de su agenda vuelve al papel.
  */
@@ -77,8 +79,9 @@ export function franjasFueraDeTurno({
   const libra = ausencias.some((a) => a.start_date <= fecha && a.end_date >= fecha);
   if (libra) return [{ desde: inicio, hasta: fin, motivo: 'libra' }];
 
+  if (!turnos.length) return [];                 // sin horario propio: atiende siempre
   const suyos = turnos.filter((t) => t.weekday === diaSemana);
-  if (!suyos.length) return [];
+  if (!suyos.length) return [{ desde: inicio, hasta: fin, motivo: 'libra' }];
 
   const bandas = suyos
     .map((t) => ({ d: aMinutos(t.open_time) ?? inicio, h: aMinutos(t.close_time) ?? fin }))

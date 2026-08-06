@@ -2760,6 +2760,24 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
       console.error('[Profesional] Error en el barrido de citas', { requestId, err });
     }
 
+    // Constancia de la pasada: es lo que permite a /admin decir «última
+    // ejecución hace 4 minutos» y, sobre todo, gritar cuando hace media hora
+    // que no sabe nada. El planificador se ha caído DOS veces en silencio.
+    try {
+      await supabase.from('cron_runs').insert({
+        origen: req.header('user-agent')?.slice(0, 60) || 'desconocido',
+        resumen: {
+          recordatorios: recordatorios?.enviados ?? null,
+          liberadas: sincronizacionCalendar?.liberadas ?? null,
+          profesionales: profesionales?.avisadas ?? null,
+          tokens_por_caducar: tokensPorCaducar
+        }
+      });
+    } catch (err) {
+      // Que no se pueda anotar la pasada NUNCA puede tumbar el despacho
+      console.warn('[Cron] No se pudo registrar la pasada', { requestId, message: err?.message });
+    }
+
     res.json({
       ...resumen,
       tokens_por_caducar: tokensPorCaducar,

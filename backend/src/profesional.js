@@ -40,7 +40,22 @@ async function citasConProfesional(storeId, { dias = DIAS_VISTA } = {}) {
     .order('start_at', { ascending: true });
 
   if (error) {
-    console.error('[Profesional] Error leyendo citas', { storeId, message: error.message });
+    // Caso concreto y silencioso: falta la migración B5.3. La reserva sí
+    // funciona (createAppointment reintenta sin la columna opcional), así que
+    // nada falla a la vista — pero este barrido devuelve [] y la clienta nunca
+    // se entera de que su profesional no puede. Se dice con todas las letras.
+    const faltaColumna = /column .* does not exist|resource_pedido|aviso_profesional_at/i.test(
+      `${error.message} ${error.details || ''}`
+    );
+    if (faltaColumna) {
+      console.error(
+        '[Profesional] FALTA LA MIGRACIÓN database/migration_elegir_profesional.sql — ' +
+        'el barrido de citas huérfanas NO se está ejecutando en esta tienda',
+        { storeId, message: error.message }
+      );
+    } else {
+      console.error('[Profesional] Error leyendo citas', { storeId, message: error.message });
+    }
     return [];
   }
   return data || [];

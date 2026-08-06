@@ -45,6 +45,10 @@ export default function AdminPage() {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [actividad, setActividad] = useState<Record<string, { mensajes: any[]; citas: any[] } | null>>({});
   const [resumen, setResumen] = useState<Record<string, number | null> | null>(null);
+  // Vigilancia del planificador externo: si calla, no salen recordatorios
+  const [cron, setCron] = useState<{
+    ultima: string | null; hace_minutos: number | null; alerta: boolean; sin_datos?: boolean;
+  } | null>(null);
   const [altaAbierta, setAltaAbierta] = useState(false);
   const [alta, setAlta] = useState({
     name: '', timezone: 'Europe/Madrid', appointment_duration_minutes: 30,
@@ -82,6 +86,7 @@ export default function AdminPage() {
       const data = await r.json();
       setTiendas(data.stores || []);
       setResumen(data.resumen || null);
+      setCron(data.cron || null);
       setEntrado(true);
       sessionStorage.setItem('ca_admin_token', t);
     } catch {
@@ -255,6 +260,17 @@ export default function AdminPage() {
               <span className="text-[#9a3412]">{totalIncidencias} incidencia(s) detectada(s)</span>
             )}
           </p>
+          {/* Lo que no se vigila se cae en silencio: el planificador externo
+              ha muerto dos veces sin que nadie se enterase. */}
+          {cron && (
+            <p className={`mt-1 text-[13px] ${cron.alerta ? 'text-[#9f1239]' : 'text-[#57534e]'}`}>
+              {cron.sin_datos
+                ? '⚠️ El planificador no ha dejado constancia de ninguna pasada. Sin él no salen recordatorios ni se vigila el calendario.'
+                : cron.alerta
+                  ? `⚠️ El planificador no se ejecuta desde hace ${cron.hace_minutos} min. Revisa cron-job.org y el token INTERNAL_CRON_TOKEN.`
+                  : `Planificador al día · última pasada hace ${cron.hace_minutos} min`}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <button

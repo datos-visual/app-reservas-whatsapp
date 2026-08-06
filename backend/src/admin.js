@@ -36,6 +36,36 @@ function indexBy(arr, key = 'store_id') {
  * Las incidencias se CALCULAN de los datos (previsión operativa): el admin ve
  * el problema antes de que la tienda llame.
  */
+/**
+ * ¿Cuándo corrió el despachador por última vez? Sin esto, que el planificador
+ * externo muera es INVISIBLE: nadie llama al backend, así que no hay error
+ * que ver. Ha pasado dos veces (jul-2026 y 5-ago-2026).
+ */
+async function estadoDelCron() {
+  try {
+    const { data, error } = await supabase
+      .from('cron_runs')
+      .select('ran_at, origen, resumen')
+      .order('ran_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return { ultima: null, hace_minutos: null, alerta: true, sin_datos: true };
+
+    const minutos = Math.round(DateTime.now().diff(DateTime.fromISO(data.ran_at), 'minutes').minutes);
+    return {
+      ultima: data.ran_at,
+      origen: data.origen || null,
+      hace_minutos: minutos,
+      // El principal corre cada 10 min y el de respaldo cada hora: pasada
+      // una hora y cuarto sin noticias, algo está roto de verdad.
+      alerta: minutos > 75,
+      resumen: data.resumen || null
+    };
+  } catch {
+    return { ultima: null, hace_minutos: null, alerta: true, sin_datos: true };
+  }
+}
+
 async function getAdminOverview() {
   const [stores, was, cals, mcs, rems, horarios] = await Promise.all([
     fetchAll('stores', '*'),
@@ -45,6 +75,8 @@ async function getAdminOverview() {
     fetchAll('reminder_settings', 'store_id, enabled, template_status'),
     fetchAll('store_business_hours', 'store_id, weekday, is_closed')
   ]);
+
+  const cron = await estadoDelCron();
 
   // Citas ±7 días de todas las tiendas en una sola query; conteo en memoria
   const ahora = DateTime.now();
@@ -150,7 +182,7 @@ async function getAdminOverview() {
     clientes_totales: clientes
   };
 
-  return { generado: ahora.toISO(), flagsDisponibles: PREMIUM_FLAGS, resumen, stores: result };
+  return { generado: ahora.toISO(), cron, flagsDisponibles: PREMIUM_FLAGS, resumen, stores: result };
 }
 
 /**
