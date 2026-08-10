@@ -152,7 +152,9 @@ async function getAdminOverview() {
     // el asistente se quede en modo botones, no después.
     const iaHoy = usoIa.get(s.id) || 0;
     const iaTope = Number.isInteger(s.nlu_max_dia) ? s.nlu_max_dia : config.nluMaxDia;
-    if (iaTope > 0 && iaHoy > iaTope)
+    if (s.nlu_activo === false)
+      incidencias.push({ nivel: 'aviso', texto: 'IA apagada a mano: el asistente funciona solo con botones' });
+    else if (iaTope > 0 && iaHoy > iaTope)
       incidencias.push({ nivel: 'error', texto: `Tope de IA superado hoy (${iaHoy}/${iaTope}): solo botones` });
     else if (iaTope > 0 && iaHoy >= iaTope * 0.8)
       incidencias.push({ nivel: 'aviso', texto: `Consumo de IA alto hoy (${iaHoy}/${iaTope})` });
@@ -171,7 +173,13 @@ async function getAdminOverview() {
         recordatorios: rem ? { enabled: !!rem.enabled, template_status: rem.template_status || null } : null
       },
       citas: { ultimos7dias: citasPasadas, proximos7dias: citasProximas },
-      ia: { hoy: usoIa.get(s.id) || 0, tope: Number.isInteger(s.nlu_max_dia) ? s.nlu_max_dia : config.nluMaxDia },
+      ia: {
+        hoy: usoIa.get(s.id) || 0,
+        tope: Number.isInteger(s.nlu_max_dia) ? s.nlu_max_dia : config.nluMaxDia,
+        activo: s.nlu_activo !== false,
+        // Para que el panel distinga «tope de esta tienda» de «el de la casa»
+        tope_propio: Number.isInteger(s.nlu_max_dia)
+      },
       incidencias
     };
   });
@@ -249,6 +257,57 @@ async function updateStoreFeatures(storeId, flags) {
 
   console.log('[Admin] Flags premium actualizados', { storeId, merged });
   return merged;
+}
+
+/**
+ * Interruptor y tope de IA de una tienda. NO es una función premium: es un
+ * mando de operación nuestro, por eso vive fuera de premium_features.
+ *
+ * tope = null devuelve la tienda al valor por defecto del backend; 0 la deja
+ * sin límite. Se distingue «no me han mandado el campo» de «me han mandado
+ * null», que significan cosas distintas.
+ */
+async function updateStoreIa(storeId, { activo, tope } = {}) {
+  const patch = {};
+  if (activo !== undefined) patch.nlu_activo = activo === true;
+  if (tope !== undefined) {
+    if (tope === null || tope === '') {
+      patch.nlu_max_dia = null;
+    } else {
+      const n = parseInt(tope, 10);
+      if (!Number.isInteger(n) || n < 0) {
+        const e = new Error('El tope debe ser un número entero de 0 en adelante (0 = sin límite).');
+        e.code = 'VALIDACION';
+        throw e;
+      }
+      patch.nlu_max_dia = n;
+    }
+  }
+  if (!Object.keys(patch).length) return null;
+
+  const { data, error } = await supabase
+    .from('stores')
+    .update(patch)
+    .eq('id', storeId)
+    .select('id, nlu_activo, nlu_max_dia')
+    .maybeSingle();
+  if (error) {
+    const m = `${error.code || ''} ${error.message || ''}`.toLowerCase();
+    if (m.includes('does not exist') || m.includes('42703') || m.includes('could not find')) {
+      const e = new Error('Falta aplicar database/migration_ia_interruptor.sql (y migration_tope_ia.sql).');
+      e.code = 'VALIDACION';
+      throw e;
+    }
+    throw error;
+  }
+  if (!data) return null;
+
+  console.log('[Admin] Ajustes de IA de la tienda', { storeId, ...patch });
+  return {
+    activo: data.nlu_activo !== false,
+    tope: Number.isInteger(data.nlu_max_dia) ? data.nlu_max_dia : config.nluMaxDia,
+    tope_propio: Number.isInteger(data.nlu_max_dia)
+  };
 }
 
 /**
@@ -391,4 +450,4 @@ async function setStoreFeatureActive(storeId, flag, activo) {
   return 'ok';
 }
 
-module.exports = { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };
+module.exports = { getAdminOverview, updateStoreFeatures, updateStoreIa, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };

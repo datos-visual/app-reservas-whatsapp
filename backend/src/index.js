@@ -2797,7 +2797,7 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
 app.use('/api', authMiddleware);
 
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
-const { getAdminOverview, updateStoreFeatures, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
+const { getAdminOverview, updateStoreFeatures, updateStoreIa, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
 const catalog = require('./catalog');
 
 // --- B5.1: equipo (personas, turnos y ausencias) ---
@@ -3469,6 +3469,23 @@ app.get('/api/admin/overview', async (req, res) => {
   } catch (err) {
     console.error('[Admin] Error en /api/admin/overview', err);
     res.status(500).json({ error: 'Error obteniendo la vista de administración' });
+  }
+});
+
+// Interruptor y tope de IA de una tienda (mando de operación, no premium)
+app.put('/api/admin/stores/:storeId/ia', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const r = await updateStoreIa(String(req.params.storeId), {
+      activo: req.body?.activo,
+      tope: req.body?.tope
+    });
+    if (r === null) return res.status(400).json({ error: 'Nada que cambiar (o tienda no encontrada)' });
+    res.json(r);
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[Admin] Error en PUT /api/admin/stores/:storeId/ia', err);
+    res.status(500).json({ error: 'Error guardando los ajustes de IA' });
   }
 });
 

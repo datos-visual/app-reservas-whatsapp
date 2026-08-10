@@ -22,7 +22,7 @@ type Tienda = {
     recordatorios: { enabled: boolean; template_status: string | null } | null;
   };
   citas: { ultimos7dias: number; proximos7dias: number };
-  ia?: { hoy: number; tope: number };
+  ia?: { hoy: number; tope: number; activo: boolean; tope_propio: boolean };
   incidencias: Incidencia[];
 };
 
@@ -187,6 +187,30 @@ export default function AdminPage() {
       setActividad((a) => ({ ...a, [storeId]: data }));
     } catch {
       setError('No se pudo conectar con el backend.');
+    }
+  }
+
+  // Interruptor y tope de IA. No es una función premium: es un mando de
+  // operación nuestro (proveedor caído, tienda que no la necesita, o aislar
+  // un problema apagándola en un clic). Apagarla NO degrada el servicio:
+  // el asistente sigue funcionando con botones.
+  async function cambiarIa(storeId: string, cambios: { activo?: boolean; tope?: number | null }) {
+    setGuardando(storeId + 'ia');
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/stores/${storeId}/ia`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': token },
+        body: JSON.stringify(cambios)
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(body.error || 'No se pudieron guardar los ajustes de IA.');
+        return;
+      }
+      setError('');
+      await cargar(token);
+    } finally {
+      setGuardando(null);
     }
   }
 
@@ -395,15 +419,50 @@ export default function AdminPage() {
                 {t.ia && (
                   <span
                     className={`rounded px-2 py-0.5 ${
-                      t.ia.tope > 0 && t.ia.hoy > t.ia.tope
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-[#efece4] text-[#44403c]'
+                      !t.ia.activo
+                        ? 'bg-[#efece4] text-[#6b6459]'
+                        : t.ia.tope > 0 && t.ia.hoy > t.ia.tope
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-[#efece4] text-[#44403c]'
                     }`}
                   >
-                    IA hoy: {t.ia.hoy}{t.ia.tope > 0 ? ` / ${t.ia.tope}` : ' (sin tope)'}
+                    {t.ia.activo
+                      ? `IA hoy: ${t.ia.hoy}${t.ia.tope > 0 ? ` / ${t.ia.tope}` : ' (sin tope)'}`
+                      : 'IA apagada'}
                   </span>
                 )}
               </div>
+
+              {/* Mando de operación: apagar la IA de una tienda y ponerle techo.
+                  Apagarla no rompe nada — el asistente sigue con botones. */}
+              {t.ia && (
+                <div className="mt-2 flex flex-wrap items-center gap-3 rounded border border-[#ddd9d0] px-3 py-2 text-xs">
+                  <label className="flex cursor-pointer items-center gap-2 text-[#44403c]">
+                    <input
+                      type="checkbox"
+                      checked={t.ia.activo}
+                      disabled={guardando === t.id + 'ia'}
+                      onChange={(e) => cambiarIa(t.id, { activo: e.target.checked })}
+                    />
+                    Interpretar texto libre con IA
+                  </label>
+                  <span className="text-[#6b6459]">
+                    Tope diario
+                    <input
+                      type="number"
+                      min={0}
+                      defaultValue={t.ia.tope}
+                      disabled={guardando === t.id + 'ia' || !t.ia.activo}
+                      onBlur={(e) => {
+                        const v = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                        if (v !== t.ia!.tope) cambiarIa(t.id, { tope: v });
+                      }}
+                      className="ml-2 w-20 rounded border border-[#ddd9d0] px-2 py-0.5"
+                    />
+                    <span className="ml-2">0 = sin límite{t.ia.tope_propio ? '' : ' · valor por defecto'}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {t.incidencias.length > 0 && (

@@ -41,7 +41,7 @@ si uno cae, caen todas las peluquerías a la vez.
 | Recurso | Estado | Qué hacer |
 |---|---|---|
 | App de Meta | Correcto por diseño | Nada. Embedded Signup pone la cuenta a nombre del cliente → hacerlo hacia la 4ª o 5ª tienda |
-| Claves de IA | Cuota compartida | **Pasar a clave de pago.** Tope por tienda: hecho (`migration_tope_ia.sql`) |
+| Claves de IA | Cuota compartida | **Pasar a clave de pago.** Freno por tienda: hecho (tope diario + interruptor manual en `/admin`) |
 | Servidor Render | Uno solo | Plan de pago cuando haya clientes de verdad |
 | Cuenta de servicio de Google | Una para todos | Ver abajo |
 

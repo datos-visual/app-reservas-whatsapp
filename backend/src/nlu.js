@@ -210,29 +210,40 @@ function providerChain() {
 // Tope diario por tienda
 // ---------------------------------------------------------------------
 /**
- * Tope de esta tienda: el suyo propio si lo tiene, y si no el del backend.
- * 0 o negativo = sin límite.
+ * Interruptor y tope de esta tienda, en UNA consulta.
+ *   activo: false = apagada a mano; ni se cuenta ni se llama a nadie.
+ *   tope:   el suyo propio si lo tiene, y si no el del backend. 0 = sin límite.
+ *
+ * Tolerante en los dos sentidos: sin las columnas (migración sin aplicar) la
+ * IA queda encendida con el tope por defecto, o sea, como estaba.
  */
-async function topeDeLaTienda(storeId) {
+async function ajustesIa(storeId) {
+  const porDefecto = { activo: true, tope: config.nluMaxDia };
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('stores')
-      .select('nlu_max_dia')
+      .select('nlu_activo, nlu_max_dia')
       .eq('id', storeId)
       .limit(1)
       .maybeSingle();
-    const propio = data?.nlu_max_dia;
-    return Number.isInteger(propio) ? propio : config.nluMaxDia;
+    if (error || !data) return porDefecto;
+    return {
+      activo: data.nlu_activo !== false,
+      tope: Number.isInteger(data.nlu_max_dia) ? data.nlu_max_dia : config.nluMaxDia
+    };
   } catch {
-    return config.nluMaxDia;
+    return porDefecto;
   }
 }
 
 /**
- * Apunta una llamada y dice si esta tienda YA se ha pasado del tope.
+ * ¿Se queda esta tienda sin IA para este mensaje? Dos motivos posibles:
+ * el interruptor está apagado, o ya se pasó del tope de hoy.
  *
- * Dos decisiones deliberadas:
+ * Tres decisiones deliberadas:
  *
+ *  · Apagada a mano NO consume contador: no se ha llamado a nadie, así que
+ *    contarlo falsearía el consumo real de esa tienda.
  *  · Se cuenta ANTES de llamar al modelo, no después. Si se contase al
  *    terminar, un fallo del proveedor saldría gratis y el bucle que
  *    quisiéramos frenar sería justo el que no se frena.
@@ -240,10 +251,11 @@ async function topeDeLaTienda(storeId) {
  *    DEJA PASAR. El tope es una protección de costes, no una regla de
  *    negocio: que se caiga no puede dejar mudo al asistente.
  */
-async function pasaDelTope(storeId) {
+async function sinIA(storeId) {
   if (!storeId) return false;
   try {
-    const tope = await topeDeLaTienda(storeId);
+    const { activo, tope } = await ajustesIa(storeId);
+    if (!activo) return true;                                 // apagada a mano
     if (!Number.isInteger(tope) || tope <= 0) return false;   // sin límite
 
     const { data, error } = await supabase.rpc('incrementar_uso_nlu', { p_store_id: storeId });
@@ -276,7 +288,7 @@ async function interpretMessage({ storeId = null, text, timezone, nowDt, convers
   const chain = providerChain();
   if (chain.length === 0) return null;
   if (!text || String(text).trim().length < 2) return null;
-  if (await pasaDelTope(storeId)) return null;   // sin IA hoy → botones
+  if (await sinIA(storeId)) return null;          // sin IA → botones
 
   // La conversación reciente ES el contexto: sin ella, «anúlala» no tiene
   // antecedente y el modelo se queda con el «no me viene bien» del principio,
@@ -323,7 +335,7 @@ async function interpretChoice({ storeId = null, text, options }) {
   const chain = providerChain();
   if (chain.length === 0) return null;
   if (!text || !Array.isArray(options) || options.length === 0) return null;
-  if (await pasaDelTope(storeId)) return null;   // sin IA hoy → botones
+  if (await sinIA(storeId)) return null;          // sin IA → botones
 
   const lista = options.map((o, i) => `${i + 1}) ${o}`).join('\n');
   const prompt =
@@ -367,5 +379,5 @@ async function interpretChoice({ storeId = null, text, options }) {
 module.exports = {
   interpretMessage, interpretChoice, nluResultToCommand,
   buildPrompt, validateNluResult, providerChain,
-  pasaDelTope, topeDeLaTienda
+  sinIA, ajustesIa
 };
