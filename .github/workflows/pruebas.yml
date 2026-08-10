@@ -1,0 +1,57 @@
+# Pruebas automáticas de CanalAgenda.
+#
+# Por qué existe: las reglas de disponibilidad se rompen en silencio. Un fallo
+# que hace que el asistente OFREZCA DE MENOS no da ningún error — la
+# peluquería pierde huecos vendibles y lo achaca a que «no había hueco».
+# Pasó con la rejilla de 30 minutos y volvió a pasar con los turnos.
+#
+# Estas pruebas no tocan la base de datos, ni Google, ni Meta: prueban las
+# DECISIONES con datos en la mano. Por eso tardan segundos y pueden correr en
+# cada push sin secretos de ninguna clase.
+#
+# Si esto se pone en rojo, NO despliegues.
+
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: Backend (reglas de negocio)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Sin caché a propósito: el backend no tiene package-lock.json versionado
+      # y `cache: npm` falla en seco si no lo encuentra. Un flujo de pruebas que
+      # se cae por su propia configuración es peor que uno lento.
+      - name: Instalar dependencias
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+      - name: Ejecutar pruebas
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    name: Panel (rejilla y tipos)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Ejecutar pruebas
+        working-directory: frontend
+        run: npm test
+      - name: Comprobar tipos
+        working-directory: frontend
+        run: npx tsc --noEmit

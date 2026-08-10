@@ -1070,6 +1070,7 @@ module.exports = {
   guardarHabilidades,
   serviciosSinNadie,
   tramosActivos,
+  tramosChocan,
   margenRelleno,
   guardarMargenRelleno,
   hayEquipoActivo,

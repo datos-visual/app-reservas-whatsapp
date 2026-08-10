@@ -33,10 +33,15 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
   // como "a las 11" cuando el día se dijo dos mensajes antes)
   let contexto = '';
   if (conversation.length) {
+    // Los mensajes sin texto (una foto, un audio) se descartan: metían la
+    // palabra literal «undefined» en el prompt, y el modelo se la cree.
     const lines = conversation
+      .filter((m) => m && m.content != null && String(m.content).trim() !== '')
       .map((m) => `${m.from_me ? 'Bot' : 'Cliente'}: ${String(m.content).slice(0, 160)}`)
       .join('\n');
-    contexto = `Conversación reciente (para resolver referencias como "a esa hora" o un día ya mencionado):\n${lines}\n\n`;
+    if (lines) {
+      contexto = `Conversación reciente (para resolver referencias como "a esa hora" o un día ya mencionado):\n${lines}\n\n`;
+    }
   }
 
   return (
