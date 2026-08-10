@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "lint": "eslint src/ test/",
+    "test": "npm run lint && node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
@@ -16,6 +17,7 @@
     "luxon": "^3.5.0"
   },
   "devDependencies": {
+    "eslint": "^9.0.0",
     "nodemon": "^3.1.0"
   }
 }

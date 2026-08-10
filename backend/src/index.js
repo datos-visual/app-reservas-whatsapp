@@ -132,6 +132,18 @@ app.get('/health', async (req, res) => {
 
 app.get('/webhook', verifyWebhook);
 
+/**
+ * «miércoles 15/07 a las 09:30» — cómo se le dice una fecha a una clienta.
+ *
+ * Estaba definida DENTRO de handleIncomingText y se usaba también desde
+ * handleFlowPayload, donde no existe: dos respuestas del flujo B5.3 reventaban
+ * con ReferenceError (bug encontrado el 10-ago-2026 al meter `no-undef`).
+ * Aquí arriba está a la vista de todos y hay una sola versión del formato.
+ */
+function fechaHumana(iso, zone) {
+  return DateTime.fromISO(iso, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+}
+
 async function sendAndLog({ storeId, phoneNumberId, accessToken, to, text }) {
   try {
     const sentToday = await getMessagesSentToday(storeId, to);
@@ -1037,7 +1049,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       console.log('[Profesional] La clienta acepta otra profesional', { storeId, citaId: cita.id, a: otra.id });
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `Perfecto, tu cita del ${fmtHuman(cita.start_at)} queda con ${otra.name}. ¡Te esperamos!`
+        text: `Perfecto, tu cita del ${fechaHumana(cita.start_at, zone)} queda con ${otra.name}. ¡Te esperamos!`
       });
       return true;
     }
@@ -1068,7 +1080,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       }, expiresAt);
       await preguntarSiNo({
         storeId, phoneNumberId, accessToken, to: from,
-        pregunta: `¿Anulo tu cita del ${fmtHuman(cita.start_at)}?`,
+        pregunta: `¿Anulo tu cita del ${fechaHumana(cita.start_at, zone)}?`,
         siTitulo: 'Sí, anúlala', noTitulo: 'No, la mantengo'
       });
       return true;
@@ -1119,9 +1131,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
   // Formato humano de fechas en la timezone de la tienda
   const fmt = (iso) => DateTime.fromISO(iso, { zone }).toFormat("dd/MM/yyyy 'a las' HH:mm");
-  // Versión conversacional: "miércoles 15/07 a las 09:30"
-  const fmtHuman = (iso) =>
-    DateTime.fromISO(iso, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
+  // Versión conversacional: "miércoles 15/07 a las 09:30" (una sola fuente)
+  const fmtHuman = (iso) => fechaHumana(iso, zone);
 
   /**
    * Propone un CAMBIO de cita: valida el hueco nuevo y deja la confirmación
@@ -2322,7 +2333,11 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
  * si el payload era conocido y ya se ha respondido; false → tratar como texto.
  */
 /** Botones de la plantilla de LISTA DE ESPERA ([Lo quiero] / [No me interesa]). */
-async function handleWaitlistButton({ storeId, phoneNumberId, accessToken, from, payload }) {
+// `profileName` viaja hasta aquí porque al aceptar un hueco de la lista de
+// espera se reserva de verdad, y la reserva quiere el nombre del perfil de
+// WhatsApp. Faltaba en los parámetros y se usaba abajo: ReferenceError al
+// pulsar «Lo quiero» (bug encontrado el 10-ago-2026 al meter `no-undef`).
+async function handleWaitlistButton({ storeId, phoneNumberId, accessToken, from, payload, profileName = null }) {
   const pending = await getConversationState(storeId, from);
   const offer = pending?.state?.waitlistOffer || null;
 
@@ -2520,7 +2535,7 @@ async function processWebhookBody(body, { requestId }) {
           handled = await handleReminderButton({ storeId, phoneNumberId, accessToken, from, payload });
         }
         if (!handled && (payload === 'WAITLIST_YES' || payload === 'WAITLIST_NO')) {
-          handled = await handleWaitlistButton({ storeId, phoneNumberId, accessToken, from, payload });
+          handled = await handleWaitlistButton({ storeId, phoneNumberId, accessToken, from, payload, profileName });
         }
         if (!handled) {
           handled = await handleMissedCallButton({ storeId, phoneNumberId, accessToken, from, payload });
@@ -3827,6 +3842,14 @@ app.get('/api/missed-call/metrics', async (req, res) => {
   }
 });
 
-app.listen(config.port, () => {
-  console.log(`[API] Servidor escuchando en puerto ${config.port}`);
-});
+// Solo se abre el puerto cuando este fichero SE EJECUTA (npm start). Si se
+// importa —lo hacen las pruebas para inspeccionar la tabla de rutas— no se
+// levanta ningún servidor. Sin esta guarda, `require('./index')` dejaría un
+// puerto abierto y las pruebas no terminarían nunca.
+if (require.main === module) {
+  app.listen(config.port, () => {
+    console.log(`[API] Servidor escuchando en puerto ${config.port}`);
+  });
+}
+
+module.exports = { app };

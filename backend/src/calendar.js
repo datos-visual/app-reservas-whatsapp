@@ -1,4 +1,16 @@
-const { google } = require('googleapis');
+// `googleapis` es una librería ENORME: cargarla tarda segundos y se hacía al
+// arrancar el proceso, aunque la petición que llegase no tocara el calendario.
+// En Render (plan gratuito, que duerme el servicio) eso es tiempo que paga la
+// primera clienta del día.
+//
+// Se carga la primera vez que de verdad hace falta y se guarda. De paso, esto
+// permite importar el backend en las pruebas sin esperar a Google.
+let _google = null;
+function google() {
+  if (!_google) _google = require('googleapis').google;
+  return _google;
+}
+
 const { DateTime } = require('luxon');
 const config = require('./config');
 const { getCalendarConnectionByStoreId } = require('./db');
@@ -16,14 +28,15 @@ function getCalendarClient() {
     console.warn('[Calendar] Variables de entorno de Google no configuradas.');
   }
 
-  const jwtClient = new google.auth.JWT(
+  const g = google();
+  const jwtClient = new g.auth.JWT(
     config.googleClientEmail,
     null,
     config.googlePrivateKey,
     ['https://www.googleapis.com/auth/calendar']
   );
 
-  const calendar = google.calendar({ version: 'v3', auth: jwtClient });
+  const calendar = g.calendar({ version: 'v3', auth: jwtClient });
   return { calendar, jwtClient };
 }
 

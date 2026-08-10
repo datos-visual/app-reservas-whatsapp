@@ -34,6 +34,9 @@ jobs:
       - name: Instalar dependencias
         working-directory: backend
         run: npm install --no-audit --no-fund
+      # `npm test` ejecuta ANTES el detector de variables inexistentes. Cazó
+      # dos fallos que llevaban semanas en producción (ver eslint.config.mjs):
+      # sintaxis correcta, pero la petición reventaba al llegar.
       - name: Ejecutar pruebas
         working-directory: backend
         run: npm test
