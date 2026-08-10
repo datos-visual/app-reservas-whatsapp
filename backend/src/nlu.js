@@ -13,6 +13,7 @@
 // entorno: NLU_PROVIDERS="gemini,mistral" (titular y suplente).
 
 const config = require('./config');
+const { supabase } = require('./db');
 
 const VALID_INTENTS = ['DISPONIBLE', 'CITA', 'CONFIRMAR', 'RECHAZAR', 'MIS_CITAS', 'CANCELAR_CITA', 'CAMBIAR_CITA', 'AYUDA', 'BAJA', 'OTRO'];
 // 6 s se quedaba corto: en producción Gemini se abortaba («This operation was
@@ -201,6 +202,64 @@ function providerChain() {
 }
 
 // ---------------------------------------------------------------------
+// Tope diario por tienda
+// ---------------------------------------------------------------------
+/**
+ * Tope de esta tienda: el suyo propio si lo tiene, y si no el del backend.
+ * 0 o negativo = sin límite.
+ */
+async function topeDeLaTienda(storeId) {
+  try {
+    const { data } = await supabase
+      .from('stores')
+      .select('nlu_max_dia')
+      .eq('id', storeId)
+      .limit(1)
+      .maybeSingle();
+    const propio = data?.nlu_max_dia;
+    return Number.isInteger(propio) ? propio : config.nluMaxDia;
+  } catch {
+    return config.nluMaxDia;
+  }
+}
+
+/**
+ * Apunta una llamada y dice si esta tienda YA se ha pasado del tope.
+ *
+ * Dos decisiones deliberadas:
+ *
+ *  · Se cuenta ANTES de llamar al modelo, no después. Si se contase al
+ *    terminar, un fallo del proveedor saldría gratis y el bucle que
+ *    quisiéramos frenar sería justo el que no se frena.
+ *  · Si el contador falla (falta la migración, la BD no responde), se
+ *    DEJA PASAR. El tope es una protección de costes, no una regla de
+ *    negocio: que se caiga no puede dejar mudo al asistente.
+ */
+async function pasaDelTope(storeId) {
+  if (!storeId) return false;
+  try {
+    const tope = await topeDeLaTienda(storeId);
+    if (!Number.isInteger(tope) || tope <= 0) return false;   // sin límite
+
+    const { data, error } = await supabase.rpc('incrementar_uso_nlu', { p_store_id: storeId });
+    if (error) {
+      console.warn('[NLU] No se pudo contar el uso (¿falta migration_tope_ia.sql?)', { storeId, message: error.message });
+      return false;
+    }
+    const usadas = Number(data);
+    if (usadas === tope + 1) {
+      // Se avisa UNA vez, justo al cruzarlo. En cada mensaje posterior
+      // sería ruido en el log del día entero.
+      console.warn('[NLU] Tope diario alcanzado: esta tienda sigue con botones', { storeId, tope });
+    }
+    return usadas > tope;
+  } catch (err) {
+    console.warn('[NLU] Excepción contando el uso, se deja pasar', { storeId, err: err?.message });
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------
 // API pública
 // ---------------------------------------------------------------------
 /**
@@ -208,10 +267,11 @@ function providerChain() {
  * o null (sin proveedores, error, timeout o salida no fiable).
  * NUNCA lanza: la degradación al flujo de comandos es la red de seguridad.
  */
-async function interpretMessage({ text, timezone, nowDt, conversation = [] }) {
+async function interpretMessage({ storeId = null, text, timezone, nowDt, conversation = [] }) {
   const chain = providerChain();
   if (chain.length === 0) return null;
   if (!text || String(text).trim().length < 2) return null;
+  if (await pasaDelTope(storeId)) return null;   // sin IA hoy → botones
 
   // La conversación reciente ES el contexto: sin ella, «anúlala» no tiene
   // antecedente y el modelo se queda con el «no me viene bien» del principio,
@@ -254,10 +314,11 @@ async function interpretMessage({ text, timezone, nowDt, conversation = [] }) {
  * "la segunda", "la de las 9 y media"). options: array de textos legibles.
  * Devuelve el índice (base 0) o null si no está claro / sin proveedores.
  */
-async function interpretChoice({ text, options }) {
+async function interpretChoice({ storeId = null, text, options }) {
   const chain = providerChain();
   if (chain.length === 0) return null;
   if (!text || !Array.isArray(options) || options.length === 0) return null;
+  if (await pasaDelTope(storeId)) return null;   // sin IA hoy → botones
 
   const lista = options.map((o, i) => `${i + 1}) ${o}`).join('\n');
   const prompt =
@@ -298,4 +359,8 @@ async function interpretChoice({ text, options }) {
   return null;
 }
 
-module.exports = { interpretMessage, interpretChoice, nluResultToCommand, buildPrompt, validateNluResult, providerChain };
+module.exports = {
+  interpretMessage, interpretChoice, nluResultToCommand,
+  buildPrompt, validateNluResult, providerChain,
+  pasaDelTope, topeDeLaTienda
+};

@@ -28,7 +28,11 @@ const config = {
   geminiApiKey: process.env.GEMINI_API_KEY || null,
   geminiModel: process.env.GEMINI_MODEL || 'gemini-flash-lite-latest',
   mistralApiKey: process.env.MISTRAL_API_KEY || null,
-  mistralModel: process.env.MISTRAL_MODEL || 'mistral-small-latest'
+  mistralModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
+  // Tope diario de llamadas a la IA POR TIENDA. Las claves son compartidas:
+  // sin techo, una tienda puede dejar sin IA (o sin presupuesto) a las demás.
+  // 0 = sin límite. Se puede afinar por tienda en stores.nlu_max_dia.
+  nluMaxDia: parseInt(process.env.NLU_MAX_DIA || '400', 10)
 };
 
 module.exports = config;

@@ -5,6 +5,7 @@
 
 const { supabase } = require('./db');
 const { DateTime } = require('luxon');
+const config = require('./config');
 
 // Flags premium reconocidos (doc 09 §3). Un plan comercial = conjunto de flags.
 const PREMIUM_FLAGS = ['smart_slots', 'waitlist', 'reactivation', 'post_sale', 'style_file', 'flash_offers', 'elegir_profesional', 'fases_servicio', 'servicios_por_profesional'];
@@ -78,6 +79,20 @@ async function getAdminOverview() {
 
   const cron = await estadoDelCron();
 
+  // Consumo de IA de HOY por tienda. Las claves son compartidas, así que
+  // esto es lo que avisa de la tienda que se está comiendo la cuota de las
+  // demás — o la factura. Tolerante: sin migración, no se enseña nada.
+  const usoIa = await (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('nlu_usage')
+        .select('store_id, llamadas')
+        .eq('dia', DateTime.now().toISODate());
+      if (error) return new Map();
+      return new Map((data || []).map((r) => [r.store_id, r.llamadas]));
+    } catch { return new Map(); }
+  })();
+
   // Citas ±7 días de todas las tiendas en una sola query; conteo en memoria
   const ahora = DateTime.now();
   const desde = ahora.minus({ days: 7 }).toUTC().toISO();
@@ -133,6 +148,15 @@ async function getAdminOverview() {
     if (rem?.enabled && rem.template_status !== 'approved')
       incidencias.push({ nivel: 'aviso', texto: `Recordatorios activos con plantilla ${rem.template_status || 'sin estado'}` });
 
+    // Consumo de IA: se avisa al 80 % para poder subir el tope ANTES de que
+    // el asistente se quede en modo botones, no después.
+    const iaHoy = usoIa.get(s.id) || 0;
+    const iaTope = Number.isInteger(s.nlu_max_dia) ? s.nlu_max_dia : config.nluMaxDia;
+    if (iaTope > 0 && iaHoy > iaTope)
+      incidencias.push({ nivel: 'error', texto: `Tope de IA superado hoy (${iaHoy}/${iaTope}): solo botones` });
+    else if (iaTope > 0 && iaHoy >= iaTope * 0.8)
+      incidencias.push({ nivel: 'aviso', texto: `Consumo de IA alto hoy (${iaHoy}/${iaTope})` });
+
     return {
       id: s.id,
       name: s.name,
@@ -147,6 +171,7 @@ async function getAdminOverview() {
         recordatorios: rem ? { enabled: !!rem.enabled, template_status: rem.template_status || null } : null
       },
       citas: { ultimos7dias: citasPasadas, proximos7dias: citasProximas },
+      ia: { hoy: usoIa.get(s.id) || 0, tope: Number.isInteger(s.nlu_max_dia) ? s.nlu_max_dia : config.nluMaxDia },
       incidencias
     };
   });

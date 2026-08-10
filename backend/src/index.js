@@ -1278,6 +1278,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // 2º intento: lenguaje natural ("la del miércoles", "la de las 9 y media")
     if (idx === null) {
       idx = await interpretChoice({
+        storeId,
         text: body,
         options: pendingChoice.options.map((o) => o.label)
       });
@@ -1319,7 +1320,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const num = parseInt(lower.trim(), 10);
     if (Number.isInteger(num) && num >= 1 && num <= pendingReChoice.options.length) idx = num - 1;
     if (idx === null) {
-      idx = await interpretChoice({ text: body, options: pendingReChoice.options.map((o) => o.label) });
+      idx = await interpretChoice({ storeId, text: body, options: pendingReChoice.options.map((o) => o.label) });
     }
     if (idx === null) {
       // Salida de emergencia: no parece una elección → soltar el estado y
@@ -1424,7 +1425,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     if (!dateIso) {
       const conv = await getRecentConversation(storeId, from);
       const interp = await interpretMessage({
-        text: body, timezone: zone, nowDt: DateTime.now().setZone(zone), conversation: conv
+        storeId, text: body, timezone: zone, nowDt: DateTime.now().setZone(zone), conversation: conv
       });
       if (interp?.date) dateIso = interp.date;
     }
@@ -1469,7 +1470,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     } else {
       const conv = await getRecentConversation(storeId, from);
       const interp = await interpretMessage({
-        text: body, timezone: zone, nowDt: DateTime.now().setZone(zone), conversation: conv
+        storeId, text: body, timezone: zone, nowDt: DateTime.now().setZone(zone), conversation: conv
       });
       if (interp?.time) { newTime = interp.time; newDate = interp.date; }
     }
@@ -2118,6 +2119,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     try {
       const conversation = await getRecentConversation(storeId, from);
       const interpreted = await interpretMessage({
+        storeId,
         text: body,
         timezone: zone,
         nowDt: DateTime.now().setZone(zone),

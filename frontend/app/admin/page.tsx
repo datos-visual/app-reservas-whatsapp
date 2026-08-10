@@ -22,6 +22,7 @@ type Tienda = {
     recordatorios: { enabled: boolean; template_status: string | null } | null;
   };
   citas: { ultimos7dias: number; proximos7dias: number };
+  ia?: { hoy: number; tope: number };
   incidencias: Incidencia[];
 };
 
@@ -391,6 +392,17 @@ export default function AdminPage() {
                 <span className="rounded bg-[#efece4] px-2 py-0.5 text-[#44403c]">
                   Citas: {t.citas.ultimos7dias} últ. 7d · {t.citas.proximos7dias} próx. 7d
                 </span>
+                {t.ia && (
+                  <span
+                    className={`rounded px-2 py-0.5 ${
+                      t.ia.tope > 0 && t.ia.hoy > t.ia.tope
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-[#efece4] text-[#44403c]'
+                    }`}
+                  >
+                    IA hoy: {t.ia.hoy}{t.ia.tope > 0 ? ` / ${t.ia.tope}` : ' (sin tope)'}
+                  </span>
+                )}
               </div>
             </div>
 
