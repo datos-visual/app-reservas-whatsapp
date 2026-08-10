@@ -52,6 +52,10 @@ jobs:
       - name: Ejecutar pruebas
         working-directory: frontend
         run: npm test
+      # Esta comprobación existe porque un despliegue se cayó por un error de
+      # tipos (10-ago-2026): una variable declarada y no usada. El `tsconfig`
+      # solo incluía `src/**` y la aplicación vive en `app/**`, así que `tsc`
+      # no miraba NADA y salía en verde siempre. Corregido el `include`.
       - name: Comprobar tipos
         working-directory: frontend
         run: npx tsc --noEmit

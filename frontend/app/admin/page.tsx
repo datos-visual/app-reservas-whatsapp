@@ -56,10 +56,10 @@ export default function AdminPage() {
   const [guardando, setGuardando] = useState<string | null>(null);
   const [actividad, setActividad] = useState<Record<string, { mensajes: any[]; citas: any[] } | null>>({});
   const [resumen, setResumen] = useState<Record<string, number | null> | null>(null);
-  // Vigilancia del planificador externo: si calla, no salen recordatorios
-  const [cron, setCron] = useState<{
-    ultima: string | null; hace_minutos: number | null; alerta: boolean; sin_datos?: boolean;
-  } | null>(null);
+  // El estado del planificador ya no se guarda aquí: viene dentro de `salud`,
+  // que es donde se pinta. El backend sigue enviando `cron` suelto por
+  // compatibilidad, pero esta pantalla no lo usa.
+  //
   // Salud: todos los avisos del sistema en un sitio, agrupados por problema.
   // Antes estaban repartidos entre esta página, el panel de cada tienda y los
   // logs de Render — o sea, en ninguno.
@@ -102,7 +102,6 @@ export default function AdminPage() {
       const data = await r.json();
       setTiendas(data.stores || []);
       setResumen(data.resumen || null);
-      setCron(data.cron || null);
       setSalud(data.salud || null);
       setEntrado(true);
       sessionStorage.setItem('ca_admin_token', t);
