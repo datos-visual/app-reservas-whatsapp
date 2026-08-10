@@ -14,7 +14,7 @@ type Check = {
   titulo: string;
   nivel: Nivel;
   detalle: string;
-  tiendas: { nombre: string; texto: string }[];
+  tiendas: { nombre: string; texto: string; id?: number }[];
 };
 type Salud = { nivel: Nivel; checks: Check[] };
 type Tienda = {
@@ -228,6 +228,20 @@ export default function AdminPage() {
     }
   }
 
+  async function marcarErrorVisto(id: number) {
+    setGuardando('err' + id);
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/errores/${id}/visto`, {
+        method: 'PUT',
+        headers: { 'x-admin-token': token }
+      });
+      if (!r.ok) { setError('No se pudo marcar como visto.'); return; }
+      await cargar(token);
+    } finally {
+      setGuardando(null);
+    }
+  }
+
   async function toggleFlag(storeId: string, key: string, value: boolean) {
     setGuardando(storeId + key);
     try {
@@ -385,8 +399,22 @@ export default function AdminPage() {
                 {saludAbierta === c.id && c.tiendas.length > 0 && (
                   <ul className="space-y-1 px-4 pb-3 pl-9">
                     {c.tiendas.map((t, i) => (
-                      <li key={i} className="text-xs text-[#44403c]">
-                        <span className="font-medium">{t.nombre}</span> — {t.texto}
+                      <li key={i} className="flex items-start justify-between gap-3 text-xs text-[#44403c]">
+                        <span>
+                          <span className="font-medium">{t.nombre}</span> — {t.texto}
+                        </span>
+                        {/* Solo los errores se pueden silenciar. Y si el mismo
+                            error vuelve a ocurrir, reaparece: si ha vuelto,
+                            es que no estaba resuelto. */}
+                        {t.id !== undefined && (
+                          <button
+                            onClick={() => marcarErrorVisto(t.id!)}
+                            disabled={guardando === 'err' + t.id}
+                            className="shrink-0 rounded border border-[#d6d3cb] px-2 py-0.5 text-[11px] text-[#57534e] hover:bg-[#f4f2ec]"
+                          >
+                            {guardando === 'err' + t.id ? '…' : 'Visto'}
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

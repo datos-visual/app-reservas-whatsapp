@@ -714,6 +714,45 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.67 LOS ERRORES SE VEN (10-ago-2026)
+
+`errores.js` + tabla `system_errors`. Todo lo que revienta —webhook, rutas,
+promesas sin gestionar— se apunta AGRUPADO y sale en el bloque de Salud.
+
+Tres reglas innegociables, todas probadas:
+
+1. **`registrarError` nunca lanza.** Un sistema de avisos que tumba la
+   petición que vigilaba es peor que no tener avisos.
+2. **Nunca guarda datos de clientas.** Teléfonos y correos se tapan antes de
+   escribir. Un registro de errores es de las tablas que más gente acaba
+   mirando.
+3. **Agrupa.** Un fallo repetido 200 veces es UNA línea con `veces = 200`. Un
+   buzón inundado es otra forma de no enterarse.
+
+El botón *Visto* silencia, pero si el error vuelve a ocurrir la marca se borra
+sola: si ha vuelto, no estaba resuelto.
+
+Con esto se cierra el patrón que veníamos persiguiendo desde el 5 de agosto:
+el sistema ya no falla en silencio.
+
+### 10.66 DETECTOR DE VARIABLES INEXISTENTES — DOS BUGS DE PRODUCCIÓN (10-ago-2026)
+
+Al preparar la partición de `index.js` se instaló `eslint` con **una sola
+regla**, `no-undef`. Encontró dos fallos vivos desde hacía semanas:
+
+- `fmtHuman` se usaba en `handleFlowPayload` pero estaba definida dentro de
+  `handleIncomingText`. **El flujo B5.3 reventaba al pulsar «Con Marta» o
+  «Anular la cita»** — la función que se probó el 8 de agosto.
+- `profileName` se usaba en `handleWaitlistButton` sin estar en sus
+  parámetros. Pulsar «Lo quiero» reventaba igual.
+
+Sintaxis correcta, `node --check` en verde, 69 pruebas en verde. Solo fallaba
+cuando una clienta pulsaba ese botón.
+
+**Lección:** ambos son el mismo error de siempre —construir media función, que
+el dato no llegue al final— pero esta vez lo encontró una herramienta en
+segundos en vez de un cliente en semanas. `npm test` lo ejecuta primero.
+
 ### 10.65 AISLAMIENTO MULTITIENDA — VERIFICADO EN EL PANEL (10-ago-2026)
 
 Segunda tienda con su propio usuario, entrando en ventana de **incógnito**

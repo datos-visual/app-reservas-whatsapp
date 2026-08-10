@@ -13,6 +13,7 @@ problema y no por tienda:
 
 | Línea | Qué significa cuando está en rojo |
 |---|---|
+| **Errores del sistema** | Algo ha reventado de verdad: el buzón de `errores.js`. Sale agrupado y con su contador. Botón *Visto* para silenciarlo — si vuelve a ocurrir, reaparece solo |
 | **Planificador** | No corre el cron: no salen recordatorios, no se detectan borrados de Calendar ni citas huérfanas. Revisa cron-job.org y el secreto `INTERNAL_CRON_TOKEN` de GitHub |
 | **Base de datos** | Falta ejecutar una migración. Dice cuál y para qué sirve. **Esto no da error en ningún otro sitio**: la función simplemente deja de trabajar |
 | **WhatsApp / Tokens** | Cuenta sin conectar, desactivada o token caducado |

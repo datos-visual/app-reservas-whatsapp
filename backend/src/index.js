@@ -61,6 +61,8 @@ const equipo = require('./equipo');
 const sincronizacion = require('./sincronizacion');
 // B5.3: citas cuya profesional deja de poder atender
 const profesional = require('./profesional');
+// Buzón de errores: que lo que revienta se vea en /admin y no solo en Render
+const { registrarError, erroresVivos, marcarVisto, vigilarProceso } = require('./errores');
 const {
   REMINDER_PAYLOADS,
   dispatchReminders,
@@ -2456,6 +2458,10 @@ async function processWebhookBody(body, { requestId }) {
   for (const msg of incoming) {
     const { phoneNumberId, from, body: textBody, messageId, kind, payload, profileName } = msg;
 
+    // Fuera del try: si algo revienta, el buzón de errores necesita saber de
+    // qué tienda era. Dentro del try no llegaría al catch.
+    let tiendaDelMensaje = null;
+
     try {
       const storeContext = await resolveStoreContextByPhoneNumberId(phoneNumberId);
       if (!storeContext) {
@@ -2473,6 +2479,7 @@ async function processWebhookBody(body, { requestId }) {
       }
 
       const { storeId, accessToken } = storeContext;
+      tiendaDelMensaje = storeId;
       if (!storeId || !accessToken) {
         console.warn('[Webhook] Cuenta inválida (faltan store_id/access_token)', {
           requestId,
@@ -2552,12 +2559,14 @@ async function processWebhookBody(body, { requestId }) {
         profileName
       });
     } catch (err) {
-      console.error('[Webhook] Error procesando mensaje', {
-        requestId,
-        phoneNumberId,
-        from,
-        messageId,
-        err
+      // Va al buzón, no solo a los logs: aquí es donde revientan las
+      // conversaciones de las clientas y es lo último que debe pasar
+      // desapercibido. Del teléfono no se guarda nada.
+      await registrarError({
+        ambito: 'webhook',
+        error: err,
+        storeId: tiendaDelMensaje,
+        contexto: { requestId, phoneNumberId, messageId }
       });
     }
   }
@@ -3487,6 +3496,21 @@ app.get('/api/admin/overview', async (req, res) => {
   }
 });
 
+// «Ya lo he visto»: silencia un error hasta que vuelva a ocurrir. Si reaparece,
+// la marca se borra sola — porque si ha vuelto, no estaba resuelto.
+app.put('/api/admin/errores/:id/visto', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    await marcarVisto(id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Admin] Error marcando incidencia como vista', err);
+    res.status(500).json({ error: 'No se pudo marcar como visto' });
+  }
+});
+
 // Interruptor y tope de IA de una tienda (mando de operación, no premium)
 app.put('/api/admin/stores/:storeId/ia', async (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -3842,11 +3866,26 @@ app.get('/api/missed-call/metrics', async (req, res) => {
   }
 });
 
+// Red de último recurso de Express: cualquier excepción que se escape de una
+// ruta llega aquí. Va DESPUÉS de todas las rutas a propósito — Express elige
+// el manejador de errores por su posición y por tener cuatro parámetros.
+app.use((err, req, res, _next) => {
+  registrarError({
+    ambito: 'api',
+    error: err,
+    storeId: req.storeId || null,
+    contexto: { ruta: req.path, metodo: req.method }
+  });
+  if (!res.headersSent) res.status(500).json({ error: 'Error interno' });
+});
+
 // Solo se abre el puerto cuando este fichero SE EJECUTA (npm start). Si se
 // importa —lo hacen las pruebas para inspeccionar la tabla de rutas— no se
 // levanta ningún servidor. Sin esta guarda, `require('./index')` dejaría un
 // puerto abierto y las pruebas no terminarían nunca.
 if (require.main === module) {
+  // Solo al ejecutar de verdad: en pruebas no queremos enganchar el proceso
+  vigilarProceso();
   app.listen(config.port, () => {
     console.log(`[API] Servidor escuchando en puerto ${config.port}`);
   });

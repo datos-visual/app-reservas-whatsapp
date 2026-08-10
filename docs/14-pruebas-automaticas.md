@@ -35,7 +35,23 @@ Se ejecutan solas en cada push a `main` y en cada pull request
 | `backend/test/nlu.test.js` | Que la IA no cuele nada: validación de su salida y contexto del prompt |
 | `backend/test/ia-tope.test.js` | El freno de la IA: interruptor manual, tope diario y qué pasa si el freno falla |
 | `backend/test/salud.test.js` | Que el semáforo de `/admin` no se ponga en verde con algo roto |
+| `backend/test/errores.test.js` | Que el buzón de errores no guarde datos de clientas y que se vea en Salud |
+| `backend/test/rutas.test.js` | **La frontera de autenticación**: qué rutas responden sin credenciales |
 | `frontend/test/rejilla.test.ts` | Que la pantalla pinte lo mismo que calcula el motor |
+
+## El detector de variables inexistentes
+
+`npm test` ejecuta **antes** que nada `eslint` con una sola regla: `no-undef`.
+No es un formateador de estilo, es un detector de bombas.
+
+El 10-ago-2026, nada más instalarlo, encontró dos fallos que llevaban semanas
+en producción: `fmtHuman` usada fuera de su función (reventaba el flujo «tu
+profesional no puede») y `profileName` sin declarar (reventaba «Lo quiero» de
+la lista de espera). **Sintaxis correcta, `node --check` en verde, pruebas en
+verde** — y la petición moría al llegar.
+
+Es imprescindible al mover código de sitio: dejarse una referencia atrás es el
+error más fácil de cometer y el más difícil de notar.
 
 ## La regla que hace esto posible
 

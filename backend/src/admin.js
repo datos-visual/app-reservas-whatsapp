@@ -84,6 +84,7 @@ async function estadoDelCron() {
 // =====================================================================
 
 const TITULOS_SALUD = {
+  errores: 'Errores del sistema',
   planificador: 'Planificador',
   migraciones: 'Base de datos',
   whatsapp: 'WhatsApp',
@@ -109,6 +110,7 @@ async function migracionesPendientes() {
   const sondas = [
     ['cron_runs', 'migration_cron_runs.sql', 'vigilancia del planificador'],
     ['nlu_usage', 'migration_tope_ia.sql', 'tope de IA'],
+    ['system_errors', 'migration_errores_sistema.sql', 'avisos de error en el backoffice'],
     ['resource_skills', 'migration_servicios_por_profesional.sql', 'servicios por profesional'],
     ['resource_absences', 'migration_equipo.sql', 'equipo y vacaciones']
   ];
@@ -157,8 +159,25 @@ async function serviciosHuerfanos(stores) {
 }
 
 /** Reúne todo en una lista de comprobaciones, ordenada por gravedad. */
-function componerSalud({ tiendas, cron, faltanMigraciones, huerfanos }) {
+function componerSalud({ tiendas, cron, faltanMigraciones, huerfanos, errores = [] }) {
   const checks = [];
+
+  // Lo primero: lo que ha reventado de verdad. Antes moría en los logs de
+  // Render. Un error repetido es UNA línea con su contador, no doscientas.
+  if (errores.length) {
+    const nombrePorId = new Map(tiendas.map((t) => [t.id, t.name]));
+    checks.push({
+      id: 'errores',
+      titulo: TITULOS_SALUD.errores,
+      nivel: 'error',
+      detalle: `${errores.length} sin revisar en las últimas 72 h`,
+      tiendas: errores.map((e) => ({
+        id: e.id,
+        nombre: nombrePorId.get(e.store_id) || `(${e.ambito})`,
+        texto: `${e.mensaje}${e.veces > 1 ? ` · ${e.veces} veces` : ''}`
+      }))
+    });
+  }
 
   checks.push({
     id: 'planificador',
@@ -368,11 +387,12 @@ async function getAdminOverview() {
 
   // Salud: todo lo que hay que mirar, en un sitio y agrupado por problema.
   // Tolerante: si alguna sonda falla, el backoffice sigue funcionando.
-  const [faltanMigraciones, huerfanos] = await Promise.all([
+  const [faltanMigraciones, huerfanos, errores] = await Promise.all([
     migracionesPendientes().catch(() => []),
-    serviciosHuerfanos(stores).catch(() => [])
+    serviciosHuerfanos(stores).catch(() => []),
+    require('./errores').erroresVivos().catch(() => [])
   ]);
-  const salud = componerSalud({ tiendas: result, cron, faltanMigraciones, huerfanos });
+  const salud = componerSalud({ tiendas: result, cron, faltanMigraciones, huerfanos, errores });
 
   return { generado: ahora.toISO(), cron, salud, flagsDisponibles: PREMIUM_FLAGS, resumen, stores: result };
 }

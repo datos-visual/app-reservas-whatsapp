@@ -32,3 +32,5 @@ JSON/
 *.pem
 *service*account*.json
 *credentials*.json
+# Caché de compilación de TypeScript: cambia en cada build y ensucia los diffs
+*.tsbuildinfo
