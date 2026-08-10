@@ -289,7 +289,10 @@ export default function AdminPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-6">
-      <div className="mb-6 flex items-center justify-between">
+      {/* Cabecera fija: con varias tiendas hay que bajar mucho, y «Actualizar»
+          y «Salir» son justo lo que se busca cuando ya estás abajo del todo.
+          El fondo opaco es obligatorio o el contenido se lee por debajo. */}
+      <div className="sticky top-0 z-30 -mx-6 mb-6 flex items-center justify-between border-b border-[#ddd9d0] bg-[#f4f2ec] px-6 py-3">
         <div>
           <h1 className="ca-h1">Backoffice CanalAgenda</h1>
           <p className="text-sm text-[#44403c]">
