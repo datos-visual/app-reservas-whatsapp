@@ -34,6 +34,7 @@ Se ejecutan solas en cada push a `main` y en cada pull request
 | `backend/test/huecos.test.js` | Qué horas se ofrecen: rejilla de inicio, capacidad, selección premium |
 | `backend/test/nlu.test.js` | Que la IA no cuele nada: validación de su salida y contexto del prompt |
 | `backend/test/ia-tope.test.js` | El freno de la IA: interruptor manual, tope diario y qué pasa si el freno falla |
+| `backend/test/salud.test.js` | Que el semáforo de `/admin` no se ponga en verde con algo roto |
 | `frontend/test/rejilla.test.ts` | Que la pantalla pinte lo mismo que calcula el motor |
 
 ## La regla que hace esto posible

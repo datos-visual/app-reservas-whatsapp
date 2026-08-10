@@ -5,6 +5,30 @@
 > sistema. Herramientas: logs de Render (backend), `/admin` (backoffice con
 > incidencias automáticas y actividad por tienda), Supabase SQL Editor.
 
+## 0. Empieza SIEMPRE por aquí: el bloque de Salud de `/admin`
+
+Antes de leer ningún log, abre `/admin` y mira el bloque de arriba. Reúne en
+un sitio todo lo que este sistema es capaz de romper en silencio, agrupado por
+problema y no por tienda:
+
+| Línea | Qué significa cuando está en rojo |
+|---|---|
+| **Planificador** | No corre el cron: no salen recordatorios, no se detectan borrados de Calendar ni citas huérfanas. Revisa cron-job.org y el secreto `INTERNAL_CRON_TOKEN` de GitHub |
+| **Base de datos** | Falta ejecutar una migración. Dice cuál y para qué sirve. **Esto no da error en ningún otro sitio**: la función simplemente deja de trabajar |
+| **WhatsApp / Tokens** | Cuenta sin conectar, desactivada o token caducado |
+| **Google Calendar** | Tienda sin calendario conectado |
+| **Horarios** | Sin horario = el bot NO ofrece citas ese día (es a propósito) |
+| **Plantillas de Meta** | Módulo activo con plantilla sin aprobar: los avisos fuera de 24 h no salen |
+| **Inteligencia artificial** | Apagada, o tope diario superado. El asistente sigue con botones |
+| **Servicios sin nadie** | Con B5.5, un servicio que ninguna profesional puede hacer. **El asistente ha dejado de ofrecerlo** |
+
+Cada línea se despliega para ver qué tiendas están afectadas.
+
+**Si el bloque está verde y aun así algo falla, es un problema que no
+estábamos vigilando.** Cuando lo resuelvas, añade la comprobación aquí y su
+prueba en `backend/test/salud.test.js`. Es la única forma de que la lista
+crezca con lo que de verdad pasa.
+
 ## 1. El bot no responde nada por WhatsApp
 
 | Comprueba | Cómo |

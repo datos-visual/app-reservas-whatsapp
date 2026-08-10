@@ -67,6 +67,157 @@ async function estadoDelCron() {
   }
 }
 
+// =====================================================================
+// SALUD DEL SISTEMA
+//
+// Los avisos existían, pero repartidos: unos en la tarjeta de cada tienda,
+// otros en el panel de la tienda y otros solo en los logs de Render. Un aviso
+// que hay que ir a buscar a tres sitios es un aviso que nadie lee.
+//
+// Esto los reúne AGRUPADOS POR PROBLEMA, no por tienda: «3 tiendas sin
+// Google Calendar» se entiende de un vistazo; tres tarjetas con la misma
+// línea roja, no.
+//
+// No duplica ninguna regla: reaprovecha las incidencias que ya se calculan
+// por tienda (por eso cada una lleva `tipo`). Tener la misma comprobación
+// escrita dos veces es como se corrige un fallo a medias.
+// =====================================================================
+
+const TITULOS_SALUD = {
+  planificador: 'Planificador',
+  migraciones: 'Base de datos',
+  whatsapp: 'WhatsApp',
+  token: 'Tokens de WhatsApp',
+  calendario: 'Google Calendar',
+  horarios: 'Horarios',
+  plantillas: 'Plantillas de Meta',
+  ia: 'Inteligencia artificial',
+  servicios: 'Servicios sin nadie'
+};
+
+const PEOR = { ok: 0, aviso: 1, error: 2 };
+const peorDe = (a, b) => (PEOR[b] > PEOR[a] ? b : a);
+
+/**
+ * ¿Están aplicadas las migraciones? Una migración sin ejecutar no da error
+ * en ningún sitio: la función simplemente deja de hacer su trabajo. Ya nos ha
+ * pasado con el barrido de citas huérfanas y con el contador de IA.
+ *
+ * Se comprueba pidiendo CERO filas de cada tabla: si responde, existe.
+ */
+async function migracionesPendientes() {
+  const sondas = [
+    ['cron_runs', 'migration_cron_runs.sql', 'vigilancia del planificador'],
+    ['nlu_usage', 'migration_tope_ia.sql', 'tope de IA'],
+    ['resource_skills', 'migration_servicios_por_profesional.sql', 'servicios por profesional'],
+    ['resource_absences', 'migration_equipo.sql', 'equipo y vacaciones']
+  ];
+  const faltan = [];
+  for (const [tabla, fichero, para] of sondas) {
+    try {
+      const { error } = await supabase.from(tabla).select('*', { count: 'exact', head: true }).limit(1);
+      if (error) faltan.push({ fichero, para });
+    } catch {
+      faltan.push({ fichero, para });
+    }
+  }
+
+  // Columnas sueltas que también se añaden por migración
+  const columnas = [
+    ['stores', 'nlu_activo', 'migration_ia_interruptor.sql', 'interruptor de IA'],
+    ['appointments', 'resource_pedido', 'migration_elegir_profesional.sql', 'elegir profesional']
+  ];
+  for (const [tabla, columna, fichero, para] of columnas) {
+    try {
+      const { error } = await supabase.from(tabla).select(columna).limit(1);
+      if (error) faltan.push({ fichero, para });
+    } catch {
+      faltan.push({ fichero, para });
+    }
+  }
+  return faltan;
+}
+
+/** Servicios que no puede hacer NADIE, tienda por tienda (solo B5.5). */
+async function serviciosHuerfanos(stores) {
+  const equipo = require('./equipo');
+  const fuera = [];
+  for (const s of stores) {
+    if (s.premium_features?.servicios_por_profesional !== true) continue;
+    try {
+      const sinNadie = await equipo.serviciosSinNadie(s.id);
+      if (sinNadie.length) {
+        fuera.push({ tienda: s.name, texto: sinNadie.map((x) => x.name).join(', ') });
+      }
+    } catch {
+      // Que falle la comprobación no puede tumbar el backoffice entero
+    }
+  }
+  return fuera;
+}
+
+/** Reúne todo en una lista de comprobaciones, ordenada por gravedad. */
+function componerSalud({ tiendas, cron, faltanMigraciones, huerfanos }) {
+  const checks = [];
+
+  checks.push({
+    id: 'planificador',
+    titulo: TITULOS_SALUD.planificador,
+    nivel: cron?.alerta ? 'error' : 'ok',
+    detalle: cron?.sin_datos
+      ? 'Sin constancia de ninguna pasada (¿falta migration_cron_runs.sql o no se ha desplegado?)'
+      : cron?.alerta
+        ? `Última pasada hace ${cron.hace_minutos} minutos: los recordatorios y la vigilancia del calendario están parados`
+        : `Al día · última pasada hace ${cron?.hace_minutos ?? '?'} min`,
+    tiendas: []
+  });
+
+  checks.push({
+    id: 'migraciones',
+    titulo: TITULOS_SALUD.migraciones,
+    nivel: faltanMigraciones.length ? 'error' : 'ok',
+    detalle: faltanMigraciones.length
+      ? `Sin aplicar: ${faltanMigraciones.map((m) => `${m.fichero} (${m.para})`).join(' · ')}`
+      : 'Todas las migraciones aplicadas',
+    tiendas: []
+  });
+
+  // El resto sale de las incidencias ya calculadas por tienda
+  const porTipo = new Map();
+  for (const t of tiendas) {
+    for (const inc of t.incidencias || []) {
+      const tipo = inc.tipo || 'otros';
+      if (!porTipo.has(tipo)) porTipo.set(tipo, { nivel: 'ok', tiendas: [] });
+      const g = porTipo.get(tipo);
+      g.nivel = peorDe(g.nivel, inc.nivel);
+      g.tiendas.push({ nombre: t.name, texto: inc.texto });
+    }
+  }
+  for (const [tipo, g] of porTipo) {
+    checks.push({
+      id: tipo,
+      titulo: TITULOS_SALUD[tipo] || 'Otros',
+      nivel: g.nivel,
+      detalle: `${g.tiendas.length} tienda(s)`,
+      tiendas: g.tiendas
+    });
+  }
+
+  if (huerfanos.length) {
+    checks.push({
+      id: 'servicios',
+      titulo: TITULOS_SALUD.servicios,
+      nivel: 'error',
+      detalle: 'El asistente ha dejado de ofrecer estos servicios',
+      tiendas: huerfanos.map((h) => ({ nombre: h.tienda, texto: h.texto }))
+    });
+  }
+
+  checks.sort((a, b) => PEOR[b.nivel] - PEOR[a.nivel]);
+  const nivel = checks.reduce((n, c) => peorDe(n, c.nivel), 'ok');
+  return { nivel, checks };
+}
+
 async function getAdminOverview() {
   const [stores, was, cals, mcs, rems, horarios] = await Promise.all([
     fetchAll('stores', '*'),
@@ -129,35 +280,35 @@ async function getAdminOverview() {
     const diasConHorario = horarios.filter((h) => h.store_id === s.id).length;
     const diasAbiertos = horarios.filter((h) => h.store_id === s.id && !h.is_closed).length;
     if (diasConHorario === 0) {
-      incidencias.push({ nivel: 'error', texto: 'Sin horario configurado: el bot NO ofrecerá citas' });
+      incidencias.push({ tipo: 'horarios', nivel: 'error', texto: 'Sin horario configurado: el bot NO ofrecerá citas' });
     } else if (diasConHorario < 7) {
-      incidencias.push({ nivel: 'aviso', texto: `Horario incompleto (${diasConHorario}/7 días): los días sin configurar se tratan como cerrados` });
+      incidencias.push({ tipo: 'horarios', nivel: 'aviso', texto: `Horario incompleto (${diasConHorario}/7 días): los días sin configurar se tratan como cerrados` });
     } else if (diasAbiertos === 0) {
-      incidencias.push({ nivel: 'aviso', texto: 'Todos los días marcados como cerrados' });
+      incidencias.push({ tipo: 'horarios', nivel: 'aviso', texto: 'Todos los días marcados como cerrados' });
     }
-    if (!wa) incidencias.push({ nivel: 'error', texto: 'WhatsApp sin conectar' });
-    else if (wa.is_active === false) incidencias.push({ nivel: 'error', texto: 'Cuenta WhatsApp desactivada' });
+    if (!wa) incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'WhatsApp sin conectar' });
+    else if (wa.is_active === false) incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'Cuenta WhatsApp desactivada' });
     if (wa?.token_expires_at) {
       const dias = Math.floor(DateTime.fromISO(wa.token_expires_at).diff(ahora, 'days').days);
-      if (dias < 0) incidencias.push({ nivel: 'error', texto: 'Token de WhatsApp CADUCADO' });
-      else if (dias <= 7) incidencias.push({ nivel: 'aviso', texto: `Token de WhatsApp caduca en ${dias} día(s)` });
+      if (dias < 0) incidencias.push({ tipo: 'token', nivel: 'error', texto: 'Token de WhatsApp CADUCADO' });
+      else if (dias <= 7) incidencias.push({ tipo: 'token', nivel: 'aviso', texto: `Token de WhatsApp caduca en ${dias} día(s)` });
     }
-    if (!cal) incidencias.push({ nivel: 'error', texto: 'Google Calendar sin conectar' });
+    if (!cal) incidencias.push({ tipo: 'calendario', nivel: 'error', texto: 'Google Calendar sin conectar' });
     if (mc?.enabled && mc.template_status !== 'approved')
-      incidencias.push({ nivel: 'aviso', texto: `Missed-call activo con plantilla ${mc.template_status || 'sin estado'}` });
+      incidencias.push({ tipo: 'plantillas', nivel: 'aviso', texto: `Missed-call activo con plantilla ${mc.template_status || 'sin estado'}` });
     if (rem?.enabled && rem.template_status !== 'approved')
-      incidencias.push({ nivel: 'aviso', texto: `Recordatorios activos con plantilla ${rem.template_status || 'sin estado'}` });
+      incidencias.push({ tipo: 'plantillas', nivel: 'aviso', texto: `Recordatorios activos con plantilla ${rem.template_status || 'sin estado'}` });
 
     // Consumo de IA: se avisa al 80 % para poder subir el tope ANTES de que
     // el asistente se quede en modo botones, no después.
     const iaHoy = usoIa.get(s.id) || 0;
     const iaTope = Number.isInteger(s.nlu_max_dia) ? s.nlu_max_dia : config.nluMaxDia;
     if (s.nlu_activo === false)
-      incidencias.push({ nivel: 'aviso', texto: 'IA apagada a mano: el asistente funciona solo con botones' });
+      incidencias.push({ tipo: 'ia', nivel: 'aviso', texto: 'IA apagada a mano: el asistente funciona solo con botones' });
     else if (iaTope > 0 && iaHoy > iaTope)
-      incidencias.push({ nivel: 'error', texto: `Tope de IA superado hoy (${iaHoy}/${iaTope}): solo botones` });
+      incidencias.push({ tipo: 'ia', nivel: 'error', texto: `Tope de IA superado hoy (${iaHoy}/${iaTope}): solo botones` });
     else if (iaTope > 0 && iaHoy >= iaTope * 0.8)
-      incidencias.push({ nivel: 'aviso', texto: `Consumo de IA alto hoy (${iaHoy}/${iaTope})` });
+      incidencias.push({ tipo: 'ia', nivel: 'aviso', texto: `Consumo de IA alto hoy (${iaHoy}/${iaTope})` });
 
     return {
       id: s.id,
@@ -215,7 +366,15 @@ async function getAdminOverview() {
     clientes_totales: clientes
   };
 
-  return { generado: ahora.toISO(), cron, flagsDisponibles: PREMIUM_FLAGS, resumen, stores: result };
+  // Salud: todo lo que hay que mirar, en un sitio y agrupado por problema.
+  // Tolerante: si alguna sonda falla, el backoffice sigue funcionando.
+  const [faltanMigraciones, huerfanos] = await Promise.all([
+    migracionesPendientes().catch(() => []),
+    serviciosHuerfanos(stores).catch(() => [])
+  ]);
+  const salud = componerSalud({ tiendas: result, cron, faltanMigraciones, huerfanos });
+
+  return { generado: ahora.toISO(), cron, salud, flagsDisponibles: PREMIUM_FLAGS, resumen, stores: result };
 }
 
 /**
@@ -450,4 +609,4 @@ async function setStoreFeatureActive(storeId, flag, activo) {
   return 'ok';
 }
 
-module.exports = { getAdminOverview, updateStoreFeatures, updateStoreIa, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, PREMIUM_FLAGS };
+module.exports = { getAdminOverview, updateStoreFeatures, updateStoreIa, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive, componerSalud, PREMIUM_FLAGS };

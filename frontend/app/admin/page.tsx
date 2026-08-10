@@ -7,7 +7,16 @@
 import { useEffect, useState } from 'react';
 import { API_BASE } from '../../lib/api';
 
-type Incidencia = { nivel: 'error' | 'aviso'; texto: string };
+type Incidencia = { nivel: 'error' | 'aviso'; texto: string; tipo?: string };
+type Nivel = 'ok' | 'aviso' | 'error';
+type Check = {
+  id: string;
+  titulo: string;
+  nivel: Nivel;
+  detalle: string;
+  tiendas: { nombre: string; texto: string }[];
+};
+type Salud = { nivel: Nivel; checks: Check[] };
 type Tienda = {
   id: string;
   name: string;
@@ -51,6 +60,11 @@ export default function AdminPage() {
   const [cron, setCron] = useState<{
     ultima: string | null; hace_minutos: number | null; alerta: boolean; sin_datos?: boolean;
   } | null>(null);
+  // Salud: todos los avisos del sistema en un sitio, agrupados por problema.
+  // Antes estaban repartidos entre esta página, el panel de cada tienda y los
+  // logs de Render — o sea, en ninguno.
+  const [salud, setSalud] = useState<Salud | null>(null);
+  const [saludAbierta, setSaludAbierta] = useState<string | null>(null);
   const [altaAbierta, setAltaAbierta] = useState(false);
   const [alta, setAlta] = useState({
     name: '', timezone: 'Europe/Madrid', appointment_duration_minutes: 30,
@@ -89,6 +103,7 @@ export default function AdminPage() {
       setTiendas(data.stores || []);
       setResumen(data.resumen || null);
       setCron(data.cron || null);
+      setSalud(data.salud || null);
       setEntrado(true);
       sessionStorage.setItem('ca_admin_token', t);
     } catch {
@@ -286,17 +301,9 @@ export default function AdminPage() {
               <span className="text-[#9a3412]">{totalIncidencias} incidencia(s) detectada(s)</span>
             )}
           </p>
-          {/* Lo que no se vigila se cae en silencio: el planificador externo
-              ha muerto dos veces sin que nadie se enterase. */}
-          {cron && (
-            <p className={`mt-1 text-[13px] ${cron.alerta ? 'text-[#9f1239]' : 'text-[#57534e]'}`}>
-              {cron.sin_datos
-                ? '⚠️ El planificador no ha dejado constancia de ninguna pasada. Sin él no salen recordatorios ni se vigila el calendario.'
-                : cron.alerta
-                  ? `⚠️ El planificador no se ejecuta desde hace ${cron.hace_minutos} min. Revisa cron-job.org y el token INTERNAL_CRON_TOKEN.`
-                  : `Planificador al día · última pasada hace ${cron.hace_minutos} min`}
-            </p>
-          )}
+          {/* El estado del planificador ya no se dice aquí: vive en el bloque
+              de Salud, con el resto. Decir lo mismo en dos sitios distintos
+              es la forma más fiable de que no se lea en ninguno. */}
         </div>
         <div className="flex gap-2">
           <button
@@ -326,6 +333,67 @@ export default function AdminPage() {
       </div>
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {/* SALUD DEL SISTEMA — lo primero que se ve, y agrupado por problema.
+          Este proyecto falla en silencio hacia el lado peligroso: el
+          planificador murió semanas sin que nadie lo notara, un servicio se
+          quedó sin nadie que lo hiciera, una migración sin ejecutar dejó un
+          barrido entero sin funcionar. Ninguno dio error. */}
+      {salud && (
+        <div className="mb-5 rounded-lg border border-[#ddd9d0] bg-white">
+          <div className="flex items-center gap-2 border-b border-[#ece9e1] px-4 py-2.5">
+            <span
+              className={`inline-block h-2.5 w-2.5 rounded-full ${
+                salud.nivel === 'error' ? 'bg-[#b91c1c]' : salud.nivel === 'aviso' ? 'bg-[#b45309]' : 'bg-[#2f5d3f]'
+              }`}
+              aria-hidden="true"
+            />
+            <span className="text-sm font-medium text-[#1c1917]">
+              {salud.nivel === 'error'
+                ? 'Hay algo roto'
+                : salud.nivel === 'aviso'
+                  ? 'Funciona, con avisos'
+                  : 'Todo en orden'}
+            </span>
+          </div>
+          <ul className="divide-y divide-[#f2f0ea]">
+            {salud.checks.map((c) => (
+              <li key={c.id}>
+                <button
+                  onClick={() => setSaludAbierta(saludAbierta === c.id ? null : c.id)}
+                  disabled={c.tiendas.length === 0}
+                  className="flex w-full items-start gap-3 px-4 py-2 text-left text-sm hover:bg-[#faf9f6] disabled:hover:bg-transparent"
+                >
+                  <span
+                    className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${
+                      c.nivel === 'error' ? 'bg-[#b91c1c]' : c.nivel === 'aviso' ? 'bg-[#b45309]' : 'bg-[#2f5d3f]'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="grow">
+                    <span className="text-[#1c1917]">{c.titulo}</span>
+                    <span className="ml-2 text-xs text-[#6b6459]">{c.detalle}</span>
+                  </span>
+                  {c.tiendas.length > 0 && (
+                    <span className="shrink-0 text-xs text-[#6b6459]">
+                      {saludAbierta === c.id ? 'ocultar' : 'ver'}
+                    </span>
+                  )}
+                </button>
+                {saludAbierta === c.id && c.tiendas.length > 0 && (
+                  <ul className="space-y-1 px-4 pb-3 pl-9">
+                    {c.tiendas.map((t, i) => (
+                      <li key={i} className="text-xs text-[#44403c]">
+                        <span className="font-medium">{t.nombre}</span> — {t.texto}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {resumen && (
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
