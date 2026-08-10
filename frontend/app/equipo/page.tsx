@@ -291,8 +291,14 @@ export default function EquipoPage() {
 
       {!cargando && (
         <div className="ca-card-p mb-5">
+          {/* Estos tres NO son funciones de pago: son el funcionamiento base.
+              Se confunden con las premium («elegir profesional») porque hablan
+              del equipo, así que se dice aquí en vez de esperar la llamada. */}
           <p className="ca-eyebrow">
             Cómo se calculan tus huecos
+          </p>
+          <p className="mb-2 text-xs text-[#6b6459]">
+            Estos tres ajustes vienen incluidos y no dependen de tu plan.
           </p>
           <label className="flex cursor-pointer items-start gap-3 py-2">
             <input type="checkbox" className="mt-1" checked={ajustes.usarEquipo}
