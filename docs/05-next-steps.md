@@ -21,8 +21,9 @@ Empiézalos ya aunque no haya cliente: son semanas de espera de terceros.
 ## 2. Antes de enseñárselo a una peluquería real
 
 - **Prueba multitienda.** Dos partes:
-  - *Panel* (gratis, hoy): segunda tienda + segundo usuario, y comprobar que
-    no ve NADA de la primera. Es la mitad crítica, la de seguridad.
+  - *Panel*: ✅ **HECHA el 10-ago-2026.** Segundo usuario (`piloto2@test.com`)
+    en ventana de incógnito: panel completo y **vacío**, sin ver nada de la
+    primera tienda. El aislamiento por `store_users` funciona.
   - *Webhook* (necesita un segundo `phone_number_id`, o sea una segunda línea
     telefónica). El rutado está escrito y leído, pero **nunca han entrado
     mensajes de dos números a la vez**. No descubrirlo con la clienta delante.

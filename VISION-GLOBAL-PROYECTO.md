@@ -714,6 +714,25 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.65 AISLAMIENTO MULTITIENDA — VERIFICADO EN EL PANEL (10-ago-2026)
+
+Segunda tienda con su propio usuario, entrando en ventana de **incógnito**
+(en la ventana normal sigue viva la sesión de administrador y no se probaría
+nada). Resultado: panel completo y **vacío**. Ni una clienta, ni una cita, ni
+un servicio de la otra tienda.
+
+Queda verificada la mitad de seguridad: JWT → `store_users` → `store_id`, y
+el `?store_id=` del query se ignora para usuarios de tienda.
+
+**Lo que sigue SIN probar** es el rutado del webhook con dos números a la vez.
+El código está leído, no ejercitado. Necesita una segunda línea telefónica y
+hay que hacerlo antes de la primera peluquería real.
+
+**Aviso de producto:** las tiendas de prueba dejan incidencias permanentes en
+`/admin` («WhatsApp sin conectar»). Un panel siempre en rojo por motivos
+falsos es un panel que se deja de mirar — y entonces la alarma de verdad no
+se ve. Borrar las tiendas ficticias cuando cumplan su función.
+
 ### 10.64 B5.5 — SERVICIOS POR PROFESIONAL, PREMIUM (6-ago-2026)
 
 «Es que Borja no hace color.» Tabla `resource_skills` (store/resource/service)
