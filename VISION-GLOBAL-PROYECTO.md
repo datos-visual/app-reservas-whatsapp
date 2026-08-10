@@ -714,6 +714,28 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.68 PARTICIÓN DE index.js — LA RED PRIMERO (10-ago-2026)
+
+Antes de mover una línea se construyó `test/rutas.test.js`: lee la tabla de
+rutas REAL de Express y fija que las públicas son exactamente seis.
+
+**El detalle que la hace útil:** baja también dentro de los Router montados.
+Sin esa recursión se habría quedado ciega justo al empezar a mover las rutas
+—una prueba que deja de ver lo que vigila cuando haces el cambio que vigila no
+vigila nada—. Verificada dos veces rompiéndola a propósito: ruta suelta antes
+del middleware, y ruta escondida dentro de un Router. Roja las dos veces.
+
+Extraídos `routes/admin.js` (8 rutas) y `routes/equipo.js` (15). `index.js`:
+3.832 → 3.471 líneas. Recuento de rutas idéntico antes y después: 58, con las
+mismas 6 públicas.
+
+**La costura elegida no es «rutas contra lógica», es MOTOR contra
+CONVERSACIÓN** — porque es la que permite añadir verticales sin tocar el
+cálculo de huecos. Receta completa en `docs/16-arquitectura-backend.md`.
+
+Queda un nudo: `notificarListaEspera` la usan el flujo y las rutas de agenda.
+Antes de sacar la agenda hay que llevarla a `avisos.js`, no duplicarla.
+
 ### 10.67 LOS ERRORES SE VEN (10-ago-2026)
 
 `errores.js` + tabla `system_errors`. Todo lo que revienta —webhook, rutas,
