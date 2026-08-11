@@ -66,13 +66,13 @@ export default function OnboardingStorePage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
-      <div className="w-full max-w-md rounded-xl border border-[#ddd9d0] bg-white p-6">
+      <div className="w-full max-w-md rounded-xl border border-[#c9c9c9] bg-[#e6e6e6] p-6">
         <h1 className="mb-1 ca-h2">Crea tu negocio</h1>
-        <p className="mb-6 text-sm text-[#6b6459]">Paso 2 de 4 — los datos básicos de tu tienda.</p>
+        <p className="mb-6 text-sm text-[#6e6e6e]">Paso 2 de 4 — los datos básicos de tu tienda.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs text-[#6b6459]">Nombre del negocio *</label>
+            <label className="mb-1 block text-xs text-[#6e6e6e]">Nombre del negocio *</label>
             <input
               required value={name} onChange={(e) => setName(e.target.value)}
               placeholder="Peluquería Ejemplo"
@@ -81,7 +81,7 @@ export default function OnboardingStorePage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs text-[#6b6459]">Zona horaria</label>
+              <label className="mb-1 block text-xs text-[#6e6e6e]">Zona horaria</label>
               <select
                 value={timezone} onChange={(e) => setTimezone(e.target.value)}
                 className="ca-input"
@@ -90,7 +90,7 @@ export default function OnboardingStorePage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-[#6b6459]">Duración de cita</label>
+              <label className="mb-1 block text-xs text-[#6e6e6e]">Duración de cita</label>
               <select
                 value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10))}
                 className="ca-input"
@@ -100,14 +100,14 @@ export default function OnboardingStorePage() {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#6b6459]">Email del negocio (opcional)</label>
+            <label className="mb-1 block text-xs text-[#6e6e6e]">Email del negocio (opcional)</label>
             <input
               type="email" value={email} onChange={(e) => setEmail(e.target.value)}
               className="ca-input"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#6b6459]">Teléfono del negocio (opcional)</label>
+            <label className="mb-1 block text-xs text-[#6e6e6e]">Teléfono del negocio (opcional)</label>
             <input
               value={phone} onChange={(e) => setPhone(e.target.value)}
               placeholder="+34 ..."

@@ -137,25 +137,25 @@ export default function DashboardPage() {
           visual, no la caja. Los demás son datos que piden una decisión —
           un número suelto («30 mensajes») no lleva a ninguna acción. */}
       {proxima ? (
-        <section className="mb-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#1c1917] px-6 py-5">
+        <section className="mb-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#1a1a1a] px-6 py-5">
           <div>
-            <p className="text-[12px] font-medium text-[#a8a29e]">Lo siguiente</p>
+            <p className="text-[12px] font-medium text-[#a3a3a3]">Lo siguiente</p>
             <p className="mt-1 text-[17px] text-white">
               <span className="ca-cifras">{hora(proxima.start_at)}</span>
-              <span className="mx-2 text-[#57534e]">·</span>
+              <span className="mx-2 text-[#4d4d4d]">·</span>
               {proxima.customers?.name || 'Sin nombre'}
-              {proxima.services?.name && <span className="text-[#d6d3cb]"> — {proxima.services.name}</span>}
+              {proxima.services?.name && <span className="text-[#c0c0c0]"> — {proxima.services.name}</span>}
             </p>
             {proxima.resources?.name && (
-              <p className="mt-0.5 text-[13px] text-[#a8a29e]">con {proxima.resources.name}</p>
+              <p className="mt-0.5 text-[13px] text-[#a3a3a3]">con {proxima.resources.name}</p>
             )}
           </div>
-          <button onClick={() => router.push('/agenda')} className="ca-btn ca-btn-sm bg-white text-[#1c1917] hover:bg-[#f4f2ec]">
+          <button onClick={() => router.push('/agenda')} className="ca-btn ca-btn-sm bg-[#e6e6e6] text-[#1a1a1a] hover:bg-[#e6e6e6]">
             Abrir la agenda
           </button>
         </section>
       ) : (
-        <section className="mb-3 rounded-xl border border-[#ddd9d0] bg-white px-6 py-5">
+        <section className="mb-3 rounded-xl border border-[#c9c9c9] bg-[#e6e6e6] px-6 py-5">
           <p className="ca-h2">Hoy no tienes citas</p>
           <p className="mt-1 ca-hint">El asistente sigue atendiendo por WhatsApp.</p>
         </section>
@@ -164,16 +164,16 @@ export default function DashboardPage() {
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <div className="ca-card-p">
           <p className="ca-meta">Citas hoy</p>
-          <p className="mt-1 font-serif text-[32px] leading-none text-[#1c1917]">{appointments.length}</p>
-          <p className="mt-2 text-[13px] text-[#57534e]">
+          <p className="mt-1 font-serif text-[32px] leading-none text-[#1a1a1a]">{appointments.length}</p>
+          <p className="mt-2 text-[13px] text-[#4d4d4d]">
             {appointments.length ? `La última termina a las ${hora(appointments[appointments.length - 1].end_at)}` : 'Agenda libre'}
           </p>
         </div>
 
         <div className="ca-card-p">
           <p className="ca-meta">Sin confirmar</p>
-          <p className="mt-1 font-serif text-[32px] leading-none text-[#1c1917]">{sinConfirmar.length}</p>
-          <p className="mt-2 text-[13px] text-[#57534e]">
+          <p className="mt-1 font-serif text-[32px] leading-none text-[#1a1a1a]">{sinConfirmar.length}</p>
+          <p className="mt-2 text-[13px] text-[#4d4d4d]">
             {sinConfirmar.length
               ? 'Se les ha pedido confirmación por WhatsApp'
               : 'Todas las de hoy están confirmadas'}
@@ -187,7 +187,7 @@ export default function DashboardPage() {
               ? <span className="ca-badge-ok">Funcionando</span>
               : <span className="ca-badge-error">Sin conectar</span>}
           </p>
-          <p className="mt-2 text-[13px] text-[#57534e]">
+          <p className="mt-2 text-[13px] text-[#4d4d4d]">
             {status?.ready ? 'Respondiendo a tus clientas en WhatsApp' : 'Contacta con CanalAgenda'}
           </p>
         </div>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="ca-card">
-          <div className="border-b border-[#ddd9d0] px-5 py-3">
+          <div className="border-b border-[#c9c9c9] px-5 py-3">
             <h2 className="ca-h2">Citas de hoy</h2>
           </div>
           {loading && <p className="px-5 py-4 ca-hint">Cargando…</p>}
@@ -207,21 +207,21 @@ export default function DashboardPage() {
               </button>
             </div>
           )}
-          <ul className="divide-y divide-[#ece9e1]">
+          <ul className="divide-y divide-[#dcdcdc]">
             {appointments.map((c) => (
               <li key={c.id} className="flex items-center justify-between px-5 py-3">
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-[#1c1917]">
+                  <p className="truncate font-medium text-[#1a1a1a]">
                     {c.customers?.name || 'Sin nombre'}
-                    {c.services?.name && <span className="font-normal text-[#57534e]"> · {c.services.name}</span>}
+                    {c.services?.name && <span className="font-normal text-[#4d4d4d]"> · {c.services.name}</span>}
                   </p>
                   <p className="ca-meta truncate">
                     {c.resources?.name ? `con ${c.resources.name}` : 'sin asignar'}
-                    <span className="mx-1.5 text-[#ddd9d0]">·</span>
+                    <span className="mx-1.5 text-[#c9c9c9]">·</span>
                     {c.customers?.phone}
                   </p>
                 </div>
-                <span className="ca-cifras shrink-0 rounded-lg bg-[#efece4] px-3 py-1.5 text-[13px] font-medium text-[#1c1917]">
+                <span className="ca-cifras shrink-0 rounded-lg bg-[#dedede] px-3 py-1.5 text-[13px] font-medium text-[#1a1a1a]">
                   {hora(c.start_at)}–{hora(c.end_at)}
                 </span>
               </li>
@@ -230,21 +230,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="ca-card">
-          <div className="border-b border-[#ddd9d0] px-5 py-3">
+          <div className="border-b border-[#c9c9c9] px-5 py-3">
             <h2 className="ca-h2">Últimas conversaciones</h2>
           </div>
-          <ul className="max-h-[420px] divide-y divide-[#ece9e1] overflow-y-auto">
+          <ul className="max-h-[420px] divide-y divide-[#dcdcdc] overflow-y-auto">
             {messages.map((m) => (
-              <li key={m.id} className={`px-5 py-3 ${m.from_me ? 'bg-[#faf9f6]' : ''}`}>
+              <li key={m.id} className={`px-5 py-3 ${m.from_me ? 'bg-[#ededed]' : ''}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`text-[12px] font-medium ${m.from_me ? 'text-[#6b6459]' : 'text-[#1c1917]'}`}>
+                  <span className={`text-[12px] font-medium ${m.from_me ? 'text-[#6e6e6e]' : 'text-[#1a1a1a]'}`}>
                     {m.from_me ? 'Asistente' : m.nombre || m.phone}
                   </span>
-                  <span className="ca-cifras shrink-0 text-[12px] text-[#6b6459]">
+                  <span className="ca-cifras shrink-0 text-[12px] text-[#6e6e6e]">
                     {new Date(m.created_at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <p className="mt-1 line-clamp-2 text-[13px] text-[#44403c]">{m.content}</p>
+                <p className="mt-1 line-clamp-2 text-[13px] text-[#3d3d3d]">{m.content}</p>
               </li>
             ))}
             {!loading && messages.length === 0 && (

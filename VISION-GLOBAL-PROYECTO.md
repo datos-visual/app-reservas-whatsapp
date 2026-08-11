@@ -714,6 +714,29 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.69 NEOMORFISMO SOBRIO — BLANCO, NEGRO Y GRIS (11-ago-2026)
+
+Repaso visual completo del panel y del backoffice. Paleta neutra pura: fuera
+los beiges y la tinta cálida.
+
+**Dónde sí hay neomorfismo:** las SUPERFICIES. Tarjetas y paneles comparten
+exactamente el color del lienzo (`#e6e6e6`) y se separan con dos sombras
+opuestas —luz blanca arriba-izquierda, sombra gris abajo-derecha—. Los
+contenedores sueltos pasan de «borde de 1 px» a hueco hundido.
+
+**Dónde NO, y a propósito:** lo accionable. El neomorfismo puro hace que un
+botón tenga el color del fondo y que su única señal sea una sombra difusa —
+que es exactamente el defecto que encontró la auditoría del 5-ago (bordes a
+1,02:1). En una peluquería, con luz de escaparate, eso no parece un botón.
+
+Por eso: **acción principal negra sólida**, campos hundidos CON borde real, y
+44 px de alto en todo lo pulsable. Se conserva el tacto sin perder la
+legibilidad.
+
+**El color queda reservado a lo que significa algo:** verde correcto, ámbar
+aviso, rojo error. Si aparece color donde no hay nada que decidir, el sistema
+está roto. Es la misma regla del acento único, llevada al extremo.
+
 ### 10.68 PARTICIÓN DE index.js — LA RED PRIMERO (10-ago-2026)
 
 Antes de mover una línea se construyó `test/rutas.test.js`: lee la tabla de

@@ -269,7 +269,7 @@ export default function AdminPage() {
     return (
       <main className="mx-auto max-w-md p-8">
         <h1 className="ca-h1 mb-2">Backoffice CanalAgenda</h1>
-        <p className="text-sm text-[#44403c] mb-6">
+        <p className="text-sm text-[#3d3d3d] mb-6">
           Acceso solo para el administrador. El token no se guarda en el servidor.
         </p>
         <form
@@ -284,12 +284,12 @@ export default function AdminPage() {
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="ADMIN_TOKEN"
-            className="w-full rounded border border-[#d6d3cb] bg-[#1c1917] px-3 py-2 text-[#1c1917] placeholder:text-[#6b6459]"
+            className="w-full rounded border border-[#c0c0c0] bg-[#1a1a1a] px-3 py-2 text-[#1a1a1a] placeholder:text-[#6e6e6e]"
           />
           <button
             type="submit"
             disabled={cargando}
-            className="w-full rounded bg-[#3f7a55] px-4 py-2 font-medium text-[#1c1917] hover:bg-[#2f5d3f] disabled:opacity-50"
+            className="w-full rounded bg-[#3f7a55] px-4 py-2 font-medium text-[#1a1a1a] hover:bg-[#2f5d3f] disabled:opacity-50"
           >
             {cargando ? 'Entrando…' : 'Entrar'}
           </button>
@@ -306,10 +306,10 @@ export default function AdminPage() {
       {/* Cabecera fija: con varias tiendas hay que bajar mucho, y «Actualizar»
           y «Salir» son justo lo que se busca cuando ya estás abajo del todo.
           El fondo opaco es obligatorio o el contenido se lee por debajo. */}
-      <div className="sticky top-0 z-30 -mx-6 mb-6 flex items-center justify-between border-b border-[#ddd9d0] bg-[#f4f2ec] px-6 py-3">
+      <div className="sticky top-0 z-30 -mx-6 mb-6 flex items-center justify-between border-b border-[#c9c9c9] bg-[#e6e6e6] px-6 py-3">
         <div>
           <h1 className="ca-h1">Backoffice CanalAgenda</h1>
-          <p className="text-sm text-[#44403c]">
+          <p className="text-sm text-[#3d3d3d]">
             {tiendas.length} tienda(s) ·{' '}
             {totalIncidencias === 0 ? (
               <span className="text-[#2f5d3f]">sin incidencias</span>
@@ -324,14 +324,14 @@ export default function AdminPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setAltaAbierta((v) => !v)}
-            className="rounded bg-[#3f7a55] px-3 py-1.5 text-sm font-medium text-[#1c1917] hover:bg-[#2f5d3f]"
+            className="rounded bg-[#3f7a55] px-3 py-1.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#2f5d3f]"
           >
             {altaAbierta ? 'Cerrar alta' : '＋ Alta de tienda'}
           </button>
           <button
             onClick={() => cargar(token)}
             disabled={cargando}
-            className="rounded border border-[#d6d3cb] px-3 py-1.5 text-sm text-[#44403c] hover:bg-[#f4f2ec] disabled:opacity-50"
+            className="rounded border border-[#c0c0c0] px-3 py-1.5 text-sm text-[#3d3d3d] hover:bg-[#e6e6e6] disabled:opacity-50"
           >
             {cargando ? 'Actualizando…' : 'Actualizar'}
           </button>
@@ -341,7 +341,7 @@ export default function AdminPage() {
               setEntrado(false);
               setToken('');
             }}
-            className="rounded border border-[#d6d3cb] px-3 py-1.5 text-sm text-[#44403c] hover:bg-[#f4f2ec]"
+            className="rounded border border-[#c0c0c0] px-3 py-1.5 text-sm text-[#3d3d3d] hover:bg-[#e6e6e6]"
           >
             Salir
           </button>
@@ -356,15 +356,15 @@ export default function AdminPage() {
           quedó sin nadie que lo hiciera, una migración sin ejecutar dejó un
           barrido entero sin funcionar. Ninguno dio error. */}
       {salud && (
-        <div className="mb-5 rounded-lg border border-[#ddd9d0] bg-white">
-          <div className="flex items-center gap-2 border-b border-[#ece9e1] px-4 py-2.5">
+        <div className="mb-5 ca-hueco bg-[#e6e6e6]">
+          <div className="flex items-center gap-2 border-b border-[#dcdcdc] px-4 py-2.5">
             <span
               className={`inline-block h-2.5 w-2.5 rounded-full ${
                 salud.nivel === 'error' ? 'bg-[#b91c1c]' : salud.nivel === 'aviso' ? 'bg-[#b45309]' : 'bg-[#2f5d3f]'
               }`}
               aria-hidden="true"
             />
-            <span className="text-sm font-medium text-[#1c1917]">
+            <span className="text-sm font-medium text-[#1a1a1a]">
               {salud.nivel === 'error'
                 ? 'Hay algo roto'
                 : salud.nivel === 'aviso'
@@ -378,7 +378,7 @@ export default function AdminPage() {
                 <button
                   onClick={() => setSaludAbierta(saludAbierta === c.id ? null : c.id)}
                   disabled={c.tiendas.length === 0}
-                  className="flex w-full items-start gap-3 px-4 py-2 text-left text-sm hover:bg-[#faf9f6] disabled:hover:bg-transparent"
+                  className="flex w-full items-start gap-3 px-4 py-2 text-left text-sm hover:bg-[#ededed] disabled:hover:bg-transparent"
                 >
                   <span
                     className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${
@@ -387,11 +387,11 @@ export default function AdminPage() {
                     aria-hidden="true"
                   />
                   <span className="grow">
-                    <span className="text-[#1c1917]">{c.titulo}</span>
-                    <span className="ml-2 text-xs text-[#6b6459]">{c.detalle}</span>
+                    <span className="text-[#1a1a1a]">{c.titulo}</span>
+                    <span className="ml-2 text-xs text-[#6e6e6e]">{c.detalle}</span>
                   </span>
                   {c.tiendas.length > 0 && (
-                    <span className="shrink-0 text-xs text-[#6b6459]">
+                    <span className="shrink-0 text-xs text-[#6e6e6e]">
                       {saludAbierta === c.id ? 'ocultar' : 'ver'}
                     </span>
                   )}
@@ -399,7 +399,7 @@ export default function AdminPage() {
                 {saludAbierta === c.id && c.tiendas.length > 0 && (
                   <ul className="space-y-1 px-4 pb-3 pl-9">
                     {c.tiendas.map((t, i) => (
-                      <li key={i} className="flex items-start justify-between gap-3 text-xs text-[#44403c]">
+                      <li key={i} className="flex items-start justify-between gap-3 text-xs text-[#3d3d3d]">
                         <span>
                           <span className="font-medium">{t.nombre}</span> — {t.texto}
                         </span>
@@ -410,7 +410,7 @@ export default function AdminPage() {
                           <button
                             onClick={() => marcarErrorVisto(t.id!)}
                             disabled={guardando === 'err' + t.id}
-                            className="shrink-0 rounded border border-[#d6d3cb] px-2 py-0.5 text-[11px] text-[#57534e] hover:bg-[#f4f2ec]"
+                            className="shrink-0 rounded border border-[#c0c0c0] px-2 py-0.5 text-[11px] text-[#4d4d4d] hover:bg-[#e6e6e6]"
                           >
                             {guardando === 'err' + t.id ? '…' : 'Visto'}
                           </button>
@@ -436,7 +436,7 @@ export default function AdminPage() {
             ['Clientes', resumen.clientes_totales]
           ].map(([etiqueta, valor]) => (
             <div key={String(etiqueta)} className="ca-card px-3 py-2">
-              <p className="text-xs text-[#6b6459]">{etiqueta}</p>
+              <p className="text-xs text-[#6e6e6e]">{etiqueta}</p>
               <p className="ca-h2">{valor ?? '—'}</p>
             </div>
           ))}
@@ -444,9 +444,9 @@ export default function AdminPage() {
       )}
 
       {altaAbierta && (
-        <div className="mb-5 rounded-lg border border-[#dbe7de] bg-white p-4">
-          <p className="mb-1 text-sm font-medium text-[#1c1917]">Alta de una peluquería nueva</p>
-          <p className="mb-3 text-xs text-[#6b6459]">
+        <div className="mb-5 rounded-lg border border-[#dbe7de] bg-[#e6e6e6] p-4">
+          <p className="mb-1 text-sm font-medium text-[#1a1a1a]">Alta de una peluquería nueva</p>
+          <p className="mb-3 text-xs text-[#6e6e6e]">
             Crea el negocio, su usuario del panel y su catálogo inicial. Después conecta
             Calendar y WhatsApp desde la tarjeta de la tienda, sin salir de aquí.
           </p>
@@ -481,7 +481,7 @@ export default function AdminPage() {
             />
             <button
               onClick={crearTienda} disabled={guardando === 'alta'}
-              className="rounded bg-[#3f7a55] px-4 py-2 text-sm font-medium text-[#1c1917] hover:bg-[#2f5d3f] disabled:opacity-50"
+              className="rounded bg-[#3f7a55] px-4 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-[#2f5d3f] disabled:opacity-50"
             >
               {guardando === 'alta' ? 'Creando…' : 'Crear tienda'}
             </button>
@@ -494,15 +494,15 @@ export default function AdminPage() {
           <div key={t.id} className="ca-card-p">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="font-medium text-[#1c1917]">
+                <h2 className="font-medium text-[#1a1a1a]">
                   {t.name}{' '}
                   {t.vertical_code && (
-                    <span className="ml-1 rounded bg-[#efece4] px-2 py-0.5 text-xs font-normal text-[#44403c]">
+                    <span className="ml-1 rounded bg-[#dedede] px-2 py-0.5 text-xs font-normal text-[#3d3d3d]">
                       {t.vertical_code}
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-[#6b6459]">{t.id}</p>
+                <p className="text-xs text-[#6e6e6e]">{t.id}</p>
               </div>
               <div className="flex flex-wrap gap-1.5 text-xs">
                 <span className={`rounded px-2 py-0.5 ${t.whatsapp.conectado && t.whatsapp.activo ? 'bg-[#edf4ee] text-[#2f5d3f]' : 'bg-red-100 text-red-800'}`}>
@@ -511,17 +511,17 @@ export default function AdminPage() {
                 <span className={`rounded px-2 py-0.5 ${t.calendar.conectado ? 'bg-[#edf4ee] text-[#2f5d3f]' : 'bg-red-100 text-red-800'}`}>
                   Calendar {t.calendar.conectado ? 'OK' : 'sin conectar'}
                 </span>
-                <span className="rounded bg-[#efece4] px-2 py-0.5 text-[#44403c]">
+                <span className="rounded bg-[#dedede] px-2 py-0.5 text-[#3d3d3d]">
                   Citas: {t.citas.ultimos7dias} últ. 7d · {t.citas.proximos7dias} próx. 7d
                 </span>
                 {t.ia && (
                   <span
                     className={`rounded px-2 py-0.5 ${
                       !t.ia.activo
-                        ? 'bg-[#efece4] text-[#6b6459]'
+                        ? 'bg-[#dedede] text-[#6e6e6e]'
                         : t.ia.tope > 0 && t.ia.hoy > t.ia.tope
                           ? 'bg-red-100 text-red-800'
-                          : 'bg-[#efece4] text-[#44403c]'
+                          : 'bg-[#dedede] text-[#3d3d3d]'
                     }`}
                   >
                     {t.ia.activo
@@ -534,8 +534,8 @@ export default function AdminPage() {
               {/* Mando de operación: apagar la IA de una tienda y ponerle techo.
                   Apagarla no rompe nada — el asistente sigue con botones. */}
               {t.ia && (
-                <div className="mt-2 flex flex-wrap items-center gap-3 rounded border border-[#ddd9d0] px-3 py-2 text-xs">
-                  <label className="flex cursor-pointer items-center gap-2 text-[#44403c]">
+                <div className="mt-2 flex flex-wrap items-center gap-3 ca-hueco px-3 py-2 text-xs">
+                  <label className="flex cursor-pointer items-center gap-2 text-[#3d3d3d]">
                     <input
                       type="checkbox"
                       checked={t.ia.activo}
@@ -544,7 +544,7 @@ export default function AdminPage() {
                     />
                     Interpretar texto libre con IA
                   </label>
-                  <span className="text-[#6b6459]">
+                  <span className="text-[#6e6e6e]">
                     Tope diario
                     <input
                       type="number"
@@ -555,7 +555,7 @@ export default function AdminPage() {
                         const v = e.target.value === '' ? null : parseInt(e.target.value, 10);
                         if (v !== t.ia!.tope) cambiarIa(t.id, { tope: v });
                       }}
-                      className="ml-2 w-20 rounded border border-[#ddd9d0] px-2 py-0.5"
+                      className="ml-2 w-20 ca-hueco px-2 py-0.5"
                     />
                     <span className="ml-2">0 = sin límite{t.ia.tope_propio ? '' : ' · valor por defecto'}</span>
                   </span>
@@ -568,7 +568,7 @@ export default function AdminPage() {
                 {t.incidencias.map((inc, i) => (
                   <li
                     key={i}
-                    className={`rounded px-2 py-1 text-xs ${inc.nivel === 'error' ? 'bg-red-50 text-red-700' : 'bg-[#fdf1ea] text-[#7c2d12]'}`}
+                    className={`rounded px-2 py-1 text-xs ${inc.nivel === 'error' ? 'bg-red-50 text-red-700' : 'bg-[#ededed] text-[#3d3d3d]'}`}
                   >
                     {inc.nivel === 'error' ? '⛔' : '⚠️'} {inc.texto}
                   </li>
@@ -576,7 +576,7 @@ export default function AdminPage() {
               </ul>
             )}
 
-            <div className="mt-4 border-t border-[#ddd9d0] pt-3">
+            <div className="mt-4 border-t border-[#c9c9c9] pt-3">
               <p className="ca-eyebrow">
                 Módulos con plantilla de Meta
               </p>
@@ -585,9 +585,9 @@ export default function AdminPage() {
                   { key: 'recordatorios' as const, label: 'Recordatorios', datos: t.modulos.recordatorios },
                   { key: 'missed_call' as const, label: 'Llamada perdida', datos: t.modulos.missed_call }
                 ]).map((m) => (
-                  <div key={m.key} className="rounded border border-[#d6d3cb] px-3 py-2 text-sm">
+                  <div key={m.key} className="rounded border border-[#c0c0c0] px-3 py-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-[#44403c]">{m.label}</span>
+                      <span className="text-[#3d3d3d]">{m.label}</span>
                       <span className={`text-xs ${m.datos?.template_status === 'approved' ? 'text-[#2f5d3f]' : 'text-[#9a3412]'}`}>
                         {m.datos ? (m.datos.template_status || 'sin estado') : 'sin ficha'}
                       </span>
@@ -597,7 +597,7 @@ export default function AdminPage() {
                         <button
                           onClick={() => cambiarModulo(t.id, m.key, { template_status: 'approved' })}
                           disabled={guardando === t.id + m.key}
-                          className="rounded bg-[#2f5d3f] px-2 py-1 text-xs text-[#1c1917] hover:bg-[#3f7a55] disabled:opacity-50"
+                          className="rounded bg-[#2f5d3f] px-2 py-1 text-xs text-[#1a1a1a] hover:bg-[#3f7a55] disabled:opacity-50"
                         >
                           Plantilla aprobada ✓
                         </button>
@@ -605,7 +605,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => cambiarModulo(t.id, m.key, { enabled: !(m.datos?.enabled) })}
                         disabled={guardando === t.id + m.key}
-                        className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${m.datos?.enabled ? 'bg-[#edf4ee] text-[#2f5d3f]' : 'bg-[#e7e5de] text-[#44403c]'}`}
+                        className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${m.datos?.enabled ? 'bg-[#edf4ee] text-[#2f5d3f]' : 'bg-[#d9d9d9] text-[#3d3d3d]'}`}
                       >
                         {m.datos?.enabled ? 'Activado' : 'Desactivado'}
                       </button>
@@ -625,12 +625,12 @@ export default function AdminPage() {
             </div>
 
             {conexiones[t.id] && (
-              <div className="mt-3 grid grid-cols-1 gap-4 rounded-lg border border-[#ddd9d0] p-3 md:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-4 ca-hueco p-3 md:grid-cols-2">
                 <div>
                   <p className="ca-eyebrow">Google Calendar</p>
-                  <p className="mb-2 text-xs text-[#6b6459]">
+                  <p className="mb-2 text-xs text-[#6e6e6e]">
                     El negocio comparte su calendario con{' '}
-                    <span className="text-[#44403c]">calendar-reservas@whatsapp-reservas-489313.iam.gserviceaccount.com</span>{' '}
+                    <span className="text-[#3d3d3d]">calendar-reservas@whatsapp-reservas-489313.iam.gserviceaccount.com</span>{' '}
                     (permiso: hacer cambios) y te pasa el ID.
                   </p>
                   <input
@@ -705,24 +705,24 @@ export default function AdminPage() {
                 <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <p className="ca-eyebrow">Próximas citas</p>
-                    {actividad[t.id]!.citas.length === 0 && <p className="text-xs text-[#6b6459]">Ninguna.</p>}
+                    {actividad[t.id]!.citas.length === 0 && <p className="text-xs text-[#6e6e6e]">Ninguna.</p>}
                     <ul className="space-y-1">
                       {actividad[t.id]!.citas.map((c: any) => (
-                        <li key={c.id} className="rounded bg-[#efece4] px-2 py-1 text-xs text-[#44403c]">
+                        <li key={c.id} className="rounded bg-[#dedede] px-2 py-1 text-xs text-[#3d3d3d]">
                           {new Date(c.start_at).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           {' — '}{c.customers?.name || c.customers?.phone || '¿?'}
-                          <span className="ml-1 text-[#6b6459]">({c.status})</span>
+                          <span className="ml-1 text-[#6e6e6e]">({c.status})</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                   <div>
                     <p className="ca-eyebrow">Últimos mensajes</p>
-                    {actividad[t.id]!.mensajes.length === 0 && <p className="text-xs text-[#6b6459]">Ninguno.</p>}
+                    {actividad[t.id]!.mensajes.length === 0 && <p className="text-xs text-[#6e6e6e]">Ninguno.</p>}
                     <ul className="max-h-64 space-y-1 overflow-y-auto">
                       {actividad[t.id]!.mensajes.map((m: any, i: number) => (
-                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-[#efece4] text-[#6b6459]' : 'bg-[#eef2f6] text-[#1c1917]'}`}>
-                          <span className="text-[#6b6459]">{m.from_me ? '🤖' : '👤'} </span>
+                        <li key={i} className={`rounded px-2 py-1 text-xs ${m.from_me ? 'bg-[#dedede] text-[#6e6e6e]' : 'bg-[#eef2f6] text-[#1a1a1a]'}`}>
+                          <span className="text-[#6e6e6e]">{m.from_me ? '🤖' : '👤'} </span>
                           {String(m.content).slice(0, 120)}
                         </li>
                       ))}
@@ -732,7 +732,7 @@ export default function AdminPage() {
               )}
             </div>
 
-            <div className="mt-4 border-t border-[#ddd9d0] pt-3">
+            <div className="mt-4 border-t border-[#c9c9c9] pt-3">
               <p className="ca-eyebrow">
                 Servicios premium (doc 09)
               </p>
@@ -743,7 +743,7 @@ export default function AdminPage() {
                   return (
                     <label
                       key={f.key}
-                      className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${activo ? 'border-[#c7dbcd] bg-[#edf4ee] text-[#2f5d3f]' : 'border-[#d6d3cb] text-[#44403c]'} ${ocupado ? 'opacity-50' : ''}`}
+                      className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm ${activo ? 'border-[#c7dbcd] bg-[#edf4ee] text-[#2f5d3f]' : 'border-[#c0c0c0] text-[#3d3d3d]'} ${ocupado ? 'opacity-50' : ''}`}
                     >
                       <input
                         type="checkbox"
