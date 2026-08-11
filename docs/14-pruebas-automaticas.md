@@ -88,6 +88,36 @@ npm test
 # → not ok 2 - con turno solo los martes, el sábado LIBRA
 ```
 
+## Mapa honesto: qué módulo tiene red y cuál no
+
+| Módulo | Prueba automática | Por qué |
+|---|---|---|
+| `huecos.js` | ✅ | Pura: aritmética de horas |
+| `equipo.js` | ✅ | Acepta caché → se ejecuta sin base de datos |
+| `conversacion.js` | ✅ | Pura: decisiones del flujo |
+| `vocabulario.js` | ✅ | Puro: frases por sector |
+| `whatsappCloud.js` | ✅ | El parseo del webhook es puro |
+| `nlu.js` | ✅ | Se prueba la validación, no los proveedores |
+| `admin.js` | ✅ | La composición de Salud es pura |
+| `errores.js` | ✅ | El limpiado de datos personales es puro |
+| `auth.js` | ✅ | Resolución de tienda y comparación de secretos |
+| `agenda.js` | ❌ | Todo lo suyo consulta la base de datos |
+| `sincronizacion.js` | ❌ | Habla con Google |
+| `profesional.js` | ❌ | Consulta y envía WhatsApp |
+| `reminders.js` | ❌ | Consulta y envía |
+| `avisos.js`, `waitlist.js`, `missedCall.js` | ❌ | Ídem |
+| `catalog.js`, `onboarding.js`, `calendar.js` | ❌ | Ídem |
+
+**El patrón no es casual**: tiene red lo que decide con datos en la mano, y no
+la tiene lo que habla con el mundo. Para dar red a los de abajo hay dos
+caminos: extraer sus decisiones (como se hizo con `conversacion.js`) o montar
+dobles de Supabase, Google y Meta — que es mucho trabajo y prueba sobre todo
+los dobles.
+
+**Prioridad si se amplía:** `sincronizacion.js` y `profesional.js`. Son los
+que deciden **anular o reasignar citas de clientas**, es decir, donde una
+equivocación se nota fuera.
+
 ## Lo que NO cubren
 
 - El flujo de conversación completo de WhatsApp (estados, botones, router).
