@@ -66,6 +66,9 @@ const { registrarError, erroresVivos, marcarVisto, vigilarProceso } = require('.
 // Avisos que nacen del sistema, no de una conversación (lista de espera).
 // Están fuera porque los usan A LA VEZ el flujo de WhatsApp y el panel.
 const { notificarListaEspera } = require('./avisos');
+// Las pocas frases que dependen del sector (peluquería, taller…). El motor no
+// las conoce: solo las usa la capa de conversación. Ver vocabulario.js.
+const { textos } = require('./vocabulario');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -517,16 +520,19 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
  * en una lista de WhatsApp lo primero es lo que menos cuesta tocar.
  */
 async function sendProfessionalList({ storeId, phoneNumberId, accessToken, to, service }) {
+  // «Elegir profesional» en un taller suena a otra cosa: ver vocabulario.js
+  const v = await textos(storeId);
   const rows = [
-    { id: 'ca:res:prof:0', title: 'Me da igual', description: 'Quien esté libre a esa hora' },
+    { id: 'ca:res:prof:0', title: v.meDaIgual, description: v.meDaIgualDetalle },
     ...service.elegibles.map((p) => ({ id: `ca:res:prof:${p.id}`, title: String(p.name).slice(0, 24) }))
   ];
 
   await sendInteractiveList({
     phoneNumberId, accessToken, to,
+    // «¿Con quién quieres la cita?» ya es neutral: sirve igual en cualquier sector
     bodyText: `«${service.serviceName}» (${service.durationMinutes} min). ¿Con quién quieres la cita?`,
-    buttonText: 'Elegir profesional',
-    sections: [{ title: 'Profesionales', rows: rows.slice(0, 10) }]
+    buttonText: v.elegirProfesional,
+    sections: [{ title: v.tituloSeccionProfesionales, rows: rows.slice(0, 10) }]
   });
   await logMessage({
     storeId, phone: to, fromMe: true,
@@ -1018,7 +1024,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       }, expiresAt);
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
-        text: `Dime qué día y hora te vendrían bien con ${cita.resources?.name || 'tu profesional'} y miro sus huecos.`
+        text: `Dime qué día y hora te vendrían bien con ${cita.resources?.name || (await textos(storeId)).tuProfesional} y miro sus huecos.`
       });
       return true;
     }
@@ -1503,7 +1509,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         accessToken,
         to: from,
         text: current.resourceId && !pedida
-          ? `Vaya, ${current.resourceName || 'esa profesional'} acaba de quedarse sin ese hueco. Dime otra hora y miro cuándo puede.`
+          ? `Vaya, ${current.resourceName || (await textos(storeId)).esaProfesional} acaba de quedarse sin ese hueco. Dime otra hora y miro cuándo puede.`
           : 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
       });
       return;

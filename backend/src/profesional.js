@@ -21,6 +21,9 @@ const { DateTime } = require('luxon');
 const { supabase, getStoreConfig, getWhatsappAccountByStoreId, logMessage } = require('./db');
 const { sendInteractiveButtons, sendInteractiveList, sendTextMessage } = require('./whatsappCloud');
 const equipo = require('./equipo');
+// Las frases que dependen del sector: «profesional» en una peluquería,
+// «mecánico» en un taller. Ver vocabulario.js.
+const { textos } = require('./vocabulario');
 
 const DIAS_VISTA = 21;
 
@@ -105,8 +108,9 @@ async function preguntarQueHacer({ storeId, cita, zone, libres }) {
     return false;
   }
 
+  const v = await textos(storeId);
   const cuando = DateTime.fromISO(cita.start_at, { zone }).setLocale('es').toFormat("cccc dd/MM 'a las' HH:mm");
-  const quien = cita.resources?.name || 'la profesional con la que tenías la cita';
+  const quien = cita.resources?.name || v.laDeTuCita;
   const servicio = cita.services?.name ? `de ${cita.services.name} ` : '';
   const to = cita.customers.phone;
 
@@ -123,7 +127,7 @@ async function preguntarQueHacer({ storeId, cita, zone, libres }) {
     ...libres.slice(0, 8).map((p) => ({
       id: `ca:prof:con:${cita.id}:${p.id}`,
       title: `Con ${p.name}`.slice(0, 24),
-      description: 'Misma hora, otra profesional'
+      description: v.mismaHoraOtraPersona
     })),
     { id: `ca:prof:hueco:${cita.id}`, title: 'Otro día u hora', description: `Busco huecos con ${quien}` },
     { id: `ca:prof:anular:${cita.id}`, title: 'Anular la cita', description: 'La quito y ya está' }
@@ -169,7 +173,7 @@ async function preguntarQueHacer({ storeId, cita, zone, libres }) {
         phoneNumberId: cuenta.phone_number_id,
         accessToken: cuenta.access_token,
         to,
-        text: `${texto} Puedo cambiarte de profesional, buscarte otro hueco o anularla — respóndeme y lo vemos.`
+        text: `${texto} ${v.puedoCambiarte}`
       });
       await logMessage({ storeId, phone: to, body: texto, fromMe: true });
       return true;

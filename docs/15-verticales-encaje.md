@@ -76,15 +76,32 @@ clientes, WhatsApp y panel, pero con su propia lógica de disponibilidad.
 1. **Comprobar el encaje con la frase de arriba** antes que nada. Si no
    encaja, no es un vertical: es un producto nuevo.
 2. Añadir la semilla en `verticals.js` (servicios, duraciones, precios).
-3. Traducir el vocabulario, **no el motor**. Los textos que hoy asumen
-   peluquería son pocos y están localizados: «Elegir profesional», «otra
-   profesional», «Con {nombre}».
+3. Añadir el bloque de frases en `vocabulario.js` (ver abajo).
 4. Probar el ciclo completo con un negocio real de ese sector antes de vender
    al segundo.
 
+## El vocabulario: `backend/src/vocabulario.js`
+
+Hecho el 10-ago-2026. **Solo OCHO frases de todo el asistente dependen del
+sector.** El resto ya habla de tú («tu cita», «te escribo por») y sirve igual
+para una peluquería que para un taller.
+
+Para añadir un sector: copiar el bloque `defecto`, traducir las ocho frases y
+darle el código del vertical. Nada más — no se toca el motor.
+
+**Se guardan frases enteras, no palabras sueltas.** La tentación es guardar el
+sustantivo y armar la frase con código, pero en español eso obliga a manejar
+género y artículo: «LA profesional» pero «EL mecánico», «otra profesional»
+pero «otro mecánico». Ensamblar gramática con plantillas es una fábrica de
+erratas, y una errata la lee el cliente.
+
+`test/vocabulario.test.js` comprueba que ningún sector se deje una frase sin
+traducir y que los títulos caben en los límites de WhatsApp (20 caracteres los
+botones, 24 las filas). Meta no avisa cuando se pasa: recorta y deja la frase
+a medias en el móvil.
+
 ## Lo que hay que hacer antes del segundo vertical
 
-- Sacar las etiquetas dependientes del sector a un módulo de textos por
-  vertical (hoy están sueltas en `index.js`).
+- ~~Sacar las etiquetas dependientes del sector a un módulo~~ ✅ hecho.
 - Implementar el modo «franja» (mañana / tarde / día) que el taller necesita.
 - Decidir si el restaurante entra, porque implica tocar el cálculo de huecos.

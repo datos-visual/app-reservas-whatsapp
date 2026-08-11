@@ -72,6 +72,49 @@ externos — un proceso de semanas, del mismo tipo que la verificación de Meta.
 conviene hacerlo a la vez que Embedded Signup: son el mismo tipo de trabajo
 (mover una conexión de «yo la configuro a mano» a «el cliente la autoriza»).
 
+## 3.bis Módulo de llamada perdida: lo que cuesta de verdad
+
+Revisado el 10-ago-2026 tras comprobarlo en la consola de Twilio.
+
+**Un número por peluquería, sin alternativa.** El módulo identifica la tienda
+por el número al que se desvía la llamada. Dos salones no pueden compartirlo.
+
+**Cada número español exige un paquete regulatorio** con NIF, dirección y
+justificante **del usuario final**, que es la peluquería, no nosotros.
+
+**Pero eso SÍ se automatiza.** Twilio tiene API de cumplimiento
+(`EndUsers`, `SupportingDocuments`, `ItemAssignments`, `Bundles`), se puede
+enviar a revisión desde código, hay `Status callback URL` para enterarse del
+resultado y una API de evaluaciones para validar el paquete ANTES de enviarlo.
+
+Diseño correcto del alta, sin intervención humana:
+
+1. La tienda rellena NIF y dirección y sube su justificante desde el panel.
+2. El backend crea el usuario final, sube el documento, monta el paquete, lo
+   evalúa (si falta algo se lo dice en el momento) y lo envía a revisión.
+3. Al llegar el callback de aprobación, compra el número y le configura el
+   webhook. Si es rechazo, el panel enseña el motivo y pide otro documento.
+
+**Lo que queda fuera de nuestro control:**
+
+- **La revisión de Twilio tarda días.** Es latencia, no trabajo nuestro: para
+  la tienda es una verificación como cualquier otra.
+- **El inventario.** Hoy NO hay números españoles disponibles (comprobado
+  10-ago-2026, búsqueda sin filtros: cero resultados). Eso no lo resuelve
+  ninguna API — es una solicitud a soporte, y es el bloqueo real.
+- Los rechazos cuyo motivo no se entienda.
+
+**Consecuencia para el precio:** es el primer componente con **coste variable
+por cliente** (cuota mensual del número + minutos). El resto de la
+infraestructura es coste fijo repartido. Tiene que ser un extra con su propia
+cuota, no ir incluido en el precio base.
+
+**Y no bloquear el piloto con esto.** El producto es reservar por WhatsApp;
+esto es un extra. Para validar el software sin esperar: comprar un número de
+cualquier país con *Address requirements: None* (se compra en el acto, sin
+papeleo) y probar el circuito entero. Lo único que necesita ser español es el
+destino final del desvío.
+
 ## 4. Lo que hará que renueve al segundo mes
 
 Nada de esto existe todavía y no es técnico:
