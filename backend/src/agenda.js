@@ -96,7 +96,7 @@ async function agendaDelDia(storeId, dateIso) {
     })(),
     supabase
       .from('appointments')
-      .select('id, start_at, end_at, status, source, service_id, resource_id, google_event_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
+      .select('id, start_at, end_at, status, source, service_id, resource_id, google_event_id, confirmed_by_client_at, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
       .eq('store_id', storeId)
       .gte('start_at', dia.startOf('day').toUTC().toISO())
       .lt('start_at', dia.plus({ days: 1 }).startOf('day').toUTC().toISO())
@@ -146,6 +146,10 @@ async function agendaDelDia(storeId, dateIso) {
         end_at: c.end_at,
         status: c.status,
         source: c.source,
+        // ¿Respondió la clienta al recordatorio? El dato existía desde julio
+        // pero la agenda no lo enseñaba: una cita confirmada y otra que lleva
+        // días sin contestar se veían igual. La segunda huele a plantón.
+        confirmada_por_cliente: !!c.confirmed_by_client_at,
         cliente: c.customers?.name || null,
         telefono: c.customers?.phone || null,
         servicio: c.services?.name || null,

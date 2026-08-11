@@ -22,6 +22,8 @@ type Cita = {
   servicio: string | null;
   profesional: string | null;
   resource_id?: number | null;
+  // ¿Respondió la clienta al recordatorio? Si no, la cita huele a plantón
+  confirmada_por_cliente?: boolean;
   // B5.4 — tramos en los que la profesional trabaja y hueco en el que queda libre
   tramos?: { desde: string; hasta: string }[];
   hueco_libre?: { desde: string; hasta: string; minutos: number } | null;
@@ -409,9 +411,14 @@ export default function AgendaPage() {
               {agenda.citas
                 .filter((c) => c.status === 'confirmed')
                 .map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <li
+                    key={c.id}
+                    className={`flex items-center justify-between gap-3 px-4 py-3 ${
+                      new Date(c.end_at) < new Date() ? 'opacity-55' : ''
+                    }`}
+                  >
                     <div className="flex items-center gap-4">
-                      <span className="ca-cifras w-[104px] shrink-0 rounded-lg bg-[#f0f0f0] px-2 py-1.5 text-center text-sm font-medium text-[#111111]">
+                      <span className="ca-cifras w-[104px] shrink-0 rounded-md bg-[#f0f0f0] px-2 py-1.5 text-center text-sm font-medium text-[#111111]">
                         {hora(c.start_at)}–{hora(c.end_at)}
                       </span>
                       <div>
@@ -429,6 +436,12 @@ export default function AgendaPage() {
                           {c.source === 'admin'
                             ? <span className="ca-badge-mute">apuntada por ti</span>
                             : <span className="ca-badge-ok">por WhatsApp</span>}
+                          {/* Se le mandó el recordatorio y no ha contestado.
+                              Es la señal más barata de riesgo de plantón que
+                              tiene el sistema, y no se estaba enseñando. */}
+                          {c.confirmada_por_cliente === false && (
+                            <span className="ca-badge-warn">sin confirmar</span>
+                          )}
                         </p>
                         {/* B5.4: un tinte ocupa el puesto todo el rato, pero a
                             la profesional solo al principio y al final. */}

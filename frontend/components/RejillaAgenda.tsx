@@ -31,6 +31,8 @@ export type CitaRejilla = {
   servicio: string | null;
   profesional: string | null;
   resource_id?: number | null;
+  // ¿Respondió la clienta al recordatorio? Si no, la cita huele a plantón
+  confirmada_por_cliente?: boolean;
   tramos?: Tramo[];
   hueco_libre?: { desde: string; hasta: string; minutos: number } | null;
 };
@@ -46,6 +48,18 @@ export type PersonaRejilla = {
 };
 
 const ALTO_HORA = 68;          // px por hora: 30 min = 34 px, legible y compacto
+
+/**
+ * Iniciales para el círculo de cada columna. DOS letras, no una: con una sola
+ * «Marta» y «María» eran idénticas, que es justo lo que no puede pasar en la
+ * pantalla donde se reparte el trabajo.
+ */
+function iniciales(nombre: string): string {
+  const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '??';
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[1][0]).toUpperCase();
+}
 const TRAMA =
   'repeating-linear-gradient(45deg,#f7f7f7,#f7f7f7 5px,#e8e8e8 5px,#e8e8e8 10px)';
 
@@ -193,8 +207,8 @@ export default function RejillaAgenda({
                   ?
                 </span>
               ) : (
-                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#f0f0f0] text-[12px] text-[#3f3f3f]">
-                  {c.nombre.slice(0, 1).toUpperCase()}
+                <span className="ca-cifras mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-[#111111] bg-white text-[11px] font-medium text-[#111111]">
+                  {iniciales(c.nombre)}
                 </span>
               )}
               <span className="text-[13px] text-[#111111]">{c.nombre}</span>
@@ -278,21 +292,40 @@ export default function RejillaAgenda({
                   const hd = aMinutos(hueco?.desde);
                   const hh = aMinutos(hueco?.hasta);
 
+                  // Dos estados que la dueña necesita distinguir de un vistazo:
+                  //
+                  // · PASADA: ya no hay nada que hacer con ella. Se apaga para
+                  //   que la atención quede en lo que queda de día.
+                  // · SIN CONFIRMAR: se le mandó el recordatorio y no ha
+                  //   contestado. Borde discontinuo = esta puede no venir.
+                  //   El dato existía desde julio y no se enseñaba en ninguna
+                  //   parte, que es como perder una plaza sin enterarse.
+                  const pasada = ahora != null && h <= ahora;
+                  const sinConfirmar = c.confirmada_por_cliente === false;
+
                   return (
                     <button
                       key={c.id}
                       onClick={() => onSeleccionar?.(c)}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#d9d9d9] border-l-[3px] border-l-[#111111] bg-[#efebe3] px-2 py-1 text-left transition hover:bg-[#e8e3d9] focus:outline-none focus:ring-2 focus:ring-[#111111]/15"
+                      title={sinConfirmar ? 'Sin confirmar por la clienta' : undefined}
+                      className={`absolute left-0.5 right-0.5 overflow-hidden rounded-[6px] border-l-[3px] px-2 py-1 text-left transition focus:outline-none focus:ring-2 focus:ring-[#111111]/15 ${
+                        sinConfirmar ? 'border border-dashed' : 'border border-solid'
+                      } ${
+                        pasada
+                          ? 'border-[#e8e8e8] border-l-[#b8b8b8] bg-[#fafafa] hover:bg-[#f5f5f5]'
+                          : 'border-[#d9d9d9] border-l-[#111111] bg-white hover:bg-[#f5f5f5]'
+                      }`}
                       style={{ top: y(d), height: alturaBloque }}
                     >
-                      <span className="ca-cifras block text-[12px] leading-tight text-[#666666]">
+                      <span className={`ca-cifras block text-[12px] leading-tight ${pasada ? 'text-[#999999]' : 'text-[#666666]'}`}>
                         {aHhmm(d)}
+                        {sinConfirmar && <span className="ml-1 not-italic">·</span>}
                       </span>
-                      <span className="block truncate text-[12px] leading-tight text-[#111111]">
+                      <span className={`block truncate text-[12px] leading-tight ${pasada ? 'text-[#8a8a8a]' : 'text-[#111111]'} ${sinConfirmar ? 'italic' : ''}`}>
                         {c.cliente || 'Sin nombre'}
                       </span>
                       {alturaBloque > 44 && (
-                        <span className="block truncate text-[12px] leading-tight text-[#3f3f3f]">
+                        <span className={`block truncate text-[12px] leading-tight ${pasada ? 'text-[#999999]' : 'text-[#3f3f3f]'}`}>
                           {c.servicio}
                         </span>
                       )}
@@ -337,6 +370,15 @@ export default function RejillaAgenda({
         <span className="flex items-center gap-1.5">
           <i className="inline-block h-3 w-3 rounded-[3px] border border-dashed border-[#111111]" />
           hueco aprovechable mientras la clienta espera
+        </span>
+        {/* Sin explicar, un borde discontinuo se lee como «esto está mal» */}
+        <span className="flex items-center gap-1.5">
+          <i className="inline-block h-3 w-3 rounded-[3px] border border-dashed border-[#d9d9d9] bg-white" />
+          <span className="italic">sin confirmar por la clienta</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="inline-block h-3 w-3 rounded-[3px] border border-[#e8e8e8] bg-[#fafafa]" />
+          ya pasada
         </span>
       </div>
     </div>
