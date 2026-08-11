@@ -47,7 +47,7 @@ export type PersonaRejilla = {
 
 const ALTO_HORA = 68;          // px por hora: 30 min = 34 px, legible y compacto
 const TRAMA =
-  'repeating-linear-gradient(45deg,#eaeaea,#eaeaea 5px,#dedede 5px,#dedede 10px)';
+  'repeating-linear-gradient(45deg,#f7f7f7,#f7f7f7 5px,#e8e8e8 5px,#e8e8e8 10px)';
 
 function minutosDeIso(iso: string): number {
   const d = new Date(iso);
@@ -160,13 +160,13 @@ export default function RejillaAgenda({
     <div className="ca-card overflow-hidden">
       {/* Selector de profesional: solo en móvil */}
       {columnas.length > 1 && (
-        <div className="flex gap-1.5 overflow-x-auto border-b border-[#dcdcdc] px-3 py-2 sm:hidden">
+        <div className="flex gap-1.5 overflow-x-auto border-b border-[#e8e8e8] px-3 py-2 sm:hidden">
           {columnas.map((c) => (
             <button
               key={String(c.id)}
               onClick={() => setMovil(c.id)}
               className={`whitespace-nowrap rounded-full px-3 py-1 text-xs transition ${
-                movil === c.id ? 'bg-[#1a1a1a] text-white' : 'bg-[#dedede] text-[#4d4d4d]'
+                movil === c.id ? 'bg-[#111111] text-white' : 'bg-[#f0f0f0] text-[#3f3f3f]'
               }`}
             >
               {c.nombre}
@@ -177,7 +177,7 @@ export default function RejillaAgenda({
 
       {/* Cabecera de columnas */}
       <div
-        className="grid border-b border-[#dcdcdc]"
+        className="grid border-b border-[#e8e8e8]"
         style={{ gridTemplateColumns: `48px repeat(${columnas.length}, minmax(0,1fr))` }}
       >
         <div />
@@ -189,15 +189,15 @@ export default function RejillaAgenda({
               className={`px-2 py-2.5 text-center ${oculta ? 'hidden sm:block' : ''}`}
             >
               {c.id === null ? (
-                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-[#c9c9c9] text-[12px] text-[#6e6e6e]">
+                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-[#d9d9d9] text-[12px] text-[#666666]">
                   ?
                 </span>
               ) : (
-                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#dedede] text-[12px] text-[#4d4d4d]">
+                <span className="mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#f0f0f0] text-[12px] text-[#3f3f3f]">
                   {c.nombre.slice(0, 1).toUpperCase()}
                 </span>
               )}
-              <span className="text-[13px] text-[#1a1a1a]">{c.nombre}</span>
+              <span className="text-[13px] text-[#111111]">{c.nombre}</span>
             </div>
           );
         })}
@@ -216,7 +216,7 @@ export default function RejillaAgenda({
             {horas.map((h) => (
               <div
                 key={h}
-                className="ca-cifras absolute right-2 -translate-y-1/2 text-[12px] text-[#4d4d4d]"
+                className="ca-cifras absolute right-2 -translate-y-1/2 text-[12px] text-[#3f3f3f]"
                 style={{ top: y(h) }}
               >
                 {h < fin ? aHhmm(h) : ''}
@@ -232,13 +232,13 @@ export default function RejillaAgenda({
             return (
               <div
                 key={String(col.id)}
-                className={`relative border-l border-[#dcdcdc] ${oculta ? 'hidden sm:block' : ''}`}
+                className={`relative border-l border-[#e8e8e8] ${oculta ? 'hidden sm:block' : ''}`}
               >
                 {/* Líneas de hora: lo más tenues posible */}
                 {horas.slice(1).map((h) => (
                   <div
                     key={h}
-                    className="absolute left-0 right-0 border-t border-[#dcdcdc]"
+                    className="absolute left-0 right-0 border-t border-[#e8e8e8]"
                     style={{ top: y(h) }}
                   />
                 ))}
@@ -261,10 +261,10 @@ export default function RejillaAgenda({
                   return (
                     <div
                       key={b.event_id + String(col.id)}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#d4d4d4] px-2 py-1"
+                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#d9d9d9] px-2 py-1"
                       style={{ top: y(d), height: Math.max(18, y(h) - y(d)), background: TRAMA }}
                     >
-                      <span className="text-[12px] text-[#4d4d4d]">{b.titulo}</span>
+                      <span className="text-[12px] text-[#3f3f3f]">{b.titulo}</span>
                     </div>
                   );
                 })}
@@ -282,17 +282,17 @@ export default function RejillaAgenda({
                     <button
                       key={c.id}
                       onClick={() => onSeleccionar?.(c)}
-                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#c9c9c9] border-l-[3px] border-l-[#1a1a1a] bg-[#efebe3] px-2 py-1 text-left transition hover:bg-[#e8e3d9] focus:outline-none focus:ring-2 focus:ring-[#1a1a1a]/15"
+                      className="absolute left-0.5 right-0.5 overflow-hidden rounded-[10px] border border-[#d9d9d9] border-l-[3px] border-l-[#111111] bg-[#efebe3] px-2 py-1 text-left transition hover:bg-[#e8e3d9] focus:outline-none focus:ring-2 focus:ring-[#111111]/15"
                       style={{ top: y(d), height: alturaBloque }}
                     >
-                      <span className="ca-cifras block text-[12px] leading-tight text-[#6e6e6e]">
+                      <span className="ca-cifras block text-[12px] leading-tight text-[#666666]">
                         {aHhmm(d)}
                       </span>
-                      <span className="block truncate text-[12px] leading-tight text-[#1a1a1a]">
+                      <span className="block truncate text-[12px] leading-tight text-[#111111]">
                         {c.cliente || 'Sin nombre'}
                       </span>
                       {alturaBloque > 44 && (
-                        <span className="block truncate text-[12px] leading-tight text-[#4d4d4d]">
+                        <span className="block truncate text-[12px] leading-tight text-[#3f3f3f]">
                           {c.servicio}
                         </span>
                       )}
@@ -300,7 +300,7 @@ export default function RejillaAgenda({
                       {/* El hueco de la espera: la cita se pinta hueca por dentro */}
                       {hueco && hd != null && hh != null && hueco.minutos > 0 && (
                         <span
-                          className="absolute left-1 right-1 flex items-center justify-center rounded-[7px] border border-dashed border-[#1a1a1a] bg-[#e6e6e6]"
+                          className="absolute left-1 right-1 flex items-center justify-center rounded-[7px] border border-dashed border-[#111111] bg-white"
                           style={{ top: y(hd) - y(d), height: Math.max(16, y(hh) - y(hd)) }}
                         >
                           <span className="text-[10px] text-[#9a3412]">libre · {hueco.minutos} min</span>
@@ -319,23 +319,23 @@ export default function RejillaAgenda({
               className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
               style={{ top: y(ahora) }}
             >
-              <span className="ca-cifras rounded-full bg-[#1a1a1a] px-1.5 py-0.5 text-[10px] text-white">
+              <span className="ca-cifras rounded-full bg-[#111111] px-1.5 py-0.5 text-[10px] text-white">
                 {aHhmm(ahora)}
               </span>
-              <span className="h-px flex-1 bg-[#1a1a1a]" />
+              <span className="h-px flex-1 bg-[#111111]" />
             </div>
           )}
         </div>
       </div>
 
       {/* Leyenda: sin ella, el rayado se lee como «error» */}
-      <div className="flex flex-wrap gap-4 border-t border-[#dcdcdc] px-4 py-2.5 text-[12px] text-[#6e6e6e]">
+      <div className="flex flex-wrap gap-4 border-t border-[#e8e8e8] px-4 py-2.5 text-[12px] text-[#666666]">
         <span className="flex items-center gap-1.5">
-          <i className="inline-block h-3 w-3 rounded-[3px] border border-[#d4d4d4]" style={{ background: TRAMA }} />
+          <i className="inline-block h-3 w-3 rounded-[3px] border border-[#d9d9d9]" style={{ background: TRAMA }} />
           fuera de turno, vacaciones o franja bloqueada
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-block h-3 w-3 rounded-[3px] border border-dashed border-[#1a1a1a]" />
+          <i className="inline-block h-3 w-3 rounded-[3px] border border-dashed border-[#111111]" />
           hueco aprovechable mientras la clienta espera
         </span>
       </div>

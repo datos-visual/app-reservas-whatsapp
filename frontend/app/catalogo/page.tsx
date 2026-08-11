@@ -27,7 +27,7 @@ type Servicio = {
 type Aparato = { id: number; name: string; units: number };
 
 const inputCls =
-  'w-full ca-input focus:border-[#1a1a1a] focus:outline-none';
+  'w-full ca-input focus:border-[#111111] focus:outline-none';
 
 const sumaTramos = (s: Partial<Servicio>) =>
   (s.trabajo_inicial_min ?? 0) + (s.espera_min ?? 0) + (s.trabajo_final_min ?? 0);
@@ -183,15 +183,15 @@ export default function CatalogoPage() {
               return (
                 <div
                   key={s.id}
-                  className={`rounded-lg border p-4 ${v.is_active ? 'border-[#c9c9c9] bg-[#e6e6e6]' : 'border-[#c9c9c9] bg-[#e6e6e6] opacity-70'}`}
+                  className={`rounded-lg border p-4 ${v.is_active ? 'border-[#d9d9d9] bg-white' : 'border-[#d9d9d9] bg-white opacity-70'}`}
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
                     <div className="sm:col-span-4">
-                      <label className="mb-1 block text-xs text-[#6e6e6e]">Servicio</label>
+                      <label className="mb-1 block text-xs text-[#666666]">Servicio</label>
                       <input className={inputCls} value={v.name} onChange={(ev) => editar(s.id, 'name', ev.target.value)} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-[#6e6e6e]">Minutos</label>
+                      <label className="mb-1 block text-xs text-[#666666]">Minutos</label>
                       <input
                         className={inputCls} type="number" min={5} max={480} step={5}
                         value={v.duration_minutes}
@@ -199,7 +199,7 @@ export default function CatalogoPage() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs text-[#6e6e6e]">Precio €</label>
+                      <label className="mb-1 block text-xs text-[#666666]">Precio €</label>
                       <input
                         className={inputCls} type="number" min={0} step={0.5}
                         value={v.price_eur ?? ''}
@@ -208,7 +208,7 @@ export default function CatalogoPage() {
                       />
                     </div>
                     <div className="sm:col-span-4">
-                      <label className="mb-1 block text-xs text-[#6e6e6e]">Descripción</label>
+                      <label className="mb-1 block text-xs text-[#666666]">Descripción</label>
                       <input
                         className={inputCls} value={v.description ?? ''}
                         onChange={(ev) => editar(s.id, 'description', ev.target.value)}
@@ -218,14 +218,14 @@ export default function CatalogoPage() {
                   {/* B5.4 — Fases: el tinte ocupa el puesto 90 min pero a la
                       peluquera solo al principio y al final. */}
                   {fasesActivas && (
-                  <div className="mt-3 border-t border-[#dcdcdc] pt-3">
-                    <p className="mb-2 text-xs text-[#6e6e6e]">
+                  <div className="mt-3 border-t border-[#e8e8e8] pt-3">
+                    <p className="mb-2 text-xs text-[#666666]">
                       ¿La clienta pasa un rato esperando sin que la atiendan? (tinte, mechas,
                       permanente). Rellena los tres tramos y podrás atender a otra persona
                       mientras tanto. Déjalos en 0 si se trabaja sin parar.
                     </p>
                     <div className="flex flex-wrap items-end gap-3">
-                      <label className="text-xs text-[#6e6e6e]">
+                      <label className="text-xs text-[#666666]">
                         <span className="mb-1 block">Trabajo inicial</span>
                         <input
                           className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
@@ -233,7 +233,7 @@ export default function CatalogoPage() {
                           onChange={(ev) => editar(s.id, 'trabajo_inicial_min', parseInt(ev.target.value, 10) || 0)}
                         />
                       </label>
-                      <label className="text-xs text-[#6e6e6e]">
+                      <label className="text-xs text-[#666666]">
                         <span className="mb-1 block">Espera (libre)</span>
                         <input
                           className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
@@ -241,7 +241,7 @@ export default function CatalogoPage() {
                           onChange={(ev) => editar(s.id, 'espera_min', parseInt(ev.target.value, 10) || 0)}
                         />
                       </label>
-                      <label className="text-xs text-[#6e6e6e]">
+                      <label className="text-xs text-[#666666]">
                         <span className="mb-1 block">Trabajo final</span>
                         <input
                           className={`${inputCls} w-24`} type="number" min={0} max={480} step={5}
@@ -249,7 +249,7 @@ export default function CatalogoPage() {
                           onChange={(ev) => editar(s.id, 'trabajo_final_min', parseInt(ev.target.value, 10) || 0)}
                         />
                       </label>
-                      <p className={`text-xs ${sumaTramos(v) === v.duration_minutes || (v.espera_min ?? 0) === 0 ? 'text-[#6e6e6e]' : 'text-[#9a3412]'}`}>
+                      <p className={`text-xs ${sumaTramos(v) === v.duration_minutes || (v.espera_min ?? 0) === 0 ? 'text-[#666666]' : 'text-[#9a3412]'}`}>
                         {(v.espera_min ?? 0) === 0
                           ? 'Trabajo continuo'
                           : `Suman ${sumaTramos(v)} min · el servicio dura ${v.duration_minutes}`}
@@ -259,17 +259,17 @@ export default function CatalogoPage() {
                   )}
 
                   {aparatos.length > 0 && (
-                    <div className="mt-3 border-t border-[#dcdcdc] pt-3">
+                    <div className="mt-3 border-t border-[#e8e8e8] pt-3">
                       <span className="sr-only">Aparatos que necesita este servicio</span>
                       <div className="flex flex-wrap gap-3">
                         {aparatos.map((a) => (
-                          <label key={a.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#3d3d3d]">
+                          <label key={a.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#3f3f3f]">
                             <input
                               type="checkbox"
                               checked={(s.recursos || []).includes(a.id)}
                               onChange={(ev) => cambiarRecurso(s, a.id, ev.target.checked)}
                             />
-                            {a.name} <span className="text-xs text-[#4d4d4d]">×{a.units}</span>
+                            {a.name} <span className="text-xs text-[#3f3f3f]">×{a.units}</span>
                           </label>
                         ))}
                       </div>
@@ -277,7 +277,7 @@ export default function CatalogoPage() {
                   )}
 
                   <div className="mt-3 flex items-center justify-between">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#3d3d3d]">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#3f3f3f]">
                       <input
                         type="checkbox" checked={v.is_active}
                         onChange={(ev) => editar(s.id, 'is_active', ev.target.checked)}
@@ -298,7 +298,7 @@ export default function CatalogoPage() {
               );
             })}
             {servicios.length === 0 && (
-              <p className="rounded-lg border border-dashed border-[#c0c0c0] p-6 text-center text-sm text-[#6e6e6e]">
+              <p className="rounded-lg border border-dashed border-[#b8b8b8] p-6 text-center text-sm text-[#666666]">
                 Aún no tienes servicios. Crea el primero aquí abajo. 👇
               </p>
             )}

@@ -171,8 +171,8 @@ export default function HorariosPage() {
                 if (!d) return null;
                 return (
                   <div key={weekday} className="flex flex-wrap items-center gap-3 ca-hueco px-3 py-2">
-                    <span className="w-24 text-sm text-[#3d3d3d]">{NOMBRES[weekday]}</span>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-[#6e6e6e]">
+                    <span className="w-24 text-sm text-[#3f3f3f]">{NOMBRES[weekday]}</span>
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-[#666666]">
                       <input
                         type="checkbox"
                         checked={!d.is_closed}
@@ -198,20 +198,20 @@ export default function HorariosPage() {
                           type="time" className={inputCls} value={d.open_time || '09:00'}
                           onChange={(e) => editarDia(weekday, { open_time: e.target.value })}
                         />
-                        <span className="text-[#6e6e6e]">a</span>
+                        <span className="text-[#666666]">a</span>
                         <input
                           type="time" className={inputCls} value={d.close_time || '19:00'}
                           onChange={(e) => editarDia(weekday, { close_time: e.target.value })}
                         />
                       </div>
                     )}
-                    {d.is_closed && <span className="text-xs text-[#6e6e6e]">Cerrado todo el día</span>}
+                    {d.is_closed && <span className="text-xs text-[#666666]">Cerrado todo el día</span>}
                   </div>
                 );
               })}
             </div>
-            <div className="mt-4 border-t border-[#dcdcdc] pt-4">
-              <label className="mb-1 block text-sm font-medium text-[#1a1a1a]">
+            <div className="mt-4 border-t border-[#e8e8e8] pt-4">
+              <label className="mb-1 block text-sm font-medium text-[#111111]">
                 ¿Cada cuánto pueden empezar las citas?
               </label>
               <select
@@ -229,8 +229,8 @@ export default function HorariosPage() {
                 10:00, 10:30, 11:00 y 11:30. En bloques solo se ofrecería las 10:00.
               </p>
             </div>
-            <div className="mt-4 border-t border-[#dcdcdc] pt-4">
-              <label className="mb-1 block text-sm font-medium text-[#1a1a1a]">
+            <div className="mt-4 border-t border-[#e8e8e8] pt-4">
+              <label className="mb-1 block text-sm font-medium text-[#111111]">
                 Margen al encajar una cita en un hueco de espera
               </label>
               <div className="flex items-center gap-2">
@@ -240,7 +240,7 @@ export default function HorariosPage() {
                   value={margen}
                   onChange={(e) => setMargen(parseInt(e.target.value, 10) || 0)}
                 />
-                <span className="text-sm text-[#4d4d4d]">minutos</span>
+                <span className="text-sm text-[#3f3f3f]">minutos</span>
               </div>
               <p className="ca-hint mt-1">
                 Colchón para no llegar justas: lo que se cuele mientras reposa un tinte
@@ -260,12 +260,12 @@ export default function HorariosPage() {
             <p className="ca-eyebrow">
               Cierres de todo el negocio
             </p>
-            <p className="mb-1 text-xs text-[#6e6e6e]">
+            <p className="mb-1 text-xs text-[#666666]">
               Durante estas fechas el asistente no dará ninguna cita y avisará del motivo.
             </p>
             {/* Se confundía con las vacaciones de una persona sola, que viven
                 en otra pantalla. Decirlo aquí ahorra la pregunta. */}
-            <p className="mb-3 text-xs text-[#6e6e6e]">
+            <p className="mb-3 text-xs text-[#666666]">
               ¿Se va de vacaciones solo una persona del equipo?{' '}
               <a href="/equipo" className="text-[#9a3412] underline underline-offset-2">
                 Ponlo en su ficha, en Equipo
@@ -274,14 +274,14 @@ export default function HorariosPage() {
             </p>
 
             {cierres.length === 0 && (
-              <p className="mb-3 text-sm text-[#6e6e6e]">No tienes cierres programados.</p>
+              <p className="mb-3 text-sm text-[#666666]">No tienes cierres programados.</p>
             )}
             <ul className="mb-4 space-y-2">
               {cierres.map((c) => (
                 <li key={c.id} className="flex items-center justify-between ca-hueco px-3 py-2 text-sm">
-                  <span className="text-[#3d3d3d]">
+                  <span className="text-[#3f3f3f]">
                     {c.start_date === c.end_date ? fmt(c.start_date) : `${fmt(c.start_date)} → ${fmt(c.end_date)}`}
-                    {c.reason && <span className="ml-2 text-[#6e6e6e]">({c.reason})</span>}
+                    {c.reason && <span className="ml-2 text-[#666666]">({c.reason})</span>}
                   </span>
                   <button
                     onClick={() => borrarCierre(c.id)}
@@ -295,21 +295,21 @@ export default function HorariosPage() {
 
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="mb-1 block text-xs text-[#6e6e6e]">Desde</label>
+                <label className="mb-1 block text-xs text-[#666666]">Desde</label>
                 <input
                   type="date" className={inputCls} value={nuevo.start_date}
                   onChange={(e) => setNuevo({ ...nuevo, start_date: e.target.value })}
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-[#6e6e6e]">Hasta (opcional)</label>
+                <label className="mb-1 block text-xs text-[#666666]">Hasta (opcional)</label>
                 <input
                   type="date" className={inputCls} value={nuevo.end_date}
                   onChange={(e) => setNuevo({ ...nuevo, end_date: e.target.value })}
                 />
               </div>
               <div className="grow">
-                <label className="mb-1 block text-xs text-[#6e6e6e]">Motivo (opcional)</label>
+                <label className="mb-1 block text-xs text-[#666666]">Motivo (opcional)</label>
                 <input
                   className={`${inputCls} w-full`} placeholder="Vacaciones, festivo local…"
                   value={nuevo.reason}

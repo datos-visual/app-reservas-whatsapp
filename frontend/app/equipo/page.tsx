@@ -297,36 +297,36 @@ export default function EquipoPage() {
           <p className="ca-eyebrow">
             Cómo se calculan tus huecos
           </p>
-          <p className="mb-2 text-xs text-[#6e6e6e]">
+          <p className="mb-2 text-xs text-[#666666]">
             Estos tres ajustes vienen incluidos y no dependen de tu plan.
           </p>
           <label className="flex cursor-pointer items-start gap-3 py-2">
             <input type="checkbox" className="mt-1" checked={ajustes.usarEquipo}
               onChange={(e) => cambiarAjuste('usar_equipo', e.target.checked)} />
             <span>
-              <span className="font-medium text-[#1a1a1a]">Tener en cuenta a mi equipo</span>
+              <span className="font-medium text-[#111111]">Tener en cuenta a mi equipo</span>
               <span className="block ca-hint">
                 Se dan tantas citas a la vez como personas estén trabajando, respetando turnos y vacaciones.
                 Si lo apagas, se vuelve a <strong>una cita a la vez</strong> sin borrar nada.
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-3 border-t border-[#dcdcdc] py-2 pt-3">
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#e8e8e8] py-2 pt-3">
             <input type="checkbox" className="mt-1" checked={ajustes.usarAparatos}
               onChange={(e) => cambiarAjuste('usar_aparatos', e.target.checked)} />
             <span>
-              <span className="font-medium text-[#1a1a1a]">Tener en cuenta mis aparatos</span>
+              <span className="font-medium text-[#111111]">Tener en cuenta mis aparatos</span>
               <span className="block ca-hint">
                 Un servicio que necesite sillón de color o lavacabezas solo se ofrece si queda uno libre.
                 Si lo apagas, los aparatos dejan de limitar.
               </span>
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-3 border-t border-[#dcdcdc] py-2 pt-3">
+          <label className="flex cursor-pointer items-start gap-3 border-t border-[#e8e8e8] py-2 pt-3">
             <input type="checkbox" className="mt-1" checked={ajustes.sincronizarCalendar !== false}
               onChange={(e) => cambiarAjuste('usar_sync_calendar', e.target.checked)} />
             <span>
-              <span className="font-medium text-[#1a1a1a]">Vigilar mi Google Calendar</span>
+              <span className="font-medium text-[#111111]">Vigilar mi Google Calendar</span>
               <span className="block ca-hint">
                 Si borras una cita directamente en Google Calendar, esa hora vuelve a ofrecerse
                 por WhatsApp. Si lo apagas, las citas solo se anulan desde aquí o desde el chat.
@@ -355,8 +355,8 @@ export default function EquipoPage() {
               <div key={p.id} className={`ca-card ${p.is_active ? '' : 'opacity-60'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div>
-                    <p className="font-medium text-[#1a1a1a]">{p.name}</p>
-                    <p className="text-xs text-[#6e6e6e]">
+                    <p className="font-medium text-[#111111]">{p.name}</p>
+                    <p className="text-xs text-[#666666]">
                       {turnos.length === 0
                         ? 'Todo el horario del negocio'
                         : turnos.map((t) => `${NOMBRES[t.weekday].slice(0, 3)} ${t.open_time.slice(0, 5)}-${t.close_time.slice(0, 5)}`).join(' · ')}
@@ -379,7 +379,7 @@ export default function EquipoPage() {
                     {/* Solo se dice algo cuando hay límite. «Hace todos los
                         servicios» en cuatro fichas es ruido que nadie lee. */}
                     {ajustes.serviciosPorProfesional && (p.servicios?.length ?? 0) > 0 && (
-                      <p className="text-xs text-[#6e6e6e]">
+                      <p className="text-xs text-[#666666]">
                         Solo hace: {p.servicios!
                           .map((id) => servicios.find((s) => s.id === id)?.name)
                           .filter(Boolean)
@@ -392,7 +392,7 @@ export default function EquipoPage() {
                       esperando: se lee de izquierda a derecha. */}
                   <div className="flex items-center gap-2">
                     {ajustes.elegirProfesional && (
-                      <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#4d4d4d]">
+                      <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-[13px] text-[#3f3f3f]">
                         <input
                           type="checkbox"
                           checked={p.elegible !== false}
@@ -410,7 +410,7 @@ export default function EquipoPage() {
                     <button onClick={() => cambiarActiva(p)} className="ca-btn-ghost ca-btn-sm">
                       {p.is_active ? 'Dar de baja' : 'Reactivar'}
                     </button>
-                    <span className="mx-1 h-5 w-px bg-[#dcdcdc]" aria-hidden="true" />
+                    <span className="mx-1 h-5 w-px bg-[#e8e8e8]" aria-hidden="true" />
                     <button onClick={() => borrar(p)} className="ca-btn-danger ca-btn-sm">
                       Borrar
                     </button>
@@ -418,9 +418,9 @@ export default function EquipoPage() {
                 </div>
 
                 {abierta === p.id && (
-                  <div className="border-t border-[#c9c9c9] px-5 py-4">
+                  <div className="border-t border-[#d9d9d9] px-5 py-4">
                     <p className="ca-eyebrow">Turnos</p>
-                    <p className="mb-3 text-xs text-[#6e6e6e]">
+                    <p className="mb-3 text-xs text-[#666666]">
                       Si no marcas ningún día, trabaja todo el horario del negocio. En cuanto marcas
                       uno, <strong>los días que no marques los libra</strong>: o se los pones todos, o
                       no le pongas ninguno.
@@ -430,7 +430,7 @@ export default function EquipoPage() {
                         const t = turnos.find((x) => x.weekday === wd);
                         return (
                           <div key={wd} className="flex flex-wrap items-center gap-3 ca-hueco px-3 py-2">
-                            <label className="flex w-32 cursor-pointer items-center gap-2 text-sm text-[#3d3d3d]">
+                            <label className="flex w-32 cursor-pointer items-center gap-2 text-sm text-[#3f3f3f]">
                               <input
                                 type="checkbox" checked={!!t}
                                 onChange={(e) =>
@@ -448,7 +448,7 @@ export default function EquipoPage() {
                                   value={t.open_time.slice(0, 5)}
                                   onChange={(e) => editarTurnos(p.id, turnos.map((x) => x.weekday === wd ? { ...x, open_time: e.target.value } : x))}
                                 />
-                                <span className="text-[#6e6e6e]">a</span>
+                                <span className="text-[#666666]">a</span>
                                 <input
                                   type="time" className="ca-input w-auto py-1.5"
                                   value={t.close_time.slice(0, 5)}
@@ -475,7 +475,7 @@ export default function EquipoPage() {
                     {ajustes.serviciosPorProfesional && servicios.length > 0 && (
                       <>
                         <p className="ca-eyebrow">Servicios que hace</p>
-                        <p className="mb-3 text-xs text-[#6e6e6e]">
+                        <p className="mb-3 text-xs text-[#666666]">
                           {misServicios.length === 0
                             ? 'Ahora mismo los hace todos. Marca solo si hay algo que NO hace.'
                             : 'Solo se le asignarán los marcados. Desmárcalos todos para que vuelva a hacer de todo.'}
@@ -488,8 +488,8 @@ export default function EquipoPage() {
                                 key={s.id}
                                 className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${
                                   marcado
-                                    ? 'border-[#1a1a1a] bg-[#1a1a1a] text-white'
-                                    : 'border-[#c9c9c9] text-[#3d3d3d] hover:border-[#a3a3a3]'
+                                    ? 'border-[#111111] bg-[#111111] text-white'
+                                    : 'border-[#d9d9d9] text-[#3f3f3f] hover:border-[#999999]'
                                 }`}
                               >
                                 <input
@@ -528,9 +528,9 @@ export default function EquipoPage() {
                     <ul className="mb-3 space-y-1">
                       {p.ausencias.map((a) => (
                         <li key={a.id} className="flex items-center justify-between ca-hueco px-3 py-1.5 text-sm">
-                          <span className="text-[#3d3d3d]">
+                          <span className="text-[#3f3f3f]">
                             {fmt(a.start_date)}{a.end_date !== a.start_date && ` → ${fmt(a.end_date)}`}
-                            {a.reason && <span className="ml-2 text-[#6e6e6e]">({a.reason})</span>}
+                            {a.reason && <span className="ml-2 text-[#666666]">({a.reason})</span>}
                           </span>
                           <button onClick={() => quitarAusencia(a.id)} className="ca-btn-ghost ca-btn-sm">Quitar</button>
                         </li>
@@ -590,9 +590,9 @@ export default function EquipoPage() {
             <ul className="mb-4 space-y-2">
               {aparatos.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 ca-hueco px-3 py-2">
-                  <span className="font-medium text-[#1a1a1a]">{a.name}</span>
+                  <span className="font-medium text-[#111111]">{a.name}</span>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-[#6e6e6e]">Unidades</label>
+                    <label className="text-xs text-[#666666]">Unidades</label>
                     <input
                       type="number" min={1} max={50} defaultValue={a.units}
                       className="ca-input w-20 py-1.5"

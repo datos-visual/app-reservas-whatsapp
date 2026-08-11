@@ -714,28 +714,40 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
-### 10.69 NEOMORFISMO SOBRIO — BLANCO, NEGRO Y GRIS (11-ago-2026)
+### 10.69 EDITORIAL MONOCROMO — Y EL NEOMORFISMO QUE DURÓ UN DÍA (11-ago-2026)
 
 Repaso visual completo del panel y del backoffice. Paleta neutra pura: fuera
 los beiges y la tinta cálida.
 
-**Dónde sí hay neomorfismo:** las SUPERFICIES. Tarjetas y paneles comparten
-exactamente el color del lienzo (`#e6e6e6`) y se separan con dos sombras
-opuestas —luz blanca arriba-izquierda, sombra gris abajo-derecha—. Los
-contenedores sueltos pasan de «borde de 1 px» a hueco hundido.
+**Primero se probó neomorfismo** (superficies del color del fondo, separadas
+por sombras duales). Bonito en el portátil, **ilegible en un móvil con luz**.
+Se retiró el mismo día.
 
-**Dónde NO, y a propósito:** lo accionable. El neomorfismo puro hace que un
-botón tenga el color del fondo y que su única señal sea una sombra difusa —
-que es exactamente el defecto que encontró la auditoría del 5-ago (bordes a
-1,02:1). En una peluquería, con luz de escaparate, eso no parece un botón.
+Su defecto es de definición, no de ejecución: si las superficies comparten
+color con el fondo, toda la estructura depende de una sombra difusa. Es
+literalmente el mismo defecto que la auditoría del 5-ago ya había encontrado
+—tarjeta blanca sobre fondo claro, 1,02:1— con otro nombre.
 
-Por eso: **acción principal negra sólida**, campos hundidos CON borde real, y
-44 px de alto en todo lo pulsable. Se conserva el tacto sin perder la
-legibilidad.
+> **Lección:** si la estructura de una pantalla depende de una sombra, se
+> pierde con la luz del sol.
 
-**El color queda reservado a lo que significa algo:** verde correcto, ámbar
-aviso, rojo error. Si aparece color donde no hay nada que decidir, el sistema
-está roto. Es la misma regla del acento único, llevada al extremo.
+**Lo que quedó — editorial monocromo:**
+
+- Lienzo `#f5f5f5`, superficies **blancas**. Se distinguen por tono, no por un
+  borde que se pueda perder.
+- Estructura por **filetes de 1 px** (`#e8e8e8` divide, `#d9d9d9` delimita) y
+  por espacio. En listas, **solo líneas horizontales**: nada de rejillas.
+- La acción principal es un **bloque negro** con texto blanco: **18,9:1**.
+- Los estados se resuelven **invirtiendo** (el botón secundario se pone negro
+  al pasar por encima) o con un gris suavísimo. Sin colores llamativos para
+  decir «esto está seleccionado».
+- Radios de 8 px. Lo muy redondo es infantil y esto es una herramienta.
+
+**Contraste medido:** principal 18,9:1 · párrafo 10,5:1 · metadato 5,7:1 ·
+estados entre 5,9:1 y 7,0:1. Todo por encima del mínimo AA de 4,5:1.
+
+**El color, solo donde significa algo:** verde correcto, ámbar aviso, rojo
+error. Si aparece color donde no hay nada que decidir, el sistema está roto.
 
 ### 10.68 PARTICIÓN DE index.js — LA RED PRIMERO (10-ago-2026)
 

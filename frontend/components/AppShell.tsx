@@ -50,19 +50,19 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 bg-[#e6e6e6]/95 backdrop-blur" style={{ boxShadow: '0 4px 10px -6px #bcbcbc' }}>
+      <header className="sticky top-0 z-30 border-b border-[#e8e8e8] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 pt-3.5">
           <div className="flex items-center gap-3">
             {/* La marca en tinta, no en el color de acento: el acento se
                 reserva para la acción principal de cada pantalla. */}
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1a1a1a] font-serif text-base leading-none text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#111111] font-serif text-base leading-none text-white">
               C
             </span>
             <div>
-              <p className="text-[15px] font-medium leading-tight tracking-tight text-[#1a1a1a]">
+              <p className="text-[15px] font-medium leading-tight tracking-tight text-[#111111]">
                 {negocio || 'CanalAgenda'}
               </p>
-              <p className="text-xs leading-tight text-[#6e6e6e]">{email}</p>
+              <p className="text-xs leading-tight text-[#666666]">{email}</p>
             </div>
           </div>
           <button onClick={salir} className="ca-btn-ghost ca-btn-sm">
@@ -82,8 +82,8 @@ export default function AppShell({ children, titulo, descripcion, acciones }: {
                     onClick={() => router.push(href)}
                     className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition ${
                       activo
-                        ? 'border-[#1a1a1a] font-medium text-[#1a1a1a]'
-                        : 'border-transparent text-[#6e6e6e] hover:text-[#1a1a1a]'
+                        ? 'border-[#111111] font-medium text-[#111111]'
+                        : 'border-transparent text-[#666666] hover:text-[#111111]'
                     }`}
                   >
                     <Icon /> {label}

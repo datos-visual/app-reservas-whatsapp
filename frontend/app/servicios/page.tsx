@@ -128,14 +128,14 @@ export default function ServiciosPage() {
       descripcion="Las funciones que tienes contratadas. Puedes apagar la que no quieras usar."
     >
       {error && <p className="ca-alert-error mb-4">{error}</p>}
-      {cargando && <p className="text-sm text-[#6e6e6e]">Cargando…</p>}
+      {cargando && <p className="text-sm text-[#666666]">Cargando…</p>}
 
       {!cargando && state && (
         <>
           {contratados.length === 0 ? (
             <div className="ca-card-p text-center">
-              <p className="text-[#3d3d3d]">Tu plan actual no incluye servicios premium.</p>
-              <p className="mt-1 text-sm text-[#6e6e6e]">
+              <p className="text-[#3f3f3f]">Tu plan actual no incluye servicios premium.</p>
+              <p className="mt-1 text-sm text-[#666666]">
                 Si quieres probar alguno, escríbenos y te lo activamos.
               </p>
             </div>
@@ -147,16 +147,16 @@ export default function ServiciosPage() {
                 return (
                   <div key={f} className="flex items-center justify-between ca-card-p">
                     <div className="pr-4">
-                      <p className="font-medium text-[#1a1a1a]">{info.nombre}</p>
-                      <p className="text-sm text-[#6e6e6e]">{info.descripcion}</p>
+                      <p className="font-medium text-[#111111]">{info.nombre}</p>
+                      <p className="text-sm text-[#666666]">{info.descripcion}</p>
                     </div>
                     <button
                       onClick={() => toggle(f, !activo)}
                       disabled={guardando === f}
                       className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
                         activo
-                          ? 'bg-[#1a1a1a] text-white hover:bg-[#2e2e2e]'
-                          : 'bg-[#d9d9d9] text-[#3d3d3d] hover:bg-[#c0c0c0]'
+                          ? 'bg-[#111111] text-white hover:bg-[#262626]'
+                          : 'bg-[#e8e8e8] text-[#3f3f3f] hover:bg-[#b8b8b8]'
                       } ${guardando === f ? 'opacity-50' : ''}`}
                     >
                       {guardando === f ? '…' : activo ? 'Activado' : 'Desactivado'}
@@ -174,9 +174,9 @@ export default function ServiciosPage() {
                 {noContratados.map((f) => {
                   const info = ETIQUETAS[f] || { nombre: f, descripcion: '' };
                   return (
-                    <div key={f} className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-[#c9c9c9] p-4">
+                    <div key={f} className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-[#d9d9d9] p-4">
                       <div>
-                        <p className="text-[15px] font-medium text-[#3d3d3d]">{info.nombre}</p>
+                        <p className="text-[15px] font-medium text-[#3f3f3f]">{info.nombre}</p>
                         <p className="ca-meta mt-0.5">{info.descripcion}</p>
                       </div>
                       {SIN_CONSTRUIR.includes(f) ? (

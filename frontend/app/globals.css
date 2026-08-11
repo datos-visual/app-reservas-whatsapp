@@ -3,69 +3,67 @@
 @tailwind utilities;
 
 /*
- * SISTEMA VISUAL DE CANALAGENDA — «neomorfismo sobrio» (rev. 11-ago-2026).
+ * SISTEMA VISUAL DE CANALAGENDA — «editorial monocromo» (rev. 11-ago-2026).
  *
- * Blanco, negro y gris. El color queda reservado para lo que SIGNIFICA algo:
- * un error, un aviso, un estado correcto. Si aparece color en un sitio donde
- * no hay nada que decidir, el sistema está roto.
+ * Blanco, negro y gris. El color se reserva para lo que SIGNIFICA algo: un
+ * error, un aviso, un estado correcto. Si aparece color donde no hay nada que
+ * decidir, el sistema está roto.
  *
- * --- EL NEOMORFISMO, Y HASTA DÓNDE ---------------------------------------
+ * --- POR QUÉ SE DESCARTÓ EL NEOMORFISMO (duró un día) ---------------------
  *
- * Las SUPERFICIES son neomórficas: tarjetas y paneles comparten exactamente
- * el color del lienzo y se separan de él con dos sombras opuestas — una luz
- * blanca arriba a la izquierda y una sombra gris abajo a la derecha. Bordes
- * amplios, aire, y nada de líneas duras.
+ * Se probó el 11-ago y se retiró el mismo día: bonito en la pantalla del
+ * portátil, ilegible en un móvil bajo el escaparate de una peluquería. Su
+ * defecto es de definición, no de ejecución — las superficies comparten color
+ * con el fondo y toda la estructura depende de una sombra difusa. Es
+ * exactamente el defecto que ya había encontrado la auditoría del 5-ago
+ * (tarjeta blanca sobre fondo claro: 1,02:1).
  *
- * Lo ACCIONABLE, no. Y es a propósito.
+ * Lección: si la estructura de una pantalla depende de una sombra, se pierde
+ * con la luz del sol.
  *
- * El neomorfismo puro hace que los botones tengan el mismo color que el fondo
- * y que su única señal sea una sombra difusa. En una peluquería, con luz de
- * escaparate y el móvil en la mano, eso no parece un botón. La auditoría de
- * agosto encontró exactamente esos defectos —bordes de 1,02:1, botones de
- * 27 px— y no vamos a reintroducirlos por estética.
+ * --- LO QUE SUSTITUYE ------------------------------------------------------
  *
- * Así que: la acción principal es NEGRA SÓLIDA sobre gris, los campos van
- * hundidos (que es lo que invita a escribir) y con borde visible, y todo lo
- * pulsable mantiene 44 px de alto. Se conserva el tacto del neomorfismo sin
- * que la dueña tenga que adivinar dónde tocar.
+ * Estructura por FILETES y por ESPACIO, no por cajas ni por sombras:
  *
- * --- Lo que sigue vigente de la auditoría del 5-ago ------------------------
- * · Escala de seis tamaños y dos pesos. Ni uno más.
- * · Contraste de texto por encima de 4,5:1 SIEMPRE.
- * · 44 px de alto en lo pulsable (36 en lo compacto).
+ * · Lienzo gris muy claro, superficies BLANCAS. Se distinguen por tono, no
+ *   por un borde que se pueda perder.
+ * · Filetes de 1 px, finos pero visibles (#e8e8e8 divide, #d9d9d9 delimita).
+ *   En listas y tablas, solo líneas HORIZONTALES: nada de rejillas cerradas.
+ * · La acción principal es un BLOQUE NEGRO con texto blanco. Contraste 18,9:1
+ *   y ninguna duda sobre dónde hay que pulsar.
+ * · Los estados se resuelven invirtiendo o con un gris suavísimo. Nada de
+ *   colores llamativos para decir «esto está seleccionado».
+ * · Radios pequeños (8 px). Lo redondo es amable; lo muy redondo es infantil
+ *   y esto es una herramienta de trabajo.
+ *
+ * --- Invariantes desde la auditoría del 5-ago ------------------------------
+ * · Seis tamaños de letra y dos pesos. Ni uno más.
+ * · Todo texto por encima de 4,5:1. Sin excepciones.
+ * · 44 px de alto en lo pulsable (36 en lo compacto): manos mojadas.
  * · Una sola acción destacada por pantalla.
  * -------------------------------------------------------------------------
  */
 :root {
-  /* Tinta — neutra pura, sin temperatura */
-  --ca-tinta: #1a1a1a;        /* texto principal y acción sólida */
-  --ca-tinta-2: #3d3d3d;      /* texto de párrafo · 10,4:1 */
-  --ca-tinta-3: #4d4d4d;      /* secundario · 8,1:1 */
-  --ca-tinta-4: #6e6e6e;      /* metadatos · 4,9:1 (AA) */
-  --ca-tinta-5: #8c8c8c;      /* SOLO decorativo: iconos, separadores */
+  /* Tinta — neutra pura. Los contrastes son sobre blanco. */
+  --ca-tinta: #111111;        /* principal · 18,9:1 */
+  --ca-tinta-2: #3f3f3f;      /* párrafo · 10,4:1 */
+  --ca-tinta-3: #666666;      /* metadatos · 5,7:1 (AA) */
+  --ca-tinta-4: #8a8a8a;      /* SOLO decorativo: iconos, separadores */
 
-  /* Superficies: lienzo y tarjeta son EL MISMO color. Eso es el neomorfismo:
-     la separación la hacen las sombras, no un cambio de tono. */
-  --ca-fondo: #e6e6e6;
-  --ca-superficie: #e6e6e6;
-  --ca-borde: #c9c9c9;        /* solo donde hace falta contraste real */
-
-  /* Las dos sombras. Nunca una sola: con una parece una caja flotando. */
-  --ca-luz: #ffffff;
-  --ca-sombra: #bcbcbc;
-
-  --ca-relieve: 6px 6px 12px var(--ca-sombra), -6px -6px 12px var(--ca-luz);
-  --ca-relieve-sutil: 3px 3px 7px var(--ca-sombra), -3px -3px 7px var(--ca-luz);
-  --ca-hundido: inset 4px 4px 8px var(--ca-sombra), inset -4px -4px 8px var(--ca-luz);
-  --ca-hundido-sutil: inset 2px 2px 5px var(--ca-sombra), inset -2px -2px 5px var(--ca-luz);
+  /* Superficies: lienzo gris claro, tarjetas blancas */
+  --ca-fondo: #f5f5f5;
+  --ca-superficie: #ffffff;
+  --ca-filete: #e8e8e8;       /* divide dentro de una tarjeta */
+  --ca-borde: #d9d9d9;        /* delimita una tarjeta o un campo */
+  --ca-borde-fuerte: #b8b8b8; /* foco, hover */
 
   /* Color CON SIGNIFICADO. Solo estados; nunca decoración. */
-  --ca-ok: #2f6b46;
-  --ca-ok-tinte: #e4ece7;
+  --ca-ok: #1f6b3f;
+  --ca-ok-tinte: #eef5f0;
   --ca-aviso: #8a5200;
-  --ca-aviso-tinte: #f2eade;
-  --ca-error: #a32020;
-  --ca-error-tinte: #f3e3e3;
+  --ca-aviso-tinte: #fdf4e7;
+  --ca-error: #a01c1c;
+  --ca-error-tinte: #fdefef;
 
   /* Espaciado: progresión de 4, y nada fuera de ella */
   --ca-e1: 4px;  --ca-e2: 8px;  --ca-e3: 12px;
@@ -73,7 +71,7 @@
 }
 
 body {
-  @apply bg-[#e6e6e6] text-[#1a1a1a] antialiased;
+  @apply bg-[#f5f5f5] text-[#111111] antialiased;
   font-size: 15px;
   font-feature-settings: 'cv02', 'cv03', 'cv11';
 }
@@ -83,107 +81,110 @@ body {
 .ca-cifras { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 
 @layer components {
-  /* ---------- Superficies: aquí sí, neomorfismo puro ---------- */
+  /* ---------- Superficies: blanco sobre gris, filete fino ---------- */
   .ca-card {
     background: var(--ca-superficie);
-    border-radius: 16px;
-    box-shadow: var(--ca-relieve);
-    border: none;
+    border: 1px solid var(--ca-borde);
+    border-radius: 8px;
   }
   .ca-card-p { @apply ca-card p-6; }
 
-  /* Zona hundida: para agrupar sin añadir otra tarjeta encima de la tarjeta */
+  /* Agrupar dentro de una tarjeta sin anidar otra caja */
   .ca-hueco {
-    background: var(--ca-superficie);
-    border-radius: 14px;
-    box-shadow: var(--ca-hundido-sutil);
+    background: #fafafa;
+    border: 1px solid var(--ca-filete);
+    border-radius: 6px;
   }
+
+  /* Fila de lista: SOLO línea inferior. Nada de rejillas cerradas. */
+  .ca-fila {
+    border-bottom: 1px solid var(--ca-filete);
+    transition: background 120ms;
+  }
+  .ca-fila:last-child { border-bottom: none; }
+  .ca-fila:hover      { background: #fafafa; }
 
   /* ---------- Escala tipográfica (6 pasos, 2 pesos) ----------
      28 título de pantalla · 18 sección · 15 cuerpo · 13 secundario
      12 metadato · 13 cifras. Nada más. */
   .ca-h1 {
-    @apply text-[28px] leading-[1.15] text-[#1a1a1a];
+    @apply text-[28px] leading-[1.15] text-[#111111];
     font-family: var(--font-serif), Georgia, serif;
     font-weight: 400;
   }
-  .ca-h2      { @apply text-[18px] font-medium leading-snug tracking-tight text-[#1a1a1a]; }
-  .ca-h3      { @apply text-[15px] font-medium text-[#1a1a1a]; }
-  .ca-label   { @apply mb-1 block text-[12px] font-medium text-[#4d4d4d]; }
-  .ca-hint    { @apply text-[13px] leading-relaxed text-[#4d4d4d]; }
-  .ca-meta    { @apply text-[12px] text-[#6e6e6e]; }
-  .ca-eyebrow { @apply mb-3 block text-[12px] font-medium text-[#4d4d4d]; }
+  .ca-h2      { @apply text-[18px] font-medium leading-snug tracking-tight text-[#111111]; }
+  .ca-h3      { @apply text-[15px] font-medium text-[#111111]; }
+  .ca-label   { @apply mb-1 block text-[12px] font-medium text-[#3f3f3f]; }
+  .ca-hint    { @apply text-[13px] leading-relaxed text-[#3f3f3f]; }
+  .ca-meta    { @apply text-[12px] text-[#666666]; }
+  .ca-eyebrow { @apply mb-3 block text-[12px] font-medium text-[#3f3f3f]; }
 
-  /* ---------- Controles ----------
-     El campo va HUNDIDO: en neomorfismo es lo que dice «aquí se escribe».
-     Lleva además un borde real, porque la sombra sola no llega al 3:1 que
-     exige el contraste de componentes. */
+  /* ---------- Controles ---------- */
   .ca-input {
-    @apply w-full min-h-[44px] rounded-xl px-3 py-2.5 text-[15px] text-[#1a1a1a]
-           placeholder:text-[#8c8c8c] focus:outline-none;
-    background: var(--ca-superficie);
+    @apply w-full min-h-[44px] rounded-md bg-white px-3 py-2.5 text-[15px] text-[#111111]
+           placeholder:text-[#8a8a8a] focus:outline-none;
     border: 1px solid var(--ca-borde);
-    box-shadow: var(--ca-hundido-sutil);
   }
+  .ca-input:hover { border-color: var(--ca-borde-fuerte); }
   .ca-input:focus {
     border-color: var(--ca-tinta);
-    box-shadow: var(--ca-hundido-sutil), 0 0 0 3px rgba(26, 26, 26, 0.12);
+    box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.10);
   }
 
   .ca-btn {
-    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-medium
-           transition disabled:cursor-not-allowed disabled:opacity-45;
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-4 text-[14px] font-medium
+           transition disabled:cursor-not-allowed disabled:opacity-40;
   }
 
-  /* LA acción de la pantalla. Una, y solo una. NEGRA SÓLIDA: es el único
-     elemento que rompe el gris, y por eso se encuentra sin buscarlo. */
+  /* LA acción de la pantalla. Una, y solo una. Bloque negro: 18,9:1. */
   .ca-btn-primary {
     @apply ca-btn text-white;
     background: var(--ca-tinta);
-    box-shadow: var(--ca-relieve-sutil);
+    border: 1px solid var(--ca-tinta);
   }
-  .ca-btn-primary:hover:not(:disabled) { background: #2e2e2e; }
-  .ca-btn-primary:active:not(:disabled) {
-    box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.45), inset -3px -3px 7px rgba(255, 255, 255, 0.08);
-  }
+  .ca-btn-primary:hover:not(:disabled) { background: #262626; border-color: #262626; }
 
   .ca-btn-tinta { @apply ca-btn-primary; }
 
-  /* Acción secundaria: relieve neomórfico y, al pulsar, se hunde. Es el
-     gesto que hace que la interfaz parezca física. */
+  /* Secundaria: borde definido y, al pasar por encima, se INVIERTE. Es el
+     gesto del monocromo — no hace falta color para decir «puedes pulsar». */
   .ca-btn-ghost {
-    @apply ca-btn text-[#3d3d3d];
-    background: var(--ca-superficie);
-    box-shadow: var(--ca-relieve-sutil);
+    @apply ca-btn bg-white text-[#111111];
+    border: 1px solid var(--ca-borde);
   }
-  .ca-btn-ghost:hover:not(:disabled) { color: var(--ca-tinta); }
-  .ca-btn-ghost:active:not(:disabled) { box-shadow: var(--ca-hundido-sutil); }
+  .ca-btn-ghost:hover:not(:disabled) {
+    background: var(--ca-tinta);
+    border-color: var(--ca-tinta);
+    color: #ffffff;
+  }
 
   /* Destructivo APAGADO: solo enseña su color al pasar por encima. Un botón
      rojo permanente invita a pulsarlo; este pide intención. */
   .ca-btn-danger {
-    @apply ca-btn text-[#6e6e6e];
-    background: var(--ca-superficie);
-    box-shadow: var(--ca-relieve-sutil);
+    @apply ca-btn bg-white text-[#666666];
+    border: 1px solid var(--ca-borde);
   }
-  .ca-btn-danger:hover:not(:disabled) { color: var(--ca-error); }
-  .ca-btn-danger:active:not(:disabled) { box-shadow: var(--ca-hundido-sutil); }
+  .ca-btn-danger:hover:not(:disabled) {
+    color: var(--ca-error);
+    border-color: var(--ca-error);
+    background: var(--ca-error-tinte);
+  }
 
   /* Compacto: 36 px es el suelo. Por debajo, un dedo mojado no acierta. */
   .ca-btn-sm { @apply min-h-[36px] px-3 text-[13px]; }
 
   /* ---------- Etiquetas de estado: AQUÍ SÍ HAY COLOR ----------
-     Son lo único que se sale del gris, y precisamente por eso se ven. */
+     Son lo único que se sale del blanco y negro, y por eso se ven. */
   .ca-badge       { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium; }
   .ca-badge-ok    { @apply ca-badge; background: var(--ca-ok-tinte);    color: var(--ca-ok); }
   .ca-badge-warn  { @apply ca-badge; background: var(--ca-aviso-tinte); color: var(--ca-aviso); }
   .ca-badge-error { @apply ca-badge; background: var(--ca-error-tinte); color: var(--ca-error); }
-  .ca-badge-mute  { @apply ca-badge; background: var(--ca-superficie);  color: var(--ca-tinta-3); box-shadow: var(--ca-hundido-sutil); }
+  .ca-badge-mute  { @apply ca-badge; background: #f0f0f0;               color: var(--ca-tinta-2); }
 
-  /* ---------- Avisos ---------- */
-  .ca-alert       { @apply rounded-xl p-4 text-[14px]; box-shadow: var(--ca-relieve-sutil); }
-  .ca-alert-info  { @apply ca-alert text-[#3d3d3d]; background: var(--ca-superficie); }
-  .ca-alert-warn  { @apply ca-alert; background: var(--ca-aviso-tinte); color: var(--ca-aviso); }
-  .ca-alert-error { @apply ca-alert; background: var(--ca-error-tinte); color: var(--ca-error); }
-  .ca-alert-ok    { @apply ca-alert; background: var(--ca-ok-tinte);    color: var(--ca-ok); }
+  /* ---------- Avisos: filete lateral, no caja de color ---------- */
+  .ca-alert       { @apply rounded-md p-4 text-[14px]; border: 1px solid var(--ca-borde); }
+  .ca-alert-info  { @apply ca-alert bg-white text-[#3f3f3f]; }
+  .ca-alert-warn  { @apply ca-alert; background: var(--ca-aviso-tinte); border-color: #edd9b4; color: var(--ca-aviso); }
+  .ca-alert-error { @apply ca-alert; background: var(--ca-error-tinte); border-color: #efc9c9; color: var(--ca-error); }
+  .ca-alert-ok    { @apply ca-alert; background: var(--ca-ok-tinte);    border-color: #c6dcce; color: var(--ca-ok); }
 }

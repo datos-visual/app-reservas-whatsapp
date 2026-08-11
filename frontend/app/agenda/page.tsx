@@ -295,8 +295,8 @@ export default function AgendaPage() {
               onClick={() => cambiarFecha(iso)}
               className={`rounded-lg border px-1 py-2 text-center transition ${
                 activo
-                  ? 'border-[#1a1a1a] bg-[#dedede] text-[#1a1a1a]'
-                  : 'border-[#c9c9c9] bg-[#e6e6e6] text-[#4d4d4d] hover:border-[#c0c0c0]'
+                  ? 'border-[#111111] bg-[#f0f0f0] text-[#111111]'
+                  : 'border-[#d9d9d9] bg-white text-[#3f3f3f] hover:border-[#b8b8b8]'
               }`}
             >
               <span className="block text-[12px] uppercase tracking-wide">
@@ -306,7 +306,7 @@ export default function AgendaPage() {
                 {d.getDate()}
               </span>
               {iso === hoy && !activo && (
-                <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-[#1a1a1a]" aria-label="hoy" />
+                <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-[#111111]" aria-label="hoy" />
               )}
             </button>
           );
@@ -325,20 +325,20 @@ export default function AgendaPage() {
               Ese día el negocio está cerrado{agenda.motivo_cierre ? ` (${agenda.motivo_cierre})` : ''}.
             </p>
           ) : (
-            <p className="mb-3 text-xs text-[#6e6e6e]">
+            <p className="mb-3 text-xs text-[#666666]">
               Abierto de {agenda.horario?.abre} a {agenda.horario?.cierra}
             </p>
           )}
 
           {/* Rejilla o lista: la elección se recuerda. Un salón de una sola
               persona vive mejor con la lista; con equipo, la rejilla. */}
-          <div className="mb-3 inline-flex ca-hueco bg-[#e6e6e6] p-0.5">
+          <div className="mb-3 inline-flex ca-hueco bg-white p-0.5">
             {(['rejilla', 'lista'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => cambiarVista(v)}
                 className={`rounded-[6px] px-3 py-1 text-xs capitalize transition ${
-                  vista === v ? 'bg-[#1a1a1a] text-white' : 'text-[#4d4d4d] hover:text-[#1a1a1a]'
+                  vista === v ? 'bg-[#111111] text-white' : 'text-[#3f3f3f] hover:text-[#111111]'
                 }`}
               >
                 {v}
@@ -363,13 +363,13 @@ export default function AgendaPage() {
               {seleccionada && (
                 <div className="ca-card-p mt-3 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-[15px] text-[#1a1a1a]">
+                    <p className="text-[15px] text-[#111111]">
                       <span className="ca-cifras">{hora(seleccionada.start_at)}–{hora(seleccionada.end_at)}</span>
-                      <span className="mx-2 text-[#c0c0c0]">·</span>
+                      <span className="mx-2 text-[#b8b8b8]">·</span>
                       {seleccionada.cliente || 'Sin nombre'}
-                      {seleccionada.servicio && <span className="text-[#4d4d4d]"> · {seleccionada.servicio}</span>}
+                      {seleccionada.servicio && <span className="text-[#3f3f3f]"> · {seleccionada.servicio}</span>}
                     </p>
-                    <p className="mt-0.5 text-xs text-[#6e6e6e]">
+                    <p className="mt-0.5 text-xs text-[#666666]">
                       {seleccionada.telefono}
                       {seleccionada.profesional ? ` · con ${seleccionada.profesional}` : ' · sin asignar'}
                       {seleccionada.hueco_libre && seleccionada.hueco_libre.minutos > 0
@@ -405,21 +405,21 @@ export default function AgendaPage() {
             {agenda.citas.filter((c) => c.status === 'confirmed').length === 0 && (
               <p className="px-5 py-10 text-center ca-hint">No hay citas este día.</p>
             )}
-            <ul className="divide-y divide-[#dcdcdc]">
+            <ul className="divide-y divide-[#e8e8e8]">
               {agenda.citas
                 .filter((c) => c.status === 'confirmed')
                 .map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3">
                     <div className="flex items-center gap-4">
-                      <span className="ca-cifras w-[104px] shrink-0 rounded-lg bg-[#dedede] px-2 py-1.5 text-center text-sm font-medium text-[#1a1a1a]">
+                      <span className="ca-cifras w-[104px] shrink-0 rounded-lg bg-[#f0f0f0] px-2 py-1.5 text-center text-sm font-medium text-[#111111]">
                         {hora(c.start_at)}–{hora(c.end_at)}
                       </span>
                       <div>
-                        <p className="font-medium text-[#1a1a1a]">
+                        <p className="font-medium text-[#111111]">
                           {c.cliente || 'Sin nombre'}
-                          {c.servicio && <span className="ml-2 font-normal text-[#4d4d4d]">· {c.servicio}</span>}
+                          {c.servicio && <span className="ml-2 font-normal text-[#3f3f3f]">· {c.servicio}</span>}
                         </p>
-                        <p className="flex flex-wrap items-center gap-2 text-sm text-[#6e6e6e]">
+                        <p className="flex flex-wrap items-center gap-2 text-sm text-[#666666]">
                           {c.telefono}
                           {c.profesional
                             ? <span className="ca-badge-mute">
@@ -434,7 +434,7 @@ export default function AgendaPage() {
                             la profesional solo al principio y al final. */}
                         {c.hueco_libre && c.tramos?.length === 2 && (
                           <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                            <span className="text-[#6e6e6e]">
+                            <span className="text-[#666666]">
                               {c.profesional || 'La profesional'} trabaja{' '}
                               {c.tramos[0].desde}–{c.tramos[0].hasta} y {c.tramos[1].desde}–{c.tramos[1].hasta}
                             </span>
@@ -479,12 +479,12 @@ export default function AgendaPage() {
             </p>
 
             {agenda.bloqueos && agenda.bloqueos.length > 0 && (
-              <ul className="mb-4 divide-y divide-[#dcdcdc] rounded-lg border border-[#c9c9c9]">
+              <ul className="mb-4 divide-y divide-[#e8e8e8] rounded-lg border border-[#d9d9d9]">
                 {agenda.bloqueos.map((b) => (
                   <li key={b.event_id} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <span className="text-sm text-[#3d3d3d]">
+                    <span className="text-sm text-[#3f3f3f]">
                       <span className="font-medium">{b.desde}–{b.hasta}</span>
-                      <span className="ml-2 text-[#6e6e6e]">{b.titulo}</span>
+                      <span className="ml-2 text-[#666666]">{b.titulo}</span>
                     </span>
                     <button onClick={() => liberar(b)} className="ca-btn-ghost ca-btn-sm">Liberar</button>
                   </li>
@@ -534,7 +534,7 @@ export default function AgendaPage() {
                 value={nueva.hora} onChange={(e) => setNueva({ ...nueva, hora: e.target.value })} />
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-[#3d3d3d]">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-[#3f3f3f]">
                 <input type="checkbox" checked={nueva.avisar}
                   onChange={(e) => setNueva({ ...nueva, avisar: e.target.checked })} />
                 Avisar a la clienta por WhatsApp
