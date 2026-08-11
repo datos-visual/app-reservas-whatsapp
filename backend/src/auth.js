@@ -11,8 +11,31 @@
 // En desarrollo local sin ADMIN_TOKEN configurado se permite acceso admin
 // (comportamiento histórico para no romper el flujo de desarrollo).
 
+const crypto = require('crypto');
 const { supabase } = require('./db');
 const config = require('./config');
+
+/**
+ * Comparación de secretos en TIEMPO CONSTANTE.
+ *
+ * `a === b` se detiene en el primer carácter distinto, así que el tiempo de
+ * respuesta filtra cuántos caracteres se acertaron. Con suficientes intentos
+ * eso permite reconstruir un token letra a letra.
+ *
+ * Es un ataque difícil sobre HTTP y con un token largo y aleatorio como el
+ * nuestro, pero el remedio es de dos líneas y las firmas de Meta y de Twilio
+ * ya lo hacían así. Que el ADMIN_TOKEN —que abre TODAS las tiendas— fuera el
+ * único comparado a la ligera era una incoherencia (revisión 10-ago-2026).
+ */
+function mismoSecreto(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  // Longitudes distintas: timingSafeEqual lanzaría, así que se descarta antes.
+  // La longitud sí se filtra, y no es información aprovechable.
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 function extractToken(req) {
   const headerToken = req.header('x-admin-token');
@@ -58,7 +81,7 @@ async function authMiddleware(req, res, next) {
   }
 
   // a) Admin por token global
-  if (config.adminToken && token === config.adminToken) {
+  if (config.adminToken && mismoSecreto(token, config.adminToken)) {
     req.isAdmin = true;
     return next();
   }
@@ -114,4 +137,4 @@ function requireStoreId(req, res) {
   return null;
 }
 
-module.exports = { authMiddleware, resolveStoreId, requireStoreId, extractToken, getStoreUserByUserId };
+module.exports = { authMiddleware, resolveStoreId, requireStoreId, extractToken, getStoreUserByUserId, mismoSecreto };

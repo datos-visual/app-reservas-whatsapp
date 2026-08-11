@@ -66,33 +66,60 @@ async function markReminderSent(appointmentId, kind) {
 }
 
 /** Confirmación desde el botón [Confirmo]. Devuelve la cita o null. */
-async function confirmAppointmentByClient(storeId, appointmentId) {
+async function confirmAppointmentByClient(storeId, appointmentId, phone) {
+  // El teléfono es OBLIGATORIO. El identificador de la cita llega en el
+  // payload de un botón, y los identificadores son números correlativos:
+  // filtrar solo por tienda dejaría que alguien confirmara —o cancelara— la
+  // cita de OTRA clienta del mismo salón con solo cambiar el número.
+  //
+  // Es el mismo criterio que ya aplican `ca:apt:*` y `ca:prof:*`. Esto se
+  // quedó fuera (revisión de seguridad del 10-ago-2026).
+  if (!phone) {
+    console.error('[Reminders] confirmAppointmentByClient sin teléfono: se rechaza', { storeId, appointmentId });
+    return null;
+  }
   const { data, error } = await supabase
     .from('appointments')
     .update({ confirmed_by_client_at: new Date().toISOString() })
     .eq('id', appointmentId)
     .eq('store_id', storeId)
     .eq('status', 'confirmed')
-    .select('*')
+    .select('*, customers ( phone )')
     .maybeSingle();
   if (error) {
     console.error('[Reminders] Error confirmando por cliente', { storeId, appointmentId, error });
     return null;
   }
-  return data || null;
+  if (!data) return null;
+  if (data.customers?.phone !== phone) {
+    console.warn('[Reminders] Intento de confirmar una cita ajena', { storeId, appointmentId });
+    return null;
+  }
+  return data;
 }
 
 /** Cita cancelable desde el botón [Cancelar cita] (verifica tienda y estado). */
-async function getCancelableAppointment(storeId, appointmentId) {
+async function getCancelableAppointment(storeId, appointmentId, phone) {
+  // Mismo motivo que arriba: sin comprobar de quién es la cita, cualquiera
+  // podría cancelar la de otra clienta del salón probando números.
+  if (!phone) {
+    console.error('[Reminders] getCancelableAppointment sin teléfono: se rechaza', { storeId, appointmentId });
+    return null;
+  }
   const { data } = await supabase
     .from('appointments')
-    .select('*')
+    .select('*, customers ( phone )')
     .eq('id', appointmentId)
     .eq('store_id', storeId)
     .eq('status', 'confirmed')
     .gte('start_at', new Date().toISOString())
     .maybeSingle();
-  return data || null;
+  if (!data) return null;
+  if (data.customers?.phone !== phone) {
+    console.warn('[Reminders] Intento de cancelar una cita ajena', { storeId, appointmentId });
+    return null;
+  }
+  return data;
 }
 
 /**

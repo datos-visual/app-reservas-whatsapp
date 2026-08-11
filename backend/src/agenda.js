@@ -73,36 +73,44 @@ async function agendaDelDia(storeId, dateIso) {
   const dia = DateTime.fromISO(dateIso, { zone });
   if (!dia.isValid) throw errorValidacion('Fecha inválida.');
 
-  // La agenda tiene que enseñar la VERDAD: si la tienda borró una cita
-  // directamente en su Google Calendar, aquí se detecta antes de pintar.
-  // Best-effort: sin calendario conectado o con Google caído, se muestra lo
-  // que hay en la base de datos en vez de dejar la pantalla en blanco.
-  let eventosCalendar = [];
-  try {
-    const vistos = await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
-    eventosCalendar = vistos?.todos || vistos || [];
-  } catch (err) {
-    console.warn('[Agenda] No se pudo contrastar con Google Calendar', {
-      storeId, fecha: dia.toISODate(), message: err?.message
-    });
-  }
+  // TODO ESTO A LA VEZ, no en fila india (10-ago-2026).
+  //
+  // Antes eran cinco esperas encadenadas, y una de ellas es una llamada a
+  // Google por internet. Sumaban segundos en la pantalla que la dueña abre
+  // veinte veces al día. No dependen unas de otras: lo único que hacía falta
+  // antes era la zona horaria, y eso ya está resuelto arriba.
+  //
+  // La de Google va con su propio try: si falla o tarda, se pinta la agenda
+  // con lo que hay en la base de datos en vez de dejar la pantalla en blanco.
+  const [eventosCalendar, citasDb, horario, fases, margen] = await Promise.all([
+    (async () => {
+      try {
+        const vistos = await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
+        return vistos?.todos || vistos || [];
+      } catch (err) {
+        console.warn('[Agenda] No se pudo contrastar con Google Calendar', {
+          storeId, fecha: dia.toISODate(), message: err?.message
+        });
+        return [];
+      }
+    })(),
+    supabase
+      .from('appointments')
+      .select('id, start_at, end_at, status, source, service_id, resource_id, google_event_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
+      .eq('store_id', storeId)
+      .gte('start_at', dia.startOf('day').toUTC().toISO())
+      .lt('start_at', dia.plus({ days: 1 }).startOf('day').toUTC().toISO())
+      .order('start_at', { ascending: true }),
+    getDayHours(storeId, dia.toISODate()),
+    // B5.4: fases. Para la dueña es información de oro: saber que Marta tiene
+    // 45 minutos libres mientras reposa el tinte de las 11:00 es lo que le
+    // permite colar un corte por teléfono sin liarse.
+    equipo.fasesPorServicio(storeId),
+    equipo.margenRelleno(storeId)
+  ]);
 
-  const { data, error } = await supabase
-    .from('appointments')
-    .select('id, start_at, end_at, status, source, service_id, resource_id, google_event_id, customers ( phone, name ), services ( name, duration_minutes ), resources ( name )')
-    .eq('store_id', storeId)
-    .gte('start_at', dia.startOf('day').toUTC().toISO())
-    .lt('start_at', dia.plus({ days: 1 }).startOf('day').toUTC().toISO())
-    .order('start_at', { ascending: true });
+  const { data, error } = citasDb;
   if (error) throw error;
-
-  const horario = await getDayHours(storeId, dia.toISODate());
-
-  // B5.4: fases. Para la dueña es información de oro: saber que Marta tiene
-  // 45 minutos libres mientras reposa el tinte de las 11:00 es lo que le
-  // permite colar un corte por teléfono sin liarse.
-  const fases = await equipo.fasesPorServicio(storeId);
-  const margen = await equipo.margenRelleno(storeId);
 
   // Franjas bloqueadas: eventos del calendario que NO son citas nuestras
   // (limpiar material, comer, el médico...). Se pintan aparte para que la

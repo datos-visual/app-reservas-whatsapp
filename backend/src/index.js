@@ -123,7 +123,7 @@ app.use(
 
 // Paso 4: middleware dual (JWT Supabase Auth para usuarios de tienda,
 // ADMIN_TOKEN para el admin). Ver backend/src/auth.js.
-const { authMiddleware, resolveStoreId, requireStoreId } = require('./auth');
+const { authMiddleware, resolveStoreId, requireStoreId, mismoSecreto } = require('./auth');
 
 app.get('/', (req, res) => {
   res.status(200).send('Backend WhatsApp OK');
@@ -2324,7 +2324,7 @@ async function handleReminderButton({ storeId, phoneNumberId, accessToken, from,
 
   if (payload.startsWith(REMINDER_PAYLOADS.CONFIRM_PREFIX)) {
     const id = parseInt(payload.slice(REMINDER_PAYLOADS.CONFIRM_PREFIX.length), 10);
-    const cita = Number.isInteger(id) ? await confirmAppointmentByClient(storeId, id) : null;
+    const cita = Number.isInteger(id) ? await confirmAppointmentByClient(storeId, id, from) : null;
     await sendAndLog({
       storeId, phoneNumberId, accessToken, to: from,
       text: cita
@@ -2336,7 +2336,7 @@ async function handleReminderButton({ storeId, phoneNumberId, accessToken, from,
 
   if (payload.startsWith(REMINDER_PAYLOADS.CANCEL_PREFIX)) {
     const id = parseInt(payload.slice(REMINDER_PAYLOADS.CANCEL_PREFIX.length), 10);
-    const cita = Number.isInteger(id) ? await getCancelableAppointment(storeId, id) : null;
+    const cita = Number.isInteger(id) ? await getCancelableAppointment(storeId, id, from) : null;
     if (!cita) {
       await sendAndLog({
         storeId, phoneNumberId, accessToken, to: from,
@@ -2683,7 +2683,8 @@ app.post('/internal/missed-calls/dispatch', async (req, res) => {
     return res.status(500).json({ error: 'Configuración incompleta' });
   }
   const provided = req.header('x-internal-token');
-  if (!provided || provided !== config.internalCronToken) {
+  // Tiempo constante, igual que el ADMIN_TOKEN y las firmas (ver auth.js)
+  if (!mismoSecreto(provided, config.internalCronToken)) {
     console.warn('[MissedCall] Token interno inválido en /internal/missed-calls/dispatch', { requestId });
     return res.status(401).json({ error: 'No autorizado' });
   }
