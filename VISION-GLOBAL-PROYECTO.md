@@ -725,9 +725,20 @@ Sin esa recursión se habría quedado ciega justo al empezar a mover las rutas
 vigila nada—. Verificada dos veces rompiéndola a propósito: ruta suelta antes
 del middleware, y ruta escondida dentro de un Router. Roja las dos veces.
 
-Extraídos `routes/admin.js` (8 rutas) y `routes/equipo.js` (15). `index.js`:
-3.832 → 3.471 líneas. Recuento de rutas idéntico antes y después: 58, con las
-mismas 6 públicas.
+**Terminado: las 52 rutas del panel están fuera.** `routes/admin.js`,
+`routes/equipo.js`, `routes/agenda.js` y `routes/tienda.js`. `index.js`:
+3.832 → 2.817 líneas (−26%), y lo que queda es lo que le toca — conversación,
+webhooks, cron y arranque. Recuento de rutas idéntico en cada paso: 58, con
+las mismas 6 públicas.
+
+**Se deshizo el nudo:** `notificarListaEspera` la usaban a la vez el flujo y
+las rutas de agenda. Vive en `avisos.js` y la importan las dos. Duplicarla
+habría sido peor que no separar.
+
+Durante la extracción, `no-undef` cazó **cinco** dependencias que me dejaba
+atrás (`getStoreConfig`, `listBusinessHours`, `equipo`, `sincronizacion`,
+`getAppointmentsByDate`…) y `node --check` un `require` duplicado. Ninguna
+habría dado la cara hasta que alguien usara esa pantalla.
 
 **La costura elegida no es «rutas contra lógica», es MOTOR contra
 CONVERSACIÓN** — porque es la que permite añadir verticales sin tocar el

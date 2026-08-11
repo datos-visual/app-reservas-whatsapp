@@ -119,25 +119,41 @@ dos segundos.
 
 ## Estado de la partición
 
-| Grupo | Estado |
+**Las 52 rutas del panel están fuera de `index.js`.** No queda ninguna.
+
+| Fichero | Qué contiene |
 |---|---|
-| `/api/admin/*` (8 rutas) | ✅ en `routes/admin.js` |
-| `/api/equipo`, `/api/aparatos`, `/api/services/:id/recursos` (15) | ✅ en `routes/equipo.js` |
-| `/api/agenda`, `/api/appointments` | pendiente — usa `notificarListaEspera`, que vive en el flujo |
-| `/api/business-hours`, `/api/closures` | pendiente — lleva `validarHorario` consigo |
-| `/api/services`, `/api/verticals` | pendiente |
-| `/api/onboarding/*`, `/api/store*`, `/api/whatsapp/status` | pendiente |
-| `/api/missed-call/*`, `/api/messages` | pendiente |
-| Flujo conversacional (≈2.500 líneas) | pendiente — **la parte delicada** |
+| `routes/admin.js` | `/api/admin/*` — backoffice, solo ADMIN_TOKEN |
+| `routes/equipo.js` | `/api/equipo`, `/api/aparatos`, requisitos de servicio |
+| `routes/agenda.js` | `/api/agenda`, `/api/appointments`, horarios y cierres |
+| `routes/tienda.js` | catálogo, plan, onboarding, WhatsApp, llamadas perdidas |
+| `avisos.js` | Avisos del sistema (lista de espera) — **lo comparten panel y flujo** |
 
-`index.js` ha pasado de 3.832 a 3.471 líneas.
+`index.js` ha pasado de **3.832 a 2.817 líneas** (−26%), y lo que queda es lo
+que le corresponde: el flujo de conversación, los webhooks, el cron y el
+arranque. Cero rutas del panel.
 
-### El nudo que queda
+Verificado en cada paso: **58 rutas antes y después**, con las mismas 6
+públicas.
 
-`notificarListaEspera` la usan **el flujo de WhatsApp y las rutas de agenda**.
-Antes de sacar la agenda hay que llevarla a su propio módulo (`avisos.js`),
-no duplicarla. Es la única dependencia cruzada real que queda entre el panel
-y la conversación.
+### Lo que sigue pendiente
+
+El **flujo conversacional** (≈2.400 líneas). Es la parte delicada y **no tiene
+red de pruebas**: las 93 existentes cubren decisiones y rutas, no
+conversaciones. No lo partas sin construir antes esa red — es la misma
+lección que con las rutas.
+
+Lo que sí conviene sacar de ahí antes del segundo vertical son **los textos**
+que asumen peluquería («Elegir profesional», «otra profesional»). Es
+quirúrgico y no obliga a tocar la lógica.
+
+### El nudo que se deshizo
+
+`notificarListaEspera` la usaban **a la vez** el flujo de WhatsApp y las rutas
+de agenda. Era la única dependencia cruzada entre panel y conversación, y
+mientras existiera no se podía separar ninguna de las dos sin duplicar código.
+Vive en `avisos.js` y la importan las dos. **Duplicarla habría sido peor que
+no separar.**
 
 ---
 
