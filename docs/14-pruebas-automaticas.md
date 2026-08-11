@@ -41,6 +41,7 @@ Se ejecutan solas en cada push a `main` y en cada pull request
 | `backend/test/multimedia.test.js` | Que una nota de voz no se pierda en silencio |
 | `backend/test/vocabulario.test.js` | Que ningún sector se deje una frase sin traducir |
 | `frontend/test/rejilla.test.ts` | Que la pantalla pinte lo mismo que calcula el motor |
+| `frontend/test/conversaciones.test.ts` | Que la alarma de «sin responder» no dé falsos positivos |
 
 ## El detector de variables inexistentes
 

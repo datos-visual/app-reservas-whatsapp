@@ -29,6 +29,35 @@ type Message = {
   nombre?: string | null;   // la clienta, cuando la conocemos
 };
 
+/**
+ * Conversaciones que ESPERAN RESPUESTA.
+ *
+ * El asistente contesta a casi todo, así que una conversación cuyo último
+ * mensaje es de la clienta significa que algo no siguió su curso: se acabó el
+ * límite diario, reventó el flujo, o dijo algo que el bot decidió no
+ * responder. Es raro — y por eso, cuando pasa, importa.
+ *
+ * Margen de 5 minutos: un mensaje recién llegado puede estar procesándose
+ * todavía. Sin ese margen, la dueña vería alarmas que se apagan solas, y una
+ * alarma que se apaga sola es una alarma que se deja de mirar.
+ *
+ * Los mensajes llegan del más nuevo al más viejo, así que la PRIMERA
+ * aparición de cada teléfono es su último mensaje.
+ */
+const MARGEN_MS = 5 * 60 * 1000;
+
+function esperanRespuesta(mensajes: Message[]): Set<number> {
+  const vistos = new Set<string>();
+  const pendientes = new Set<number>();
+  const limite = Date.now() - MARGEN_MS;
+  for (const m of mensajes) {
+    if (vistos.has(m.phone)) continue;
+    vistos.add(m.phone);
+    if (!m.from_me && new Date(m.created_at).getTime() < limite) pendientes.add(m.id);
+  }
+  return pendientes;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
@@ -98,6 +127,8 @@ export default function DashboardPage() {
   // La próxima de verdad: la primera que aún no ha empezado
   const proxima = appointments.find((c) => new Date(c.start_at).getTime() >= ahora) || appointments[0];
   const sinConfirmar = appointments.filter((c) => !c.confirmed_by_client_at);
+  // Conversaciones donde escribió la clienta y no hubo respuesta (ver arriba)
+  const pendientes = esperanRespuesta(messages);
 
   return (
     <AppShell
@@ -230,14 +261,29 @@ export default function DashboardPage() {
         </div>
 
         <div className="ca-card">
-          <div className="border-b border-[#d9d9d9] px-5 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-[#d9d9d9] px-5 py-3">
             <h2 className="ca-h2">Últimas conversaciones</h2>
+            {pendientes.size > 0 && (
+              <span className="ca-badge-warn">
+                {pendientes.size} sin responder
+              </span>
+            )}
           </div>
           <ul className="max-h-[420px] divide-y divide-[#e8e8e8] overflow-y-auto">
             {messages.map((m) => (
               <li key={m.id} className={`px-5 py-3 ${m.from_me ? 'bg-[#fafafa]' : ''}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className={`text-[12px] font-medium ${m.from_me ? 'text-[#666666]' : 'text-[#111111]'}`}>
+                  <span className={`flex items-center gap-1.5 text-[12px] font-medium ${m.from_me ? 'text-[#666666]' : 'text-[#111111]'}`}>
+                    {/* LA excepción al blanco y negro en esta pantalla: escribió
+                        la clienta y nadie ha contestado. Es lo único aquí que
+                        pide que la dueña haga algo. */}
+                    {pendientes.has(m.id) && (
+                      <span
+                        className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#8a5200]"
+                        title="La clienta escribió lo último y no ha habido respuesta"
+                        aria-label="Sin responder"
+                      />
+                    )}
                     {m.from_me ? 'Asistente' : m.nombre || m.phone}
                   </span>
                   <span className="ca-cifras shrink-0 text-[12px] text-[#666666]">
