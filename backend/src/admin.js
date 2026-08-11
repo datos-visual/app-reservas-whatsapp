@@ -6,6 +6,7 @@
 const { supabase } = require('./db');
 const { DateTime } = require('luxon');
 const config = require('./config');
+const { olvidarTienda } = require('./cacheTienda');
 
 // Flags premium reconocidos (doc 09 §3). Un plan comercial = conjunto de flags.
 const PREMIUM_FLAGS = ['smart_slots', 'waitlist', 'reactivation', 'post_sale', 'style_file', 'flash_offers', 'elegir_profesional', 'fases_servicio', 'servicios_por_profesional'];
@@ -434,6 +435,7 @@ async function updateStoreFeatures(storeId, flags) {
     .eq('id', storeId);
   if (upErr) throw upErr;
 
+  olvidarTienda(storeId);   // que el cambio se note al momento en el panel
   console.log('[Admin] Flags premium actualizados', { storeId, merged });
   return merged;
 }
@@ -481,6 +483,7 @@ async function updateStoreIa(storeId, { activo, tope } = {}) {
   }
   if (!data) return null;
 
+  olvidarTienda(storeId);
   console.log('[Admin] Ajustes de IA de la tienda', { storeId, ...patch });
   return {
     activo: data.nlu_activo !== false,
@@ -625,6 +628,7 @@ async function setStoreFeatureActive(storeId, flag, activo) {
     .eq('id', storeId);
   if (upErr) throw upErr;
 
+  olvidarTienda(storeId);
   console.log('[Admin] Tienda cambió activación de feature', { storeId, flag, activo });
   return 'ok';
 }

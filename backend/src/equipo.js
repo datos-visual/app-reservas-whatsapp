@@ -8,6 +8,9 @@
 
 const { DateTime } = require('luxon');
 const { supabase, getPremiumFeatures } = require('./db');
+// Caché corta: estos ajustes se leen varias veces por pantalla y cambian una
+// vez al mes. Se invalida al guardar (ver cacheTienda.js).
+const { conCache, olvidarTienda } = require('./cacheTienda');
 
 /**
  * ¿El error es "esa tabla/columna todavía no existe"? Si la migración de
@@ -34,6 +37,10 @@ function errorMigracion() {
  * anterior sin borrar sus datos. Tolerante: sin las columnas, todo activo.
  */
 async function ajustesTienda(storeId) {
+  return conCache(storeId, 'ajustes', () => leerAjustesTienda(storeId));
+}
+
+async function leerAjustesTienda(storeId) {
   try {
     const { data, error } = await supabase
       .from('stores')
@@ -58,6 +65,10 @@ async function ajustesTienda(storeId) {
  * no puede arrastrar a los demás interruptores.
  */
 async function pasoHuecos(storeId) {
+  return conCache(storeId, 'paso', () => leerPasoHuecos(storeId));
+}
+
+async function leerPasoHuecos(storeId) {
   try {
     const { data, error } = await supabase
       .from('stores')
@@ -82,6 +93,7 @@ async function guardarPasoHuecos(storeId, minutos) {
   }
   const { error } = await supabase.from('stores').update({ paso_huecos_min: valor }).eq('id', storeId);
   if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  olvidarTienda(storeId);   // el cambio se ve al instante, no en 15 s
   console.log('[Equipo] Rejilla de huecos', { storeId, minutos: valor });
   return valor;
 }
@@ -94,6 +106,7 @@ async function guardarAjustes(storeId, { usarEquipo, usarAparatos }) {
 
   const { error } = await supabase.from('stores').update(patch).eq('id', storeId);
   if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  olvidarTienda(storeId);
   console.log('[Equipo] Ajustes de disponibilidad', { storeId, ...patch });
   return ajustesTienda(storeId);
 }
@@ -423,6 +436,10 @@ function tramosChocan(a, b) {
 
 /** Margen de seguridad de la tienda (minutos). Tolerante: 5 por defecto. */
 async function margenRelleno(storeId) {
+  return conCache(storeId, 'margen', () => leerMargenRelleno(storeId));
+}
+
+async function leerMargenRelleno(storeId) {
   try {
     const { data, error } = await supabase
       .from('stores')
@@ -446,6 +463,7 @@ async function guardarMargenRelleno(storeId, minutos) {
   }
   const { error } = await supabase.from('stores').update({ margen_relleno_min: valor }).eq('id', storeId);
   if (error) throw faltaMigracion(error) ? errorMigracion() : error;
+  olvidarTienda(storeId);
   console.log('[Equipo] Margen de relleno', { storeId, minutos: valor });
   return valor;
 }

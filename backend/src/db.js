@@ -1,6 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 const { DateTime } = require('luxon');
 const config = require('./config');
+// Caché corta de configuración: evita repetir la misma consulta a `stores`
+// varias veces en la misma pantalla. Se invalida al escribir.
+const { conCache, olvidarTienda } = require('./cacheTienda');
 
 if (!config.supabaseUrl || !config.supabaseServiceKey) {
   console.warn('[DB] Supabase URL o SERVICE_ROLE_KEY no configurados. La API fallará en tiempo de ejecución.');
@@ -316,6 +319,12 @@ async function getWhatsappAccountByStoreId(storeId) {
  * Con {} todos los flags cuentan como apagados.
  */
 async function getPremiumFeatures(storeId) {
+  // Se pide muchas veces por petición (usarFases, usarHabilidades, la ruta de
+  // equipo…): con caché es UNA consulta en vez de cinco. Ver cacheTienda.js.
+  return conCache(storeId, 'premium', () => leerPremiumFeatures(storeId));
+}
+
+async function leerPremiumFeatures(storeId) {
   try {
     // A2: efectivo = contratado (admin/plan) MENOS desactivado (elección de
     // la tienda desde su panel). Fallback tolerante si falta alguna columna.
@@ -351,6 +360,10 @@ async function getPremiumFeatures(storeId) {
 }
 
 async function getStoreConfig(storeId) {
+  return conCache(storeId, 'config', () => leerStoreConfig(storeId));
+}
+
+async function leerStoreConfig(storeId) {
   try {
     const { data, error } = await supabase
       .from('stores')
