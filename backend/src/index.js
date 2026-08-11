@@ -69,6 +69,9 @@ const { notificarListaEspera } = require('./avisos');
 // Las pocas frases que dependen del sector (peluquería, taller…). El motor no
 // las conoce: solo las usa la capa de conversación. Ver vocabulario.js.
 const { textos } = require('./vocabulario');
+// Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
+// para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -948,8 +951,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
 
   // --- B5.3: la clienta responde al aviso de «tu profesional no puede» ---
   if (payload.startsWith('ca:prof:')) {
-    const [, , accion, idTxt, personaTxt] = payload.split(':');
-    const citaId = parseInt(idTxt, 10);
+    const { accion, citaId, personaId } = partesDeProfesional(payload);
 
     // El id viene del cliente: se valida SIEMPRE contra su propia tienda y
     // su propio teléfono antes de tocar nada.
@@ -977,7 +979,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       // Si pidió una concreta, se valida que siga libre: entre el aviso y su
       // respuesta pueden pasar horas.
       const otra = accion === 'con'
-        ? libres.find((p) => p.id === parseInt(personaTxt, 10)) || null
+        ? libres.find((p) => p.id === personaId) || null
         : libres[0] || null;
 
       if (!otra && accion === 'con') {
@@ -1975,24 +1977,15 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // meterlos aquí podría cancelar una cita real a quien solo estaba
   // rechazando un hueco. El falso positivo es caro; el falso negativo lo
   // recoge la IA.
-  const PIDE_ANULAR = new RegExp(
-    '\\b(?:' +
-      'an[uú]la(?:la|r|me|melo|mela)?|' +
-      'canc[eé]la(?:la|me|melo|mela)?|' +
-      'b[oó]rra(?:la|mela)|elim[ií]na(?:la|mela)?|qu[ií]ta(?:la|mela)|' +
-      'no\\s+puedo\\s+ir|no\\s+podr[ée]\\s+ir|no\\s+voy\\s+a\\s+poder' +
-    ')\\b',
-    'i'
-  );
+  // La regla de qué frases piden anular vive en conversacion.js, con sus pruebas.
 
   // CANCELAR [id]: cancelación con confirmación SI/NO
-  if (lower === 'cancelar' || lower.startsWith('cancelar ') || PIDE_ANULAR.test(lower)) {
+  if (quiereAnular(lower)) {
     // El argumento SOLO existe en la forma de comando («cancelar 2»). Si la
     // persona lo dijo con sus palabras («no me viene bien, anúlala»), la
     // segunda palabra es texto normal y tomarla por un número acababa en un
     // absurdo «No encuentro esa cita» (bug real 5-ago-2026).
-    const esComando = lower === 'cancelar' || lower.startsWith('cancelar ');
-    const arg = esComando ? (body.trim().split(/\s+/)[1] || null) : null;
+    const arg = argumentoDeCancelar(body);
     const citas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
 
     if (!citas.length) {
@@ -2410,7 +2403,7 @@ async function handleMissedCallButton({ storeId, phoneNumberId, accessToken, fro
 async function processWebhookBody(body, { requestId }) {
   const incoming = extractIncomingMessages(body);
   for (const msg of incoming) {
-    const { phoneNumberId, from, body: textBody, messageId, kind, payload, profileName } = msg;
+    const { phoneNumberId, from, body: textBody, messageId, kind, payload, profileName, tipoMedia } = msg;
 
     // Fuera del try: si algo revienta, el buzón de errores necesita saber de
     // qué tienda era. Dentro del try no llegaría al catch.
@@ -2481,6 +2474,25 @@ async function processWebhookBody(body, { requestId }) {
           storeId,
           from,
           sentToday
+        });
+        continue;
+      }
+
+      // Notas de voz, fotos, ubicaciones… Antes se descartaban antes de
+      // llegar aquí y la clienta se quedaba sin respuesta ninguna. Ahora se
+      // le contesta con el menú, que es lo que sí sabemos hacer.
+      //
+      // No es la solución buena —la buena es transcribir el audio y meterlo
+      // en el NLU—, pero un silencio absoluto es lo peor de todo: la clienta
+      // no sabe si le has leído y la peluquería nunca se entera.
+      if (kind === 'multimedia') {
+        const esAudio = tipoMedia === 'audio' || tipoMedia === 'voice';
+        console.log('[Webhook] Mensaje multimedia recibido', { storeId, tipoMedia });
+        await sendWelcomeMenu({
+          storeId, phoneNumberId, accessToken, to: from,
+          headerText: esAudio
+            ? 'Todavía no puedo escuchar audios. Escríbeme qué necesitas o usa estos botones:'
+            : 'De momento solo entiendo texto. Dime qué necesitas o usa estos botones:'
         });
         continue;
       }

@@ -37,6 +37,9 @@ Se ejecutan solas en cada push a `main` y en cada pull request
 | `backend/test/salud.test.js` | Que el semáforo de `/admin` no se ponga en verde con algo roto |
 | `backend/test/errores.test.js` | Que el buzón de errores no guarde datos de clientas y que se vea en Salud |
 | `backend/test/rutas.test.js` | **La frontera de autenticación**: qué rutas responden sin credenciales |
+| `backend/test/conversacion.test.js` | Interpretar botones y detectar «anúlala» sin cancelar de más |
+| `backend/test/multimedia.test.js` | Que una nota de voz no se pierda en silencio |
+| `backend/test/vocabulario.test.js` | Que ningún sector se deje una frase sin traducir |
 | `frontend/test/rejilla.test.ts` | Que la pantalla pinte lo mismo que calcula el motor |
 
 ## El detector de variables inexistentes

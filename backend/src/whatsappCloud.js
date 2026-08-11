@@ -199,8 +199,22 @@ function extractIncomingMessages(body) {
             }
           }
 
+          // Nota de voz, foto, ubicación, sticker… Hasta el 10-ago-2026 estos
+          // mensajes se DESCARTABAN aquí en silencio: la clienta mandaba un
+          // audio y el asistente no contestaba nada. Ni un «no te entiendo».
+          // Y como no se registraba, ni la tienda ni nosotros nos enterábamos.
+          //
+          // En España la nota de voz es el modo por defecto de mucha gente, y
+          // justo del perfil que pide cita en una peluquería. Ahora el mensaje
+          // sigue adelante marcado como `kind: 'multimedia'` para que el flujo
+          // pueda responder algo con sentido.
+          const MULTIMEDIA = ['audio', 'voice', 'image', 'video', 'document', 'sticker', 'location', 'contacts'];
+          if (!bodyText && !payload && MULTIMEDIA.includes(type)) {
+            kind = 'multimedia';
+          }
+
           if (!phoneNumberId || !from || !messageId) continue;
-          if (!bodyText && !payload) continue;
+          if (!bodyText && !payload && kind !== 'multimedia') continue;
 
           out.push({
             phoneNumberId,
@@ -209,6 +223,9 @@ function extractIncomingMessages(body) {
             messageId,
             kind,
             payload,
+            // Qué tipo de multimedia era, para poder responder distinto a un
+            // audio que a una foto sin volver a mirar el payload de Meta.
+            tipoMedia: kind === 'multimedia' ? type : null,
             profileName: perfiles.get(from) || null
           });
         }

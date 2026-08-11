@@ -136,16 +136,29 @@ arranque. Cero rutas del panel.
 Verificado en cada paso: **58 rutas antes y después**, con las mismas 6
 públicas.
 
-### Lo que sigue pendiente
+### El flujo conversacional: cómo se está desmontando
 
-El **flujo conversacional** (≈2.400 líneas). Es la parte delicada y **no tiene
-red de pruebas**: las 93 existentes cubren decisiones y rutas, no
-conversaciones. No lo partas sin construir antes esa red — es la misma
-lección que con las rutas.
+Las ≈2.400 líneas del flujo hablan con Meta, con la base de datos y con el
+calendario. **No se pueden ejecutar en una prueba** sin montar medio mundo
+falso alrededor, y por eso no se parten «a lo bruto».
 
-Lo que sí conviene sacar de ahí antes del segundo vertical son **los textos**
-que asumen peluquería («Elegir profesional», «otra profesional»). Es
-quirúrgico y no obliga a tocar la lógica.
+La estrategia es otra: **sacar las DECISIONES y dejar la fontanería**.
+
+- `vocabulario.js` — las ocho frases que dependen del sector.
+- `conversacion.js` — interpretar el identificador de un botón, decidir si una
+  frase pide anular, sacar el argumento de un comando. **Las tres habían
+  causado un fallo real en producción.**
+
+Ambos son puros: reciben un texto y devuelven una respuesta. Se prueban sin
+red ni base de datos.
+
+**Regla:** si añades una decisión al flujo y se puede escribir sin `await`, va
+a `conversacion.js` y con su prueba. Lo que necesite red o base de datos, se
+queda en `index.js`.
+
+Así el flujo adelgaza por donde importa —lo que puede razonar mal— y no por
+donde no —lo que solo envía mensajes—. Partirlo entero en módulos sin esa red
+sería repetir el error que se evitó con las rutas.
 
 ### El nudo que se deshizo
 
