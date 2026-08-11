@@ -25,7 +25,7 @@ const TIMEOUT_MS = 10000;
 // ---------------------------------------------------------------------
 // Prompt
 // ---------------------------------------------------------------------
-function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
+function buildPrompt({ text, timezone, nowDt, conversation = [], servicios = [] }) {
   const hoy = nowDt.toFormat('yyyy-MM-dd');
   const diaSemana = nowDt.setLocale('es').toFormat('cccc');
 
@@ -44,14 +44,23 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     }
   }
 
+  // El catálogo va en el prompt para que el modelo ELIJA de la lista en vez
+  // de inventarse un nombre. Aun así, su respuesta se verifica después contra
+  // el catálogo real: nunca se acepta a ciegas (ver conversacion.js).
+  const listaServicios = (servicios || []).map((s2) => s2?.name).filter(Boolean);
+  const bloqueServicios = listaServicios.length
+    ? `Servicios que ofrece este negocio (usa el nombre EXACTO de esta lista o null):\n${listaServicios.map((n) => `- ${n}`).join('\n')}\n\n`
+    : '';
+
   return (
     'Eres el intérprete de mensajes de un sistema de reservas por WhatsApp de un negocio en España. ' +
     'Tu ÚNICA tarea es clasificar el ÚLTIMO mensaje del cliente y extraer fecha/hora/franja si las hay. ' +
     'NO respondes al cliente, NO inventas datos.\n\n' +
     `Hoy es ${diaSemana} ${hoy} (zona horaria ${timezone}).\n\n` +
     contexto +
+    bloqueServicios +
     'Devuelve SOLO un objeto JSON con esta forma exacta:\n' +
-    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|CAMBIAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null, "old_date": "YYYY-MM-DD" o null, "old_time": "HH:MM" o null}\n\n' +
+    '{"intent": "DISPONIBLE|CITA|CONFIRMAR|RECHAZAR|MIS_CITAS|CANCELAR_CITA|CAMBIAR_CITA|AYUDA|BAJA|OTRO", "date": "YYYY-MM-DD" o null, "time": "HH:MM" o null, "franja": "manana"|"tarde"|null, "old_date": "YYYY-MM-DD" o null, "old_time": "HH:MM" o null, "servicio": "nombre del servicio" o null}\n\n' +
     'Reglas:\n' +
     '- DISPONIBLE: pregunta por huecos/disponibilidad/horarios de un día ("¿tenéis hueco el viernes?"). Extrae la fecha; time null salvo hora concreta preguntada.\n' +
     '- CITA: quiere reservar en fecha Y hora concretas ("resérvame mañana a las 5 de la tarde"). Ambos campos obligatorios; si falta la hora, usa DISPONIBLE.\n' +
@@ -64,6 +73,9 @@ function buildPrompt({ text, timezone, nowDt, conversation = [] }) {
     'old_date/old_time = referencia de la cita ACTUAL si menciona cuál es. ' +
     'En frases como "cambia la de hoy a las 16 a las 15:30": old_time=16:00 y time=15:30. ' +
     'En "cambia la del martes a las 16" (una sola hora tras identificar la cita): old_time=16:00 y time=null.\n' +
+    '- servicio: QUÉ pide («un tinte», «cortarme el pelo»). Si coincide con la lista de arriba, ' +
+    'devuelve su nombre EXACTO. Si pide algo que NO está en la lista, devuelve lo que dijo tal cual ' +
+    '(hace falta para poder decirle que no lo hacemos). Si no menciona ningún servicio, null.\n' +
     '- AYUDA: pregunta qué se puede hacer o saluda pidiendo información general.\n' +
     '- BAJA: pide expresamente no recibir más mensajes.\n' +
     '- OTRO: cualquier otra cosa (consultas de precios, ubicación, charla) o si tienes dudas. Ante la duda, SIEMPRE "OTRO".\n' +
@@ -99,6 +111,7 @@ function validateNluResult(raw) {
   let franja = raw.franja ?? null;
   let oldDate = raw.old_date ?? null;
   let oldTime = raw.old_time ?? null;
+  const servicio = typeof raw.servicio === 'string' && raw.servicio.trim() ? raw.servicio.trim().slice(0, 60) : null;
   if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) date = null;
   if (time !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time))) time = null;
   if (franja !== null && !['manana', 'tarde'].includes(String(franja))) franja = null;
@@ -106,17 +119,17 @@ function validateNluResult(raw) {
   if (oldTime !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(oldTime))) oldTime = null;
 
   if (intent === 'CAMBIAR_CITA') {
-    return { intent, date, time, franja: null, old_date: oldDate, old_time: oldTime };
+    return { intent, date, time, franja: null, old_date: oldDate, old_time: oldTime, servicio };
   }
 
   // Coherencia mínima por intención
   if (intent === 'CITA' && !time && date) {
     // quiere reservar pero sin hora → enseñarle huecos de ese día
-    return { intent: 'DISPONIBLE', date, time: null, franja };
+    return { intent: 'DISPONIBLE', date, time: null, franja, servicio };
   }
   if (intent === 'CITA' && time && !date) {
     // hora sin día: intención válida a medias → el flujo preguntará el día
-    return { intent: 'CITA_SIN_FECHA', date: null, time, franja: null };
+    return { intent: 'CITA_SIN_FECHA', date: null, time, franja: null, servicio };
   }
   if (intent === 'CITA' && !date && !time) return { intent: 'OTRO', date: null, time: null, franja: null };
   if (intent === 'DISPONIBLE' && !date) return { intent: 'OTRO', date: null, time: null, franja: null };
@@ -284,7 +297,7 @@ async function sinIA(storeId) {
  * o null (sin proveedores, error, timeout o salida no fiable).
  * NUNCA lanza: la degradación al flujo de comandos es la red de seguridad.
  */
-async function interpretMessage({ storeId = null, text, timezone, nowDt, conversation = [] }) {
+async function interpretMessage({ storeId = null, text, timezone, nowDt, conversation = [], servicios = [] }) {
   const chain = providerChain();
   if (chain.length === 0) return null;
   if (!text || String(text).trim().length < 2) return null;
@@ -293,7 +306,7 @@ async function interpretMessage({ storeId = null, text, timezone, nowDt, convers
   // La conversación reciente ES el contexto: sin ella, «anúlala» no tiene
   // antecedente y el modelo se queda con el «no me viene bien» del principio,
   // que parece un rechazo. Se pasaba desde index.js pero se perdía aquí.
-  const prompt = buildPrompt({ text, timezone, nowDt, conversation });
+  const prompt = buildPrompt({ text, timezone, nowDt, conversation, servicios });
 
   for (const name of chain) {
     const controller = new AbortController();

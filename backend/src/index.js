@@ -71,7 +71,7 @@ const { notificarListaEspera } = require('./avisos');
 const { textos } = require('./vocabulario');
 // Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
 // para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -276,7 +276,7 @@ async function sendWelcomeMenu({ storeId, phoneNumberId, accessToken, to, header
  * Helpers del flujo guiado de reserva (B2). Todos leen zone/config al vuelo
  * (se invocan desde el router de payloads, fuera de handleIncomingText).
  */
-async function sendServiceList({ storeId, phoneNumberId, accessToken, to }) {
+async function sendServiceList({ storeId, phoneNumberId, accessToken, to, headerText = null }) {
   const services = await getActiveServices(storeId);
 
   if (!services.length) {
@@ -293,7 +293,7 @@ async function sendServiceList({ storeId, phoneNumberId, accessToken, to }) {
       phoneNumberId,
       accessToken,
       to,
-      bodyText: '¿Qué servicio quieres reservar?',
+      bodyText: headerText || '¿Qué servicio quieres reservar?',
       buttonText: 'Ver servicios',
       sections: [{
         rows: services.map((s) => ({
@@ -582,6 +582,20 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       });
       return true;
     }
+    // ¿Venía de decir la hora sin decir el servicio? Entonces NO se le vuelve
+    // a preguntar el día: se retoma la hora que ya dio. Volver a pedírsela
+    // después de haberla escrito es la clase de detalle que hace que la gente
+    // deje el chat y llame por teléfono.
+    const previo = (await getConversationState(storeId, from))?.state?.flow;
+    if (previo?.step === 'SELECT_SERVICE' && previo?.data?.fechaPedida && previo?.data?.horaPedida) {
+      await deleteConversationState(storeId, from);
+      return handleIncomingText({
+        storeId, phoneNumberId, accessToken, from,
+        body: `CITA ${previo.data.fechaPedida} ${previo.data.horaPedida} ${svc.id}`,
+        nluAttempted: true
+      }).then(() => true);
+    }
+
     const service = {
       serviceId: svc.id,
       serviceName: svc.name,
@@ -1076,7 +1090,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
   return false;
 }
 
-async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body, nluAttempted = false, profileName = null }) {
+async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, body, nluAttempted = false, profileName = null, textoOriginal = null, servicioIa = null }) {
   const lower = (body || '').trim().toLowerCase();
 
   const storeConfig = await getStoreConfig(storeId);
@@ -1136,7 +1150,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     };
     const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone, null, null, events
+      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone,
+      service?.id ?? null, null, events
     );
     const slotMatch = slots.find((s) => s.label === normalizedTime);
 
@@ -1829,7 +1844,10 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // CITA YYYY-MM-DD HH:MM
   if (lower.startsWith('cita ')) {
     const rest = body.substring('cita '.length).trim();
-    const [datePartRaw, timePartRaw] = rest.split(' ');
+    // Cuarto campo opcional: el servicio YA elegido. Lo usa el flujo cuando la
+    // clienta dijo la hora pero no el servicio, eligió de la lista, y hay que
+    // retomar su hora en vez de volver a preguntársela.
+    const [datePartRaw, timePartRaw, servicioIdRaw] = rest.split(' ');
     if (!datePartRaw || !timePartRaw) {
       await sendAndLog({
         storeId,
@@ -1856,6 +1874,44 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       return;
     }
 
+    // ── SIN SERVICIO NO SE RESERVA (bug 11-ago-2026) ──────────────────
+    //
+    // «Quiero una permanente para mañana a las 12h» reservaba una cita SIN
+    // servicio: duración por defecto, sin comprobar aparatos ni quién sabe
+    // hacerlo. Y «permanente» ni siquiera estaba en el catálogo.
+    //
+    // Ahora, si la tienda tiene catálogo y no sabemos qué quiere, se
+    // PREGUNTA. Fallar hacia «pregunto» en vez de hacia «reservo lo que sea».
+    const catalogo = await catalog.listServices(storeId).catch(() => []);
+    const activos = (catalogo || []).filter((sv) => sv.is_active !== false);
+    const idForzado = parseInt(servicioIdRaw, 10);
+    const svcPedido = Number.isInteger(idForzado)
+      ? activos.find((sv) => sv.id === idForzado) || null
+      : (activos.length
+          ? resolverServicio({ texto: textoOriginal || body, servicioIa, servicios: activos })
+          : null);
+
+    if (activos.length && !svcPedido) {
+      // ¿Nombró algo que no hacemos, o no dijo nada? La respuesta cambia.
+      const pidioAlgo = !!servicioIa;
+      await setConversationState(storeId, from, {
+        flow: {
+          name: 'reserva',
+          step: 'SELECT_SERVICE',
+          // La fecha y la hora NO se pierden: se retoman al elegir servicio
+          data: { fechaPedida: datePart, horaPedida: normalizedTime },
+          expiresAt: Date.now() + 10 * 60 * 1000
+        }
+      }, Date.now() + 10 * 60 * 1000);
+      await sendServiceList({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: pidioAlgo
+          ? `No tenemos «${String(servicioIa).slice(0, 40)}» en el catálogo. Esto es lo que hacemos:`
+          : '¿Qué servicio quieres? Lo necesito para saber cuánto dura:'
+      });
+      return;
+    }
+
     const businessHours = await getDayHours(storeId, dateTime.toISODate());
 
     if (businessHours?.isClosed) {
@@ -1874,7 +1930,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // TODO: quitar fallback 08:00/17:00 cuando todas las tiendas tengan store_business_hours
     const slotOptions = {
       zone,
-      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      slotDurationMinutes: svcPedido?.duration_minutes ?? storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
@@ -1885,7 +1941,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const events = await sincronizacion.eventosDelDia(storeId, dateTime.toISO(), zone);
     const slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone, null, null, events
+      storeId, dateTime.toISODate(), generate30MinSlots(dateTime.toISO(), events, slotOptions), zone,
+      svcPedido?.id ?? null, null, events
     );
     const match = slots.find((s) => s.label === normalizedTime);
 
@@ -1910,6 +1967,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         timePart: normalizedTime,
         startIso: start.toISO(),
         endIso: end.toISO(),
+        serviceId: svcPedido?.id ?? null,
+        serviceName: svcPedido?.name ?? null,
+        durationMinutes: svcPedido?.duration_minutes ?? null,
         expiresAt
       }
     }, expiresAt);
@@ -1919,7 +1979,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       phoneNumberId,
       accessToken,
       to: from,
-      pregunta: `¿Te reservo el ${fmtHuman(start.toISO())}?`,
+      pregunta: svcPedido
+        ? `¿Te reservo «${svcPedido.name}» el ${fmtHuman(start.toISO())}?`
+        : `¿Te reservo el ${fmtHuman(start.toISO())}?`,
       siTitulo: 'Sí, resérvala', noTitulo: 'No, déjalo'
     });
     return;
@@ -2078,12 +2140,16 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   if (!nluAttempted) {
     try {
       const conversation = await getRecentConversation(storeId, from);
+      // El catálogo va al prompt: sin él, «una permanente» y «un tinte» le
+      // parecen lo mismo al modelo, y la clienta acaba con una cita fantasma.
+      const servicios = await catalog.listServices(storeId).catch(() => []);
       const interpreted = await interpretMessage({
         storeId,
         text: body,
         timezone: zone,
         nowDt: DateTime.now().setZone(zone),
-        conversation
+        conversation,
+        servicios: (servicios || []).filter((sv) => sv.is_active !== false)
       });
 
       // Reserva a medias (hora sin día): antes de preguntar, red determinista —
@@ -2247,6 +2313,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           accessToken,
           from,
           body: command,
+          // Sin esto se pierde la frase de la clienta —y con ella el servicio
+          textoOriginal: body,
+          servicioIa: interpreted.servicio || null,
           nluAttempted: true,
           profileName
         });

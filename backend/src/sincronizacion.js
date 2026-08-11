@@ -31,7 +31,17 @@ const DIAS_POR_DEFECTO = 30;
 // veces en incluir un evento nuevo en los listados, y sin esta guarda una
 // reserva podía anularse sola segundos después de confirmarse — que es el
 // peor fallo imaginable: la clienta recibe «confirmada» y «anulada» seguidos.
-const GRACIA_MIN = 15;
+//
+// BAJADA DE 15 A 2 MINUTOS (11-ago-2026). Los 15 originales eran de cuando
+// esto se fiaba del LISTADO de Google. Ahora cada cita sospechosa se verifica
+// UNA A UNA con `getCalendarEvent` antes de tocarla, así que la guarda ya solo
+// cubre el hueco de propagación, que son segundos.
+//
+// El motivo del cambio es de uso real: al borrar en Calendar una cita recién
+// hecha, el sistema la ignoraba un cuarto de hora y parecía que la
+// sincronización no funcionaba «a veces». Un comportamiento que unas veces va
+// y otras no es peor que uno que no va: no te deja aprender la regla.
+const GRACIA_MIN = 2;
 
 /**
  * ¿La tienda quiere que vigilemos su calendario? Tolerante: si la columna

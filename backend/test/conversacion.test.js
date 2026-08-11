@@ -133,3 +133,58 @@ describe('botones de «tu profesional no puede»', () => {
     assert.equal(partesDeProfesional('ca:prof:con:xx:yy').personaId, null);
   });
 });
+
+describe('qué servicio está pidiendo (bug de «la permanente», 11-ago-2026)', () => {
+  const CATALOGO = [
+    { id: 1, name: 'Corte' },
+    { id: 2, name: 'Corte + lavado' },
+    { id: 3, name: 'Tinte' },
+    { id: 4, name: 'Mechas' },
+    { id: 5, name: 'Tratamiento keratina' }
+  ];
+  const { servicioEnTexto, resolverServicio, normalizar } = require('../src/conversacion');
+
+  test('lo reconoce dentro de la frase', () => {
+    assert.equal(servicioEnTexto('quiero un tinte para mañana', CATALOGO)?.id, 3);
+  });
+
+  test('sin tildes ni mayúsculas', () => {
+    assert.equal(servicioEnTexto('QUIERO MECHAS', CATALOGO)?.id, 4);
+    assert.equal(normalizar('Añádeme un TINTE'), 'anademe un tinte');
+  });
+
+  // Si «Corte» ganara a «Corte + lavado», la cita duraría 30 min en vez de 45
+  test('con varios encajes gana el MÁS LARGO', () => {
+    assert.equal(servicioEnTexto('quiero corte + lavado el jueves', CATALOGO)?.id, 2);
+  });
+
+  // EL BUG: «permanente» no está en el catálogo. Antes reservaba igual.
+  test('un servicio que la tienda NO hace devuelve null', () => {
+    assert.equal(servicioEnTexto('quiero reservar una permanente para mañana', CATALOGO), null);
+  });
+
+  test('sin mencionar servicio, null', () => {
+    assert.equal(servicioEnTexto('quiero cita mañana a las 12', CATALOGO), null);
+  });
+
+  test('sin catálogo no revienta', () => {
+    assert.equal(servicioEnTexto('un tinte', []), null);
+    assert.equal(servicioEnTexto('un tinte', null), null);
+    assert.equal(servicioEnTexto(null, CATALOGO), null);
+  });
+
+  describe('lo que dice la IA se comprueba contra el catálogo', () => {
+    test('si la IA acierta, se usa', () => {
+      assert.equal(resolverServicio({ texto: 'para mañana', servicioIa: 'Tinte', servicios: CATALOGO })?.id, 3);
+    });
+
+    // La IA puede inventarse un nombre. No se acepta a ciegas.
+    test('si la IA se inventa un servicio, se ignora', () => {
+      assert.equal(resolverServicio({ texto: 'para mañana', servicioIa: 'Permanente', servicios: CATALOGO }), null);
+    });
+
+    test('si la IA no dice nada, se busca en el texto', () => {
+      assert.equal(resolverServicio({ texto: 'un tinte mañana', servicioIa: null, servicios: CATALOGO })?.id, 3);
+    });
+  });
+});

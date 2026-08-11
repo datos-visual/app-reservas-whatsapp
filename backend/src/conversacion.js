@@ -95,8 +95,79 @@ function partesDeProfesional(payload) {
   };
 }
 
+// ---------------------------------------------------------------------
+// QUÉ SERVICIO ESTÁ PIDIENDO
+// ---------------------------------------------------------------------
+//
+// BUG 11-ago-2026: «quiero reservar una permanente para mañana a las 12h»
+// reservaba una cita SIN SERVICIO. Nadie miraba esa palabra. Y las
+// consecuencias iban mucho más allá de la estética:
+//
+//   · La cita usaba la duración por defecto, no la real → se solapaba con
+//     la siguiente.
+//   · No se comprobaban los aparatos: un tinte podía entrar sin sillón libre.
+//   · No se comprobaba quién sabe hacerlo (B5.5 necesita el servicio).
+//   · Y «permanente» ni siquiera está en el catálogo: la respuesta correcta
+//     era decir que no se hace, no reservar una cita fantasma a la que la
+//     clienta se presenta esperando otra cosa.
+//
+// Por eso esto vive aquí y con pruebas: no es un adorno del texto, es la
+// llave de todas las comprobaciones del motor.
+
+/** Sin tildes, sin mayúsculas y sin signos: «Añádeme un TINTE» → «anademe un tinte» */
+function normalizar(texto) {
+  return String(texto || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Busca en el texto alguno de los servicios de la tienda.
+ *
+ * Deliberadamente CONSERVADOR: solo reconoce el nombre completo del servicio
+ * dentro de la frase. Nada de parecidos ni de distancias de edición — acertar
+ * de más aquí significa reservar un tinte de dos horas a quien pidió un corte,
+ * y eso es peor que preguntar.
+ *
+ * Cuando hay varios encajes se queda con el MÁS LARGO: si el catálogo tiene
+ * «Corte» y «Corte + lavado», «quiero corte + lavado» tiene que dar el
+ * segundo, no el primero.
+ */
+function servicioEnTexto(texto, servicios) {
+  const t = normalizar(texto);
+  if (!t || !Array.isArray(servicios)) return null;
+
+  let mejor = null;
+  for (const s of servicios) {
+    const nombre = normalizar(s?.name);
+    if (!nombre) continue;
+    if (t.includes(nombre) && (!mejor || nombre.length > normalizar(mejor.name).length)) {
+      mejor = s;
+    }
+  }
+  return mejor;
+}
+
+/**
+ * Lo que dijo la IA («servicio») contra el catálogo real.
+ *
+ * La IA puede inventarse un nombre que no existe, así que su respuesta NO se
+ * usa tal cual: se comprueba contra el catálogo. Si no encaja, es como si no
+ * hubiera dicho nada — y entonces se pregunta, que es lo seguro.
+ */
+function resolverServicio({ texto, servicioIa, servicios }) {
+  return servicioEnTexto(servicioIa, servicios) || servicioEnTexto(texto, servicios);
+}
+
 module.exports = {
   PIDE_ANULAR,
+  normalizar,
+  servicioEnTexto,
+  resolverServicio,
   esComandoCancelar,
   quiereAnular,
   argumentoDeCancelar,
