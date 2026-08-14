@@ -188,3 +188,66 @@ describe('qué servicio está pidiendo (bug de «la permanente», 11-ago-2026)',
     });
   });
 });
+
+describe('el recuerdo NO puede tapar un «eso no lo hacemos» (bug 11-ago-2026)', () => {
+  const CAT = [{ id: 1, name: 'Corte', duration_minutes: 30 }, { id: 3, name: 'Tinte', duration_minutes: 120 }];
+  const { decidirServicio } = require('../src/conversacion');
+  const recordado = { id: 1, name: 'Corte' };
+
+  // EL FALLO: había dicho «un corte para esta tarde», el sistema lo recordó, y
+  // al escribir después «quiero una permanente» tiró del recuerdo y le reservó
+  // un corte sin decir nada. Una comodidad se comió una comprobación.
+  test('nombra algo que no hacemos ESTANDO recordado un corte → se le dice', () => {
+    const d = decidirServicio({ texto: 'quiero una permanente mañana', servicioIa: 'permanente', servicios: CAT, recordado });
+    assert.equal(d.accion, 'no_tenemos');
+    assert.equal(d.pedido, 'permanente');
+    assert.equal(d.servicio, null);
+  });
+
+  test('no nombra nada y hay recuerdo → se usa el recuerdo', () => {
+    const d = decidirServicio({ texto: 'a las 17:30', servicioIa: null, servicios: CAT, recordado });
+    assert.equal(d.accion, 'usar');
+    assert.equal(d.servicio.id, 1);
+  });
+
+  test('no nombra nada y NO hay recuerdo → se pregunta', () => {
+    assert.equal(decidirServicio({ texto: 'a las 17:30', servicioIa: null, servicios: CAT }).accion, 'preguntar');
+  });
+
+  test('nombra uno que sí hacemos → se usa, aunque el recuerdo diga otro', () => {
+    const d = decidirServicio({ texto: 'quiero un tinte', servicioIa: 'Tinte', servicios: CAT, recordado });
+    assert.equal(d.servicio.id, 3, 'cambiar de idea tiene que poder');
+  });
+
+  test('el id elegido de la lista manda sobre todo', () => {
+    const d = decidirServicio({ idForzado: 3, texto: 'quiero un corte', servicioIa: 'Corte', servicios: CAT, recordado });
+    assert.equal(d.servicio.id, 3);
+  });
+
+  test('tienda sin catálogo: se reserva como siempre', () => {
+    assert.equal(decidirServicio({ texto: 'lo que sea', servicios: [] }).accion, 'usar');
+  });
+});
+
+describe('la fecha que dijo el propio bot', () => {
+  const { fechaDeMensajeDelBot } = require('../src/conversacion');
+
+  test('formato antiguo', () => {
+    assert.equal(fechaDeMensajeDelBot('Huecos disponibles para 2026-08-14 por la tarde:'), '2026-08-14');
+  });
+
+  // Al añadir el nombre del servicio al mensaje, la expresión vieja dejaba de
+  // encajar y «a las 17:30» se quedaba sin día. Roto en silencio.
+  test('formato nuevo, con el servicio delante', () => {
+    assert.equal(fechaDeMensajeDelBot('Huecos para «Corte» (30 min) el 2026-08-14 por la tarde:'), '2026-08-14');
+  });
+
+  test('confirmación', () => {
+    assert.equal(fechaDeMensajeDelBot('Confirmas la cita el 2026-08-15 a las 10:00'), '2026-08-15');
+  });
+
+  test('un mensaje cualquiera no inventa fecha', () => {
+    assert.equal(fechaDeMensajeDelBot('¡Hecho! Te esperamos.'), null);
+    assert.equal(fechaDeMensajeDelBot(null), null);
+  });
+});

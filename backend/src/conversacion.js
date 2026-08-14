@@ -163,11 +163,79 @@ function resolverServicio({ texto, servicioIa, servicios }) {
   return servicioEnTexto(servicioIa, servicios) || servicioEnTexto(texto, servicios);
 }
 
+/**
+ * QUÉ HACER con el servicio: usarlo, decir que no lo hacemos, o preguntar.
+ *
+ * BUG 11-ago-2026, y de los que enseñan. Se añadió que el sistema RECORDARA
+ * el servicio dicho antes («un corte para esta tarde») para no preguntarlo dos
+ * veces. Bien intencionado, pero se puso como último recurso para cualquier
+ * caso — así que cuando la clienta escribió después «quiero una permanente»,
+ * el sistema no encontró «permanente» en el catálogo, **tiró del recuerdo** y
+ * le reservó un corte sin decir nada.
+ *
+ * Una comodidad se había comido una comprobación de seguridad.
+ *
+ * La regla correcta distingue tres situaciones, y el orden importa:
+ *
+ *   1. Viene un id elegido de la lista → se usa, sin más preguntas.
+ *   2. La clienta NOMBRA algo:
+ *        · si está en el catálogo → se usa
+ *        · si NO está            → se le dice que no lo hacemos. NUNCA se
+ *          recurre al recuerdo: nombrar algo distinto es cambiar de idea.
+ *   3. La clienta no nombra nada → ahí sí vale el recuerdo. Y si no hay
+ *      recuerdo, se pregunta.
+ *
+ * `servicioIa` es lo que permite distinguir «ha nombrado algo raro» de «no ha
+ * nombrado nada». Sin IA no se puede afinar tanto, y entonces se prefiere
+ * preguntar antes que reservar a ciegas.
+ */
+function decidirServicio({ idForzado = null, texto = '', servicioIa = null, servicios = [], recordado = null }) {
+  const activos = Array.isArray(servicios) ? servicios : [];
+  if (!activos.length) return { servicio: null, accion: 'usar' };   // tienda sin catálogo
+
+  if (Number.isInteger(idForzado)) {
+    const elegido = activos.find((s) => s.id === idForzado);
+    if (elegido) return { servicio: elegido, accion: 'usar' };
+  }
+
+  const enCatalogo = resolverServicio({ texto, servicioIa, servicios: activos });
+  if (enCatalogo) return { servicio: enCatalogo, accion: 'usar' };
+
+  // Nombró algo y no lo tenemos. Aquí NO se mira el recuerdo.
+  if (servicioIa) return { servicio: null, accion: 'no_tenemos', pedido: servicioIa };
+
+  // No nombró nada: vale lo que dijo hace un momento
+  if (recordado) {
+    const previo = activos.find((s) => s.id === recordado.id);
+    if (previo) return { servicio: previo, accion: 'usar' };
+  }
+  return { servicio: null, accion: 'preguntar' };
+}
+
+/**
+ * La fecha que el propio bot mencionó en un mensaje anterior.
+ *
+ * Sirve para entender «a las 17:30» a secas: el día estaba en la lista de
+ * huecos que acabábamos de enviar.
+ *
+ * CUIDADO AL TOCAR LOS TEXTOS DEL BOT. Esto lee mensajes que escribimos
+ * nosotros, así que cambiar «Huecos disponibles para X» por «Huecos para
+ * «Corte» el X» lo rompía en silencio (11-ago-2026, cazado por los pelos).
+ * Por eso la expresión es tolerante: cualquier línea que empiece por «Huecos»
+ * o «Confirmas la cita» y contenga una fecha.
+ */
+function fechaDeMensajeDelBot(texto) {
+  const m = String(texto || '').match(/(?:Huecos|Confirmas la cita)[^\n]*?(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
 module.exports = {
   PIDE_ANULAR,
   normalizar,
   servicioEnTexto,
   resolverServicio,
+  decidirServicio,
+  fechaDeMensajeDelBot,
   esComandoCancelar,
   quiereAnular,
   argumentoDeCancelar,

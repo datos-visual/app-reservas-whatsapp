@@ -71,7 +71,7 @@ const { notificarListaEspera } = require('./avisos');
 const { textos } = require('./vocabulario');
 // Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
 // para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -1755,9 +1755,24 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // servicio que la clienta ya había dicho.
     const catDisp = await catalog.listServices(storeId).catch(() => []);
     const activosDisp = (catDisp || []).filter((sv) => sv.is_active !== false);
-    const svcDisp = activosDisp.length
-      ? resolverServicio({ texto: textoOriginal || body, servicioIa, servicios: activosDisp })
-      : null;
+    const decisionDisp = decidirServicio({
+      texto: textoOriginal || body,
+      servicioIa,
+      servicios: activosDisp,
+      recordado: (await getConversationState(storeId, from))?.state?.servicioMencionado
+    });
+
+    // Si nombró algo que no hacemos, no se le enseñan horas de nada: se le
+    // dice. Enseñarle huecos de un servicio que no existe es peor que no
+    // contestar — se va convencida de que se lo vais a hacer.
+    if (decisionDisp.accion === 'no_tenemos') {
+      await sendServiceList({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: `No tenemos «${String(decisionDisp.pedido).slice(0, 40)}» en el catálogo. Esto es lo que hacemos:`
+      });
+      return;
+    }
+    const svcDisp = decisionDisp.servicio;
 
     // Se recuerda para el paso siguiente: cuando diga «a las 17:30», el flujo
     // ya sabe de qué servicio hablaba y no se lo vuelve a preguntar.
@@ -1859,7 +1874,12 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       accessToken,
       to: from,
       text:
-        `Huecos disponibles para ${iso}${franjaTxt}:\n` +
+        // El servicio va en el encabezado: así la clienta CONFIRMA de un
+        // vistazo que la hemos entendido, y si nos hemos equivocado lo dice
+        // antes de reservar en vez de descubrirlo al llegar al salón.
+        (svcDisp
+          ? `Huecos para «${svcDisp.name}» (${svcDisp.duration_minutes} min) el ${iso}${franjaTxt}:\n`
+          : `Huecos disponibles para ${iso}${franjaTxt}:\n`) +
         lines.map((l) => `- ${l}`).join('\n') +
         leyenda +
         '\n\n¿Cuál te viene bien? Dime la hora y te la reservo.'
@@ -1911,20 +1931,18 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const catalogo = await catalog.listServices(storeId).catch(() => []);
     const activos = (catalogo || []).filter((sv) => sv.is_active !== false);
     const idForzado = parseInt(servicioIdRaw, 10);
-    // Tercera vía: lo dijo hace dos mensajes («un corte para esta tarde») y
-    // ahora solo está eligiendo la hora. Volver a preguntárselo sería tratarla
-    // como si no hubiera hablado.
     const recordado = (await getConversationState(storeId, from))?.state?.servicioMencionado;
-    const svcPedido = Number.isInteger(idForzado)
-      ? activos.find((sv) => sv.id === idForzado) || null
-      : (activos.length
-          ? (resolverServicio({ texto: textoOriginal || body, servicioIa, servicios: activos })
-             || (recordado ? activos.find((sv) => sv.id === recordado.id) || null : null))
-          : null);
+    const decision = decidirServicio({
+      idForzado: Number.isInteger(idForzado) ? idForzado : null,
+      texto: textoOriginal || body,
+      servicioIa,
+      servicios: activos,
+      recordado
+    });
+    const svcPedido = decision.servicio;
 
-    if (activos.length && !svcPedido) {
-      // ¿Nombró algo que no hacemos, o no dijo nada? La respuesta cambia.
-      const pidioAlgo = !!servicioIa;
+    if (decision.accion !== 'usar') {
+      const pidioAlgo = decision.accion === 'no_tenemos';
       await setConversationState(storeId, from, {
         flow: {
           name: 'reserva',
@@ -1937,7 +1955,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       await sendServiceList({
         storeId, phoneNumberId, accessToken, to: from,
         headerText: pidioAlgo
-          ? `No tenemos «${String(servicioIa).slice(0, 40)}» en el catálogo. Esto es lo que hacemos:`
+          ? `No tenemos «${String(decision.pedido).slice(0, 40)}» en el catálogo. Esto es lo que hacemos:`
           : '¿Qué servicio quieres? Lo necesito para saber cuánto dura:'
       });
       return;
@@ -2191,10 +2209,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         for (let i = conversation.length - 1; i >= 0 && !rescuedDate; i--) {
           const m = conversation[i];
           if (!m.from_me) continue;
-          const match = String(m.content).match(
-            /(?:Huecos disponibles para|Confirmas la cita el)\s+(\d{4}-\d{2}-\d{2})/
-          );
-          if (match) rescuedDate = match[1];
+          const fecha = fechaDeMensajeDelBot(m.content);
+          if (fecha) rescuedDate = fecha;
         }
 
         if (rescuedDate) {
