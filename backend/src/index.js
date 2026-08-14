@@ -1745,6 +1745,31 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
 
     const iso = date.toISODate();
+
+    // EL SERVICIO TAMBIÉN CUENTA AQUÍ (11-ago-2026).
+    //
+    // «Quiero un corte de pelo para esta tarde» acababa en una lista de horas
+    // calculada con la duración POR DEFECTO, no con la del corte — y sin
+    // comprobar aparatos ni quién sabe hacerlo. Además, la palabra «corte» se
+    // perdía, así que al elegir la hora había que volver a preguntar el
+    // servicio que la clienta ya había dicho.
+    const catDisp = await catalog.listServices(storeId).catch(() => []);
+    const activosDisp = (catDisp || []).filter((sv) => sv.is_active !== false);
+    const svcDisp = activosDisp.length
+      ? resolverServicio({ texto: textoOriginal || body, servicioIa, servicios: activosDisp })
+      : null;
+
+    // Se recuerda para el paso siguiente: cuando diga «a las 17:30», el flujo
+    // ya sabe de qué servicio hablaba y no se lo vuelve a preguntar.
+    if (svcDisp) {
+      const expiraSvc = Date.now() + 20 * 60 * 1000;
+      const previoEstado = (await getConversationState(storeId, from))?.state || {};
+      await setConversationState(storeId, from, {
+        ...previoEstado,
+        servicioMencionado: { id: svcDisp.id, name: svcDisp.name, duration: svcDisp.duration_minutes }
+      }, expiraSvc);
+    }
+
     const businessHours = await getDayHours(storeId, iso);
 
     if (businessHours?.isClosed) {
@@ -1763,7 +1788,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // TODO: quitar fallback 08:00/17:00 cuando todas las tiendas tengan store_business_hours
     const slotOptions = {
       zone,
-      slotDurationMinutes: storeConfig?.appointment_duration_minutes ?? 30,
+      slotDurationMinutes: svcDisp?.duration_minutes ?? storeConfig?.appointment_duration_minutes ?? 30,
       openTime: businessHours?.openTime || '08:00',
       closeTime: businessHours?.closeTime || '17:00',
       // B5.1: tantas citas a la vez como personas trabajen
@@ -1778,7 +1803,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     const events = await sincronizacion.eventosDelDia(storeId, iso, zone);
     let slots = await equipo.filtrarHuecosPorEquipo(
-      storeId, iso, generate30MinSlots(iso, events, slotOptions), zone, null, null, events
+      storeId, iso, generate30MinSlots(iso, events, slotOptions), zone,
+      svcDisp?.id ?? null, null, events
     );
 
     // Franja horaria (viene del NLU: "por la tarde" → TARDE)
@@ -1885,10 +1911,15 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const catalogo = await catalog.listServices(storeId).catch(() => []);
     const activos = (catalogo || []).filter((sv) => sv.is_active !== false);
     const idForzado = parseInt(servicioIdRaw, 10);
+    // Tercera vía: lo dijo hace dos mensajes («un corte para esta tarde») y
+    // ahora solo está eligiendo la hora. Volver a preguntárselo sería tratarla
+    // como si no hubiera hablado.
+    const recordado = (await getConversationState(storeId, from))?.state?.servicioMencionado;
     const svcPedido = Number.isInteger(idForzado)
       ? activos.find((sv) => sv.id === idForzado) || null
       : (activos.length
-          ? resolverServicio({ texto: textoOriginal || body, servicioIa, servicios: activos })
+          ? (resolverServicio({ texto: textoOriginal || body, servicioIa, servicios: activos })
+             || (recordado ? activos.find((sv) => sv.id === recordado.id) || null : null))
           : null);
 
     if (activos.length && !svcPedido) {
