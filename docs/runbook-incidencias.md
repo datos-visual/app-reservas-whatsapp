@@ -5,6 +5,79 @@
 > sistema. Herramientas: logs de Render (backend), `/admin` (backoffice con
 > incidencias automáticas y actividad por tienda), Supabase SQL Editor.
 
+## 0.pre ¿Está desplegado lo que estás probando?
+
+### HAY DOS SERVICIOS EN RENDER. Son independientes.
+
+| Servicio en Render | Qué es | Quién lo usa |
+|---|---|---|
+| `app-whatsapp-backend` | **el bot** y la API | WhatsApp, el panel por debajo |
+| `app-whatsapp-frontend` | el panel y la web | el navegador |
+
+Un `git push` toca el mismo repositorio, pero **cada servicio se despliega por
+su cuenta**. Si el despliegue es manual, hay que darle a *Manual Deploy* en
+**los dos**. Desplegar el frontend tres veces no cambia ni una coma del bot.
+
+*Incidente 15-ago-2026:* tres despliegues del mismo commit en
+`app-whatsapp-frontend`, ninguno en `app-whatsapp-backend`. El bot llevaba
+día y medio contestando con código viejo mientras se buscaba el fallo en
+código ya corregido.
+
+### «npm error Invalid Version» — el despliegue falla en 1 segundo
+
+Si el build del backend muere nada más empezar con esto:
+
+```
+==> Running build command 'npm install'...
+npm error Invalid Version:
+==> Build failed 😞
+```
+
+el problema está en `backend/package-lock.json`: alguna entrada no tiene
+campo `version`. Ocurre cuando el lockfile se genera desde una instalación
+parcial (típicamente `fsevents`, que solo existe en macOS, queda escrito como
+`{"dev":true,"optional":true}` sin versión). Se arregla regenerándolo:
+
+```
+cd backend
+rm -rf node_modules package-lock.json
+npm install
+npm ci        # prueba estricta: si esto pasa, Render construye
+```
+
+*Incidente 11→15-ago-2026:* se subió un lockfile con esa entrada rota. Render
+tenía Auto-Deploy activado y lo intentó **cinco veces**; las cinco fallaron.
+Nadie miró la pestaña Deploys porque el servicio seguía marcado como `Live`
+—con la versión de cuatro días antes— y por WhatsApp todo «funcionaba». Se
+perdieron cuatro días arreglando fallos que ya estaban arreglados.
+
+**La lección:** `Live` en Render no significa «tu último código está vivo».
+Significa «hay algo vivo». Para saber el qué, `/health`.
+
+**Antes de dar por malo un arreglo, comprueba qué versión está viva.** Abre:
+
+```
+https://app-whatsapp-backend.onrender.com/health
+```
+
+Responde algo así:
+
+```json
+{ "ok": true, "commit": "4c29f42", "rama": "main", "arrancado": "2026-08-14T16:22:10.415Z" }
+```
+
+- `commit` → los 7 primeros caracteres del commit que está atendiendo los
+  mensajes **ahora mismo**. Compáralo con `git log --oneline -1`. Si no
+  coinciden, Render aún no ha terminado de desplegar: espera y repite.
+- `arrancado` → cuándo arrancó ese proceso. Si es anterior a tu `git push`,
+  estás probando código viejo.
+
+*Por qué está esto aquí (14-ago-2026):* se corrigieron dos fallos del bot, se
+subieron a las 16:15 y a las 16:26 las pruebas manuales por WhatsApp seguían
+mostrando el comportamiento antiguo. Se perdió un buen rato buscando en el
+código un error que ya estaba corregido. Desde WhatsApp no hay forma de
+adivinar qué versión te está contestando. Ahora se pregunta.
+
 ## 0. Empieza SIEMPRE por aquí: el bloque de Salud de `/admin`
 
 Antes de leer ningún log, abre `/admin` y mira el bloque de arriba. Reúne en

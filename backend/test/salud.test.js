@@ -119,3 +119,39 @@ describe('servicios que no puede hacer nadie (B5.5)', () => {
     assert.equal(check(componerSalud(sinNada), 'servicios'), undefined);
   });
 });
+
+// ---------------------------------------------------------------------
+// QUÉ VERSIÓN ESTÁ VIVA
+// ---------------------------------------------------------------------
+//
+// 14-ago-2026: dos arreglos subidos a las 16:15, pruebas manuales a las 16:26,
+// y el bot seguía comportándose como antes. Media hora buscando en el código
+// un fallo que ya estaba corregido: Render aún no había desplegado.
+//
+// No hay forma de adivinar eso desde WhatsApp. Ahora se pregunta.
+describe('/health dice qué commit está atendiendo', () => {
+  const { app } = require('../src/index');
+
+  const pedirSalud = () => new Promise((resolve, reject) => {
+    const server = app.listen(0, async () => {
+      try {
+        const r = await fetch(`http://127.0.0.1:${server.address().port}/health`);
+        resolve({ status: r.status, body: await r.json() });
+      } catch (e) { reject(e); } finally { server.close(); }
+    });
+  });
+
+  test('responde con el commit y la hora de arranque', async () => {
+    const { status, body } = await pedirSalud();
+    assert.equal(status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(typeof body.commit, 'string');
+    assert.ok(!Number.isNaN(Date.parse(body.arrancado)), 'la hora de arranque tiene que ser una fecha');
+  });
+
+  // Fuera de Render no hay variable: mejor «desconocido» que reventar la sonda
+  test('sin la variable de Render no falla', async () => {
+    const { body } = await pedirSalud();
+    assert.equal(body.commit, process.env.RENDER_GIT_COMMIT ? body.commit : 'desconocido');
+  });
+});

@@ -129,7 +129,22 @@ app.get('/', (req, res) => {
   res.status(200).send('Backend WhatsApp OK');
 });
 
+// QUÉ VERSIÓN ESTÁ VIVA AHORA MISMO.
+//
+// 14-ago-2026: se corrigieron dos fallos, se subieron, y once minutos después
+// las pruebas manuales seguían viendo el comportamiento antiguo. Se perdió un
+// buen rato buscando en el código un error que ya no estaba: lo que pasaba es
+// que Render aún no había terminado de desplegar.
+//
+// Desde aquí se ve en un segundo qué commit está atendiendo de verdad los
+// mensajes. Antes de dar por bueno o por malo un arreglo, mirar esto.
+const ARRANCADO_EN = new Date().toISOString();
 app.get('/health', async (req, res) => {
+  const version = {
+    commit: process.env.RENDER_GIT_COMMIT ? process.env.RENDER_GIT_COMMIT.slice(0, 7) : 'desconocido',
+    rama: process.env.RENDER_GIT_BRANCH || null,
+    arrancado: ARRANCADO_EN
+  };
   try {
     const dbOk = req.query.db === '1' || req.query.db === 'true';
     if (dbOk) {
@@ -137,10 +152,10 @@ app.get('/health', async (req, res) => {
       const { error } = await supabase.from('stores').select('id').limit(1);
       if (error) throw error;
     }
-    res.status(200).json({ ok: true });
+    res.status(200).json({ ok: true, ...version });
   } catch (err) {
     console.error('[Health] DB check failed', err);
-    res.status(503).json({ ok: false, error: 'DB unreachable' });
+    res.status(503).json({ ok: false, error: 'DB unreachable', ...version });
   }
 });
 

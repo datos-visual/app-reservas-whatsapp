@@ -28,12 +28,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # Sin caché a propósito: el backend no tiene package-lock.json versionado
-      # y `cache: npm` falla en seco si no lo encuentra. Un flujo de pruebas que
-      # se cae por su propia configuración es peor que uno lento.
-      - name: Instalar dependencias
+      # `npm ci` Y NO `npm install`, A PROPÓSITO (15-ago-2026).
+      #
+      # `npm install` es indulgente: si el package-lock.json está corrupto, lo
+      # arregla por su cuenta y sigue. Render ejecuta el suyo con menos suerte.
+      # El 11-ago se subió un lockfile con una entrada rota (`fsevents` sin
+      # versión) y CADA despliegue del backend falló durante CUATRO DÍAS con
+      # «npm error Invalid Version», mientras las pruebas seguían en verde
+      # porque aquí se instalaba de otra manera.
+      #
+      # `npm ci` instala EXACTAMENTE lo que dice el lockfile y revienta si no
+      # cuadra. Es decir: reproduce el build de Render. Si esto pasa, el
+      # despliegue va a construir.
+      - name: Instalar dependencias (igual que Render)
         working-directory: backend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       # `npm test` ejecuta ANTES el detector de variables inexistentes. Cazó
       # dos fallos que llevaban semanas en producción (ver eslint.config.mjs):
       # sintaxis correcta, pero la petición reventaba al llegar.
