@@ -372,6 +372,31 @@ async function serviciosSinNadie(storeId) {
     .map((s) => ({ id: s.id, name: s.name }));
 }
 
+/**
+ * Quién se quedaría SIN NINGÚN servicio marcado si se borrara este.
+ *
+ * La regla de B5.5 es «sin filas = los hace todos», y en la base de datos las
+ * filas de habilidades se borran en cascada con el servicio. Así que borrar un
+ * servicio puede convertir a una especialista en comodín: si Marta solo tenía
+ * marcado «Permanente» y se borra «Permanente», Marta pasa a poder hacerlo
+ * TODO, incluidos los tintes que nadie le ha enseñado.
+ *
+ * Nadie lo vería: no hay error, la agenda simplemente empieza a ofrecerla para
+ * cosas que no sabe hacer. Se avisa ANTES de borrar.
+ */
+async function quienSeQuedaSinNada(storeId, serviceId) {
+  const habilidades = await habilidadesPorPersona(storeId);
+  if (!habilidades.size) return [];
+
+  const soloEste = [...habilidades.entries()]
+    .filter(([, servicios]) => servicios.size === 1 && servicios.has(Number(serviceId)))
+    .map(([resourceId]) => resourceId);
+  if (!soloEste.length) return [];
+
+  const personas = await listarPersonas(storeId);
+  return personas.filter((p) => soloEste.includes(Number(p.id))).map((p) => p.name);
+}
+
 /** Guarda los servicios de una persona. Lista vacía = vuelve a hacerlos todos. */
 async function guardarHabilidades(storeId, resourceId, serviceIds) {
   const ids = [...new Set((serviceIds || []).map((n) => parseInt(n, 10)).filter(Number.isInteger))];
@@ -1087,6 +1112,7 @@ module.exports = {
   sabeHacer,
   guardarHabilidades,
   serviciosSinNadie,
+  quienSeQuedaSinNada,
   tramosActivos,
   tramosChocan,
   margenRelleno,

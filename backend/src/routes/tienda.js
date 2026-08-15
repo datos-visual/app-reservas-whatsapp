@@ -82,6 +82,39 @@ router.put('/api/services/:id', async (req, res) => {
   }
 });
 
+// Borrar un servicio. Solo si no tiene NI UNA cita: ver catalog.deleteService,
+// donde está explicado por qué borrar uno usado destroza el histórico en
+// silencio. Si la tiene, se responde 409 con el número y el panel ofrece
+// ocultarlo, que es lo que la peluquería quiere de verdad.
+router.delete('/api/services/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+
+    // ANTES de borrar: quién se quedaría sin ningún servicio marcado y, por
+    // la regla de B5.5, pasaría a hacerlos TODOS sin que nadie lo pida.
+    const comodines = await equipo.quienSeQuedaSinNada(storeId, id).catch(() => []);
+
+    const borrado = await catalog.deleteService(storeId, id);
+    if (!borrado) return res.status(404).json({ error: 'Servicio no encontrado' });
+    res.json({
+      ok: true,
+      name: borrado.name,
+      aviso: comodines.length
+        ? `${comodines.join(', ')} solo tenía${comodines.length === 1 ? '' : 'n'} marcado este servicio. ` +
+          `Al quedarse sin ninguno, el sistema ${comodines.length === 1 ? 'la' : 'las'} considera capaz de hacerlos TODOS. ` +
+          'Revisa la pestaña Equipo.'
+        : null
+    });
+  } catch (err) {
+    if (err?.code === 'EN_USO') return res.status(409).json({ error: err.message, citas: err.citas });
+    console.error('[API] Error en DELETE /api/services/:id', err);
+    res.status(500).json({ error: 'Error borrando el servicio' });
+  }
+});
+
 router.get('/api/verticals', async (req, res) => {
   res.json({ verticals: catalog.listVerticals() });
 });

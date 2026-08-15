@@ -150,6 +150,58 @@ async function updateService(storeId, serviceId, data) {
   return updated || null;
 }
 
+/**
+ * Borrar un servicio. Solo si NUNCA se ha usado.
+ *
+ * El caso real es la errata: se escribe «Permanete», se guarda, y ya no hay
+ * forma de quitarlo de la lista que ven las clientas. Para eso, borrar está
+ * bien. Para todo lo demás, NO.
+ *
+ * En la base de datos, `appointments.service_id` se pone a NULL al borrar el
+ * servicio. Es decir: nada revienta, pero las citas pasadas se quedan sin
+ * nombre y el histórico miente para siempre. Silencioso e irreversible, las
+ * dos cosas que peor se llevan en este proyecto.
+ *
+ * Así que la regla es: si tiene UNA sola cita —pasada o futura— no se borra.
+ * Se devuelve el número de citas y el panel ofrece ocultarlo, que hace lo que
+ * la peluquería quiere (que deje de verse) sin perder nada.
+ *
+ * OJO CON `resource_skills`: al borrar el servicio se borran en cascada las
+ * filas de «quién sabe hacerlo». Si alguien del equipo SOLO tenía marcado ese
+ * servicio se queda sin ninguna fila, y la regla de B5.5 dice que sin filas se
+ * hacen TODOS. Borrar un servicio puede convertir a una especialista en
+ * comodín sin avisar. Por eso se avisa (ver `equipo.quienSeQuedaSinNada`).
+ */
+async function deleteService(storeId, serviceId) {
+  const { count, error: errCount } = await supabase
+    .from('appointments')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', storeId)
+    .eq('service_id', serviceId);
+  if (errCount) throw errCount;
+
+  if (count > 0) {
+    const e = new Error(
+      `Este servicio tiene ${count} cita${count === 1 ? '' : 's'} y borrarlo dejaría el historial sin nombre. ` +
+      'Puedes ocultarlo: dejará de ofrecerse por WhatsApp y las citas antiguas se conservan.'
+    );
+    e.code = 'EN_USO';
+    e.citas = count;
+    throw e;
+  }
+
+  const { data, error } = await supabase
+    .from('services')
+    .delete()
+    .eq('store_id', storeId)
+    .eq('id', serviceId)
+    .select('id, name')
+    .maybeSingle();
+  if (error) throw error;
+  if (data) console.log('[Catalogo] Servicio borrado', { storeId, serviceId, name: data.name });
+  return data || null;
+}
+
 /** Verticales disponibles para el configurador del onboarding. */
 function listVerticals() {
   return Object.entries(VERTICAL_SEEDS).map(([code, v]) => ({
@@ -196,4 +248,4 @@ async function setVertical(storeId, verticalCode) {
   return { vertical_code: verticalCode === 'ninguno' ? null : verticalCode, sembrados };
 }
 
-module.exports = { listServices, createService, updateService, listVerticals, setVertical };
+module.exports = { listServices, createService, updateService, deleteService, listVerticals, setVertical };

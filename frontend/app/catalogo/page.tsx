@@ -112,6 +112,56 @@ export default function CatalogoPage() {
     }
   }
 
+  /**
+   * Borrar un servicio — pensado para la ERRATA recién escrita.
+   *
+   * El backend solo deja borrar los que no tienen NI UNA cita: borrar uno
+   * usado dejaría el histórico sin nombre para siempre y sin avisar. Cuando
+   * hay citas responde 409 con cuántas, y aquí se ofrece la alternativa real:
+   * ocultarlo, que es lo que la peluquería quiere (que deje de ofrecerse) sin
+   * perder nada.
+   */
+  async function borrar(servicio: Servicio) {
+    if (!confirm(`¿Borrar «${servicio.name}»? Esto no se puede deshacer.`)) return;
+    setGuardando(servicio.id);
+    setError('');
+    try {
+      const r = await apiFetch(`/api/services/${servicio.id}`, { method: 'DELETE' });
+      const body = await r.json().catch(() => null);
+
+      if (r.status === 409) {
+        const ocultar = confirm(
+          `${body?.error || 'Este servicio ya se ha usado.'}\n\n¿Quieres ocultarlo?`
+        );
+        if (ocultar) {
+          await apiFetch(`/api/services/${servicio.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_active: false })
+          });
+          setServicios((ss) => ss.map((s) => (s.id === servicio.id ? { ...s, is_active: false } : s)));
+          setAviso('Servicio oculto ✓');
+          setTimeout(() => setAviso(''), 2500);
+        }
+        return;
+      }
+      if (!r.ok) {
+        setError(body?.error || 'No se pudo borrar el servicio.');
+        return;
+      }
+
+      setServicios((ss) => ss.filter((s) => s.id !== servicio.id));
+      // Aviso de B5.5: borrar el único servicio de alguien la convierte en
+      // comodín. Se queda fijo en pantalla, no se desvanece a los 2 segundos.
+      if (body?.aviso) setError(body.aviso);
+      else {
+        setAviso('Servicio borrado ✓');
+        setTimeout(() => setAviso(''), 2000);
+      }
+    } finally {
+      setGuardando(null);
+    }
+  }
+
   async function cambiarRecurso(servicio: Servicio, aparatoId: number, marcado: boolean) {
     const actuales = servicio.recursos || [];
     const nuevos = marcado ? [...actuales, aparatoId] : actuales.filter((x) => x !== aparatoId);
@@ -284,15 +334,24 @@ export default function CatalogoPage() {
                       />
                       Visible al reservar
                     </label>
-                    {dirty && (
+                    <div className="flex items-center gap-3">
+                      {dirty && (
+                        <button
+                          onClick={() => guardar(s.id)}
+                          disabled={guardando === s.id}
+                          className="ca-btn-primary"
+                        >
+                          {guardando === s.id ? 'Guardando…' : 'Guardar cambios'}
+                        </button>
+                      )}
                       <button
-                        onClick={() => guardar(s.id)}
+                        onClick={() => borrar(s)}
                         disabled={guardando === s.id}
-                        className="ca-btn-primary"
+                        className="text-sm text-[#8a8a8a] underline underline-offset-4 hover:text-[#b00020]"
                       >
-                        {guardando === s.id ? 'Guardando…' : 'Guardar cambios'}
+                        Borrar
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               );
