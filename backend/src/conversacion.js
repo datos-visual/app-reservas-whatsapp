@@ -227,6 +227,35 @@ function soloFechaYHora(texto) {
 }
 
 /**
+ * QUÉ HA PEDIDO, con sus palabras, sin preguntarle a la IA.
+ *
+ * 15-ago-2026. Ya no se reserva nada equivocado, pero las respuestas eran
+ * malas: «una permanente para el martes a las 12h» contestaba «¿Qué servicio
+ * quieres?» —como si no hubiera dicho nada— y «quiero una permanente» a secas
+ * contestaba «no te he entendido». La clienta lo había dicho clarísimo.
+ *
+ * El problema es que para decir «no tenemos permanente» hay que saber que
+ * pidió una permanente, y eso venía de la IA, que justo antes se había
+ * inventado un «Corte». Así que se saca del texto.
+ *
+ * EL TRUCO ES EL ARTÍCULO. En castellano, «una permanente» nombra una cosa;
+ * «con Marta» o «el martes» no. Exigir un/una/unos/unas delante deja fuera los
+ * nombres de persona y los días sin necesidad de listarlos, y hace que en la
+ * duda no se diga nada (y entonces se pregunta, que es lo seguro).
+ *
+ * Se queda con dos palabras como mucho: «permanente» sí, media frase no.
+ */
+function servicioPedidoEnTexto(texto) {
+  const t = normalizar(texto).replace(/\d+/g, ' ');
+  const candidatos = [...t.matchAll(/\b(?:un|una|unos|unas)\s+([a-z]+(?:\s+[a-z]+)?)/g)];
+  for (const c of candidatos) {
+    const palabras = c[1].split(' ').filter((p) => p.length > 2 && !PALABRAS_DE_TIEMPO.has(p));
+    if (palabras.length) return palabras.join(' ');
+  }
+  return null;
+}
+
+/**
  * QUÉ HACER con el servicio: usarlo, decir que no lo hacemos, o preguntar.
  *
  * BUG 11-ago-2026, y de los que enseñan. Se añadió que el sistema RECORDARA
@@ -271,15 +300,17 @@ function decidirServicio({ idForzado = null, texto = '', servicioIa = null, serv
     const delIa = servicioEnTexto(servicioIa, activos);
     if (delIa && ecoEnElTexto(servicioIa, texto)) return { servicio: delIa, accion: 'usar' };
     // La IA acertó un servicio del catálogo que la clienta NO nombró: se lo ha
-    // sacado del contexto. No es «no lo hacemos» —existe— pero tampoco es de
-    // fiar. Se pregunta.
-    if (delIa) return { servicio: null, accion: 'preguntar' };
-    // Nombró algo que no está en el catálogo. Aquí NO se mira el recuerdo:
-    // nombrar otra cosa es cambiar de idea.
-    return { servicio: null, accion: 'no_tenemos', pedido: servicioIa };
+    // sacado del contexto. No vale, pero antes de rendirse se mira qué pidió
+    // ella de verdad.
+    if (!delIa) return { servicio: null, accion: 'no_tenemos', pedido: servicioIa };
   }
 
-  // 3. Ni una cosa ni la otra. El recuerdo SOLO vale si el mensaje es una
+  // 3. Lo que pidió con sus palabras. Si nombró algo («una permanente») y no
+  //    está en el catálogo, se le dice — sin depender de la IA para saberlo.
+  const pedido = servicioPedidoEnTexto(texto);
+  if (pedido) return { servicio: null, accion: 'no_tenemos', pedido };
+
+  // 4. Ni una cosa ni la otra. El recuerdo SOLO vale si el mensaje es una
   //    fecha y una hora y nada más («a las 17:30»): entonces está respondiendo
   //    a nuestra pregunta y sigue hablando de lo mismo.
   if (recordado && soloFechaYHora(texto)) {
@@ -333,6 +364,7 @@ module.exports = {
   resolverServicio,
   ecoEnElTexto,
   soloFechaYHora,
+  servicioPedidoEnTexto,
   preguntaPorServicios,
   decidirServicio,
   fechaDeMensajeDelBot,

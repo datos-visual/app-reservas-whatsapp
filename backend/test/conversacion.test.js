@@ -264,13 +264,15 @@ describe('la IA no puede inventar el servicio (bug 15-ago-2026)', () => {
   // cerrado. «Pues una permanente para el martes a las 12h» → el bot propuso
   // «¿Te reservo «Corte» el martes 18/08 a las 12:00?». El modelo devolvió
   // servicio:"Corte" porque lo había leído dos mensajes antes.
-  test('la IA devuelve «Corte» pero la clienta dijo «permanente» → se pregunta', () => {
+  test('la IA devuelve «Corte» pero la clienta dijo «permanente»', () => {
     const d = decidirServicio({
       texto: 'Pues una permanente para el martes a las 12h',
       servicioIa: 'Corte', servicios: CAT, recordado
     });
     assert.equal(d.servicio, null, 'jamás debe salir Corte de aquí');
-    assert.equal(d.accion, 'preguntar');
+    // Se ignora lo que dijo la IA y se cree lo que escribió ella
+    assert.equal(d.accion, 'no_tenemos');
+    assert.equal(d.pedido, 'permanente');
   });
 
   test('si la IA nombra algo que no existe, se dice que no lo hacemos', () => {
@@ -309,8 +311,8 @@ describe('la IA no puede inventar el servicio (bug 15-ago-2026)', () => {
     // Aunque la IA no diga nada, una palabra desconocida basta para preguntar
     test('«una permanente a las 12» NO hereda, aunque la IA calle', () => {
       const d = decidirServicio({ texto: 'una permanente a las 12', servicioIa: null, servicios: CAT, recordado });
-      assert.equal(d.accion, 'preguntar');
       assert.equal(d.servicio, null);
+      assert.equal(d.accion, 'no_tenemos', 'sin IA también sabe qué pidió');
     });
 
     test('soloFechaYHora distingue los dos casos', () => {
@@ -348,4 +350,56 @@ describe('«¿Hacéis permanente?» (bug 15-ago-2026)', () => {
   ]) {
     test(`«${frase}» → NO es una pregunta de catálogo`, () => assert.equal(preguntaPorServicios(frase), false));
   }
+});
+
+describe('decir QUÉ no tenemos, sin preguntarle a la IA (15-ago-2026)', () => {
+  const { servicioPedidoEnTexto, decidirServicio } = require('../src/conversacion');
+  const CAT = [{ id: 1, name: 'Corte', duration_minutes: 30 }, { id: 3, name: 'Tinte', duration_minutes: 120 }];
+
+  // Ya no reservaba nada equivocado, pero contestaba «¿Qué servicio quieres?»
+  // a quien acababa de decir exactamente qué quería.
+  test('lo saca de la frase con fecha y hora', () => {
+    assert.equal(servicioPedidoEnTexto('Pues una permanente para el martes a las 12h'), 'permanente');
+  });
+
+  test('y de la frase suelta, con erratas incluidas', () => {
+    assert.equal(servicioPedidoEnTexto('Quiero una permamente'), 'permamente');
+  });
+
+  test('aunque venga después de «una cita para»', () => {
+    assert.equal(servicioPedidoEnTexto('quiero una cita para una permanente'), 'permanente');
+  });
+
+  // EL ARTÍCULO es lo que separa «una permanente» de «el martes» o «con Marta».
+  // Sin él no se dice nada, y entonces se pregunta, que es lo seguro.
+  for (const frase of [
+    'a las 17:30',
+    'el martes por la tarde',
+    'quiero cita con Marta a las 12',
+    'quiero una cita para mañana',
+    'hola',
+    ''
+  ]) {
+    test(`«${frase}» → no se inventa ningún servicio`, () => {
+      assert.equal(servicioPedidoEnTexto(frase), null);
+    });
+  }
+
+  test('la frase entera de José Manuel: «no tenemos permanente»', () => {
+    const d = decidirServicio({
+      texto: 'Pues una permanente para el martes a las 12h',
+      servicioIa: 'Corte',                       // la IA se lo inventó del contexto
+      servicios: CAT,
+      recordado: { id: 1, name: 'Corte' }
+    });
+    assert.equal(d.accion, 'no_tenemos');
+    assert.equal(d.pedido, 'permanente');
+    assert.equal(d.servicio, null);
+  });
+
+  // Lo que no se puede romper: heredar el servicio en una respuesta de hora.
+  test('«a las 17:30» sigue heredando el Corte', () => {
+    const d = decidirServicio({ texto: 'a las 17:30', servicios: CAT, recordado: { id: 1, name: 'Corte' } });
+    assert.equal(d.servicio.id, 1);
+  });
 });

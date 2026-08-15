@@ -71,7 +71,7 @@ const { notificarListaEspera } = require('./avisos');
 const { textos } = require('./vocabulario');
 // Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
 // para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, fechaDeMensajeDelBot } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -2397,6 +2397,27 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       headerText: 'Esto es todo lo que hacemos:'
     });
     return;
+  }
+
+  // «Quiero una permanente», sin día ni hora. La IA lo clasifica como OTRO
+  // —no hay nada que reservar todavía— y acababa en «no te he entendido»
+  // cuando lo había dicho clarísimo. Si nombró algo que no está en la carta,
+  // se le dice aquí mismo.
+  try {
+    const pedido = servicioPedidoEnTexto(body);
+    if (pedido) {
+      const carta = (await catalog.listServices(storeId).catch(() => []))
+        .filter((sv) => sv.is_active !== false);
+      if (carta.length && !servicioEnTexto(pedido, carta)) {
+        await sendServiceList({
+          storeId, phoneNumberId, accessToken, to: from,
+          headerText: `No tenemos «${pedido.slice(0, 40)}» en el catálogo. Esto es lo que hacemos:`
+        });
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('[Flujo] No se pudo comprobar el servicio pedido', { storeId, err });
   }
 
   // Último recurso. Si la persona TIENE citas próximas, lo más probable es
