@@ -71,7 +71,7 @@ const { notificarListaEspera } = require('./avisos');
 const { textos } = require('./vocabulario');
 // Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
 // para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, fechaDeMensajeDelBot } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -2385,6 +2385,18 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     } catch (err) {
       console.error('[NLU] Error interpretando; fallback a mensaje estándar', { storeId, err });
     }
+  }
+
+  // «¿Hacéis permanente?» — la pregunta más natural justo después de que le
+  // digamos que algo no está en el catálogo. Contestaba «no te he entendido»
+  // (y a veces «tienes 3 citas próximas», que no venía a cuento). Va ANTES
+  // que el rescate de citas, que era justo quien se la comía.
+  if (preguntaPorServicios(body)) {
+    await sendServiceList({
+      storeId, phoneNumberId, accessToken, to: from,
+      headerText: 'Esto es todo lo que hacemos:'
+    });
+    return;
   }
 
   // Último recurso. Si la persona TIENE citas próximas, lo más probable es

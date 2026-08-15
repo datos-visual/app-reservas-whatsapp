@@ -251,3 +251,101 @@ describe('la fecha que dijo el propio bot', () => {
     assert.equal(fechaDeMensajeDelBot(null), null);
   });
 });
+
+describe('la IA no puede inventar el servicio (bug 15-ago-2026)', () => {
+  const CAT = [
+    { id: 1, name: 'Corte', duration_minutes: 30 },
+    { id: 3, name: 'Tinte', duration_minutes: 120 }
+  ];
+  const { decidirServicio, ecoEnElTexto, soloFechaYHora } = require('../src/conversacion');
+  const recordado = { id: 1, name: 'Corte' };
+
+  // EL FALLO, textual: «Hola, quiero una cita de corte de pelo para mañana» →
+  // cerrado. «Pues una permanente para el martes a las 12h» → el bot propuso
+  // «¿Te reservo «Corte» el martes 18/08 a las 12:00?». El modelo devolvió
+  // servicio:"Corte" porque lo había leído dos mensajes antes.
+  test('la IA devuelve «Corte» pero la clienta dijo «permanente» → se pregunta', () => {
+    const d = decidirServicio({
+      texto: 'Pues una permanente para el martes a las 12h',
+      servicioIa: 'Corte', servicios: CAT, recordado
+    });
+    assert.equal(d.servicio, null, 'jamás debe salir Corte de aquí');
+    assert.equal(d.accion, 'preguntar');
+  });
+
+  test('si la IA nombra algo que no existe, se dice que no lo hacemos', () => {
+    const d = decidirServicio({
+      texto: 'una permanente para el martes', servicioIa: 'permanente', servicios: CAT, recordado
+    });
+    assert.equal(d.accion, 'no_tenemos');
+  });
+
+  // Lo que NO se puede perder: la IA sigue siendo útil traduciendo.
+  test('«cortarme el pelo» → Corte sigue funcionando (cort = cort)', () => {
+    const d = decidirServicio({ texto: 'quiero cortarme el pelo el jueves', servicioIa: 'Corte', servicios: CAT });
+    assert.equal(d.servicio.id, 1);
+  });
+
+  describe('el eco: la IA traduce lo que oyó, no añade lo que no oyó', () => {
+    test('hay eco', () => {
+      assert.equal(ecoEnElTexto('Corte', 'quiero cortarme el pelo'), true);
+      assert.equal(ecoEnElTexto('Corte + lavado', 'corte + lavado el jueves'), true);
+    });
+    test('no hay eco', () => {
+      assert.equal(ecoEnElTexto('Corte', 'una permanente para el martes'), false);
+      assert.equal(ecoEnElTexto('Tinte', 'a las 17:30'), false);
+    });
+  });
+
+  describe('el recuerdo solo sobrevive a una respuesta de hora', () => {
+    test('«a las 17:30» sí hereda el servicio', () => {
+      assert.equal(decidirServicio({ texto: 'a las 17:30', servicios: CAT, recordado }).servicio.id, 1);
+    });
+
+    test('«pues para el lunes a las 10:30» también', () => {
+      assert.equal(decidirServicio({ texto: 'pues para el lunes a las 10:30', servicios: CAT, recordado }).servicio.id, 1);
+    });
+
+    // Aunque la IA no diga nada, una palabra desconocida basta para preguntar
+    test('«una permanente a las 12» NO hereda, aunque la IA calle', () => {
+      const d = decidirServicio({ texto: 'una permanente a las 12', servicioIa: null, servicios: CAT, recordado });
+      assert.equal(d.accion, 'preguntar');
+      assert.equal(d.servicio, null);
+    });
+
+    test('soloFechaYHora distingue los dos casos', () => {
+      assert.equal(soloFechaYHora('a las 17:30'), true);
+      assert.equal(soloFechaYHora('el martes por la tarde'), true);
+      assert.equal(soloFechaYHora('una permanente a las 12'), false);
+      assert.equal(soloFechaYHora('con Marta a las 12'), false);
+    });
+  });
+});
+
+describe('«¿Hacéis permanente?» (bug 15-ago-2026)', () => {
+  const { preguntaPorServicios } = require('../src/conversacion');
+
+  // Contestaba «Perdona, no te he entendido bien» y el menú de bienvenida.
+  for (const frase of [
+    '¿Hacéis permanente?',
+    'Haceis permanente',
+    '¿tenéis mechas?',
+    '¿ofrecéis tratamientos de keratina?',
+    '¿trabajáis con tinte vegetal?'
+  ]) {
+    test(`«${frase}» → enseñar el catálogo`, () => assert.equal(preguntaPorServicios(frase), true));
+  }
+
+  // Éstas preguntan por CUÁNDO, no por QUÉ. Si aquí dijéramos que sí,
+  // responderíamos con la lista de servicios a quien pide un hueco.
+  for (const frase of [
+    '¿tenéis hueco el viernes?',
+    '¿tenéis hora mañana?',
+    '¿hacéis citas los sábados?',
+    '¿tenéis algo libre esta tarde?',
+    'hola',
+    ''
+  ]) {
+    test(`«${frase}» → NO es una pregunta de catálogo`, () => assert.equal(preguntaPorServicios(frase), false));
+  }
+});

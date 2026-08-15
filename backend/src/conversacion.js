@@ -164,6 +164,69 @@ function resolverServicio({ texto, servicioIa, servicios }) {
 }
 
 /**
+ * ¿La palabra que devuelve la IA SUENA a algo que escribió la clienta?
+ *
+ * BUG 15-ago-2026. La clienta escribió «una permanente para el martes a las
+ * 12h» y el bot propuso reservar un **Corte**. El modelo, viendo que en el
+ * mensaje anterior se había hablado de un corte, «ayudó»: devolvió
+ * `servicio: "Corte"`. Como Corte SÍ está en el catálogo, el sistema se lo
+ * creyó y no había forma de detectar la invención.
+ *
+ * Es el pecado de siempre en este proyecto, otra vez: una decisión con
+ * consecuencias reales apoyada en lo que diga el modelo. La regla del proyecto
+ * es que la IA interpreta pero no decide, y aquí estaba decidiendo.
+ *
+ * Así que su respuesta tiene que tener ECO en lo que la clienta escribió: se
+ * comparan las primeras cuatro letras de cada palabra, para que «cortarme el
+ * pelo» → «Corte» siga valiendo (cort = cort) pero «permanente» → «Corte» no
+ * (perm ≠ cort). La IA puede traducir lo que oyó; no puede añadir lo que no
+ * oyó.
+ *
+ * Cuando no hay eco NO se dice «no lo hacemos» —el servicio puede existir de
+ * sobra— sino que se pregunta. Perder una pregunta es barato; reservar el
+ * servicio equivocado, no.
+ */
+function ecoEnElTexto(termino, texto) {
+  const raiz = (p) => p.slice(0, 4);
+  const enTexto = normalizar(texto).split(' ').filter((p) => p.length >= 4);
+  const delTermino = normalizar(termino).split(' ').filter((p) => p.length >= 4);
+  if (!delTermino.length || !enTexto.length) return false;
+  return delTermino.some((t) => enTexto.some((x) => raiz(x) === raiz(t)));
+}
+
+/**
+ * ¿Este mensaje es SOLO una fecha y una hora, sin nada más?
+ *
+ * Es la única situación en la que vale recordar el servicio dicho antes. Si
+ * la clienta escribe «a las 17:30» está respondiendo a nuestra pregunta y
+ * sigue hablando de lo mismo. Si escribe cualquier otra palabra, puede estar
+ * cambiando de idea —y entonces heredar el servicio anterior es justo el fallo
+ * que reservó un corte a quien pidió una permanente.
+ *
+ * La lista de abajo es DELIBERADAMENTE CORTA. Todo lo que no esté en ella
+ * cuenta como «ha dicho algo más» y provoca una pregunta. Equivocarse por este
+ * lado significa preguntar de más; por el otro, reservar lo que nadie pidió.
+ */
+const PALABRAS_DE_TIEMPO = new Set([
+  'hoy', 'manana', 'pasado', 'tarde', 'noche', 'mediodia', 'medio', 'dia',
+  'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo',
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+  'septiembre', 'octubre', 'noviembre', 'diciembre',
+  'proximo', 'proxima', 'que', 'viene', 'semana', 'finde', 'hora', 'horas',
+  'a', 'al', 'las', 'la', 'el', 'los', 'de', 'del', 'por', 'para', 'y', 'en',
+  'un', 'una', 'unos', 'unas', 'sobre', 'eso', 'esa', 'ese', 'este', 'esta',
+  'pues', 'vale', 'mejor', 'quiero', 'quisiera', 'me', 'va', 'ir', 'bien',
+  'cita', 'reserva', 'reservame', 'reservar', 'apuntame', 'ponme', 'dame',
+  'si', 'no', 'ok', 'gracias', 'porfa', 'favor', 'hola', 'h', 'am', 'pm'
+]);
+
+function soloFechaYHora(texto) {
+  const limpio = normalizar(texto).replace(/\d+/g, ' ');
+  const sueltas = limpio.split(' ').filter(Boolean);
+  return sueltas.every((p) => PALABRAS_DE_TIEMPO.has(p));
+}
+
+/**
  * QUÉ HACER con el servicio: usarlo, decir que no lo hacemos, o preguntar.
  *
  * BUG 11-ago-2026, y de los que enseñan. Se añadió que el sistema RECORDARA
@@ -198,18 +261,52 @@ function decidirServicio({ idForzado = null, texto = '', servicioIa = null, serv
     if (elegido) return { servicio: elegido, accion: 'usar' };
   }
 
-  const enCatalogo = resolverServicio({ texto, servicioIa, servicios: activos });
-  if (enCatalogo) return { servicio: enCatalogo, accion: 'usar' };
+  // 1. El nombre del servicio está LITERALMENTE en lo que escribió. Sin dudas.
+  const delTexto = servicioEnTexto(texto, activos);
+  if (delTexto) return { servicio: delTexto, accion: 'usar' };
 
-  // Nombró algo y no lo tenemos. Aquí NO se mira el recuerdo.
-  if (servicioIa) return { servicio: null, accion: 'no_tenemos', pedido: servicioIa };
+  // 2. Lo que dice la IA. Tiene que pasar dos filtros, no uno: existir en el
+  //    catálogo Y tener eco en el mensaje de la clienta (ver ecoEnElTexto).
+  if (servicioIa) {
+    const delIa = servicioEnTexto(servicioIa, activos);
+    if (delIa && ecoEnElTexto(servicioIa, texto)) return { servicio: delIa, accion: 'usar' };
+    // La IA acertó un servicio del catálogo que la clienta NO nombró: se lo ha
+    // sacado del contexto. No es «no lo hacemos» —existe— pero tampoco es de
+    // fiar. Se pregunta.
+    if (delIa) return { servicio: null, accion: 'preguntar' };
+    // Nombró algo que no está en el catálogo. Aquí NO se mira el recuerdo:
+    // nombrar otra cosa es cambiar de idea.
+    return { servicio: null, accion: 'no_tenemos', pedido: servicioIa };
+  }
 
-  // No nombró nada: vale lo que dijo hace un momento
-  if (recordado) {
+  // 3. Ni una cosa ni la otra. El recuerdo SOLO vale si el mensaje es una
+  //    fecha y una hora y nada más («a las 17:30»): entonces está respondiendo
+  //    a nuestra pregunta y sigue hablando de lo mismo.
+  if (recordado && soloFechaYHora(texto)) {
     const previo = activos.find((s) => s.id === recordado.id);
     if (previo) return { servicio: previo, accion: 'usar' };
   }
   return { servicio: null, accion: 'preguntar' };
+}
+
+/**
+ * «¿Hacéis permanente?» — preguntar QUÉ se hace, no cuándo.
+ *
+ * BUG 15-ago-2026: es la pregunta más natural del mundo justo después de que
+ * el bot diga que algo no está en el catálogo, y contestaba «Perdona, no te he
+ * entendido bien» con el menú de bienvenida. Antes incluso llegó a responder
+ * «Tienes 3 citas próximas», que no venía a cuento de nada.
+ *
+ * Se comprueba SIN IA y solo como último recurso, cuando ya se ha descartado
+ * todo lo demás. Se excluye a propósito «¿tenéis hueco el viernes?» y
+ * similares: eso pregunta por disponibilidad, no por el catálogo.
+ */
+const PREGUNTA_QUE_HACEIS = /\b(?:hac[eé]is|hacen|ten[eé]is|tienen|ofrec[eé]is|ofrecen|trabaj[aá]is)\b/i;
+const ES_DISPONIBILIDAD = /\b(?:hueco|huecos|hora|horas|cita|citas|libre|libres|disponib\w*|abierto|abren|cerr\w*)\b/i;
+
+function preguntaPorServicios(texto) {
+  const t = String(texto || '');
+  return PREGUNTA_QUE_HACEIS.test(t) && !ES_DISPONIBILIDAD.test(t);
 }
 
 /**
@@ -234,6 +331,9 @@ module.exports = {
   normalizar,
   servicioEnTexto,
   resolverServicio,
+  ecoEnElTexto,
+  soloFechaYHora,
+  preguntaPorServicios,
   decidirServicio,
   fechaDeMensajeDelBot,
   esComandoCancelar,
