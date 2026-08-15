@@ -536,19 +536,28 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
  *
  * «Me da igual» va la PRIMERA a propósito: es lo que responde la mayoría, y
  * en una lista de WhatsApp lo primero es lo que menos cuesta tocar.
+ *
+ * `prefijo` existe porque hay DOS caminos hasta aquí y no terminan igual:
+ *   · `ca:res:prof:`  — flujo de botones: falta elegir día y hora
+ *   · `ca:cita:prof:` — reserva escrita: ya hay día y hora, solo falta confirmar
+ * Una misma lista, dos continuaciones. Antes esta pregunta solo existía en el
+ * primero, así que quien pedía cita escribiendo —que es la mayoría— nunca
+ * llegaba a elegir con quién (15-ago-2026).
  */
-async function sendProfessionalList({ storeId, phoneNumberId, accessToken, to, service }) {
+async function sendProfessionalList({ storeId, phoneNumberId, accessToken, to, service, prefijo = 'ca:res:prof:' }) {
   // «Elegir profesional» en un taller suena a otra cosa: ver vocabulario.js
   const v = await textos(storeId);
   const rows = [
-    { id: 'ca:res:prof:0', title: v.meDaIgual, description: v.meDaIgualDetalle },
-    ...service.elegibles.map((p) => ({ id: `ca:res:prof:${p.id}`, title: String(p.name).slice(0, 24) }))
+    { id: `${prefijo}0`, title: v.meDaIgual, description: v.meDaIgualDetalle },
+    ...service.elegibles.map((p) => ({ id: `${prefijo}${p.id}`, title: String(p.name).slice(0, 24) }))
   ];
 
   await sendInteractiveList({
     phoneNumberId, accessToken, to,
     // «¿Con quién quieres la cita?» ya es neutral: sirve igual en cualquier sector
-    bodyText: `«${service.serviceName}» (${service.durationMinutes} min). ¿Con quién quieres la cita?`,
+    bodyText: service.cuando
+      ? `«${service.serviceName}» el ${service.cuando}. ¿Con quién quieres la cita?`
+      : `«${service.serviceName}» (${service.durationMinutes} min). ¿Con quién quieres la cita?`,
     buttonText: v.elegirProfesional,
     sections: [{ title: v.tituloSeccionProfesionales, rows: rows.slice(0, 10) }]
   });
@@ -676,6 +685,48 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       flow: { name: 'reserva', step: 'SELECT_DATE', data: service, expiresAt }
     }, expiresAt);
     await sendDateButtons({ storeId, phoneNumberId, accessToken, to: from, service });
+    return true;
+  }
+
+  // Ha elegido profesional en una reserva ESCRITA: el día y la hora ya están,
+  // así que de aquí se va directo a confirmar (a diferencia de ca:res:prof:,
+  // que todavía tiene que preguntar el día).
+  if (payload.startsWith('ca:cita:prof:')) {
+    const elegido = parseInt(payload.slice('ca:cita:prof:'.length), 10);
+    const pending = await getConversationState(storeId, from);
+    const pa = pending?.state?.pendingAppointment;
+    if (!pa) {
+      await sendWelcomeMenu({
+        storeId, phoneNumberId, accessToken, to: from,
+        headerText: 'Se me ha pasado el hilo de la conversación. Empezamos de nuevo:'
+      });
+      return true;
+    }
+
+    // 0 = «me da igual». El resto se valida contra las que le enseñamos.
+    const valida = Number.isInteger(elegido) && elegido > 0
+      ? (pa.elegibles || []).find((p) => p.id === elegido)
+      : null;
+
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, from, {
+      pendingAppointment: {
+        ...pa,
+        resourceId: valida ? valida.id : null,
+        resourceName: valida ? valida.name : null,
+        expiresAt
+      }
+    }, expiresAt);
+
+    const zonaTienda = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+    const cuando = fechaHumana(pa.startIso, zonaTienda);
+    await preguntarSiNo({
+      storeId, phoneNumberId, accessToken, to: from,
+      pregunta: valida
+        ? `¿Te reservo «${pa.serviceName}» con ${valida.name} el ${cuando}?`
+        : `¿Te reservo «${pa.serviceName}» el ${cuando}?`,
+      siTitulo: 'Sí, resérvala', noTitulo: 'No, déjalo'
+    });
     return true;
   }
 
@@ -2025,6 +2076,17 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const end = DateTime.fromISO(match.endIso, { zone });
 
     const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    // B5.3 EN LA RESERVA ESCRITA (15-ago-2026). Esta pregunta existía solo en
+    // el flujo de botones, así que quien pedía cita escribiendo —la mayoría—
+    // nunca elegía profesional aunque la tienda tuviera la función contratada.
+    // Se ofrece con las mismas dos condiciones de siempre: función activa y al
+    // menos DOS personas que sepan hacer este servicio.
+    const premiumTxt = await getPremiumFeatures(storeId);
+    const elegiblesTxt = premiumTxt?.elegir_profesional === true
+      ? await equipo.listarElegibles(storeId, svcPedido?.id ?? null)
+      : [];
+
     await setConversationState(storeId, from, {
       pendingAppointment: {
         datePart,
@@ -2034,9 +2096,32 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         serviceId: svcPedido?.id ?? null,
         serviceName: svcPedido?.name ?? null,
         durationMinutes: svcPedido?.duration_minutes ?? null,
+        // Se guardan para validar después contra ellas: el identificador que
+        // vuelve del botón lo manda el cliente y nunca se cree a ciegas.
+        elegibles: elegiblesTxt.map((p) => ({ id: p.id, name: p.name })),
         expiresAt
       }
     }, expiresAt);
+
+    if (svcPedido && elegiblesTxt.length >= 2) {
+      try {
+        await sendProfessionalList({
+          storeId, phoneNumberId, accessToken, to: from,
+          prefijo: 'ca:cita:prof:',
+          service: {
+            serviceName: svcPedido.name,
+            durationMinutes: svcPedido.duration_minutes,
+            cuando: fmtHuman(start.toISO()),
+            elegibles: elegiblesTxt.map((p) => ({ id: p.id, name: p.name }))
+          }
+        });
+        return;
+      } catch (err) {
+        // Si la lista falla, confirmar sin preguntar es mejor que dejarla
+        // colgada: pierde una opción, no la cita.
+        console.warn('[Flujo] No se pudo ofrecer profesional en reserva escrita', { storeId, err: err?.message });
+      }
+    }
 
     await preguntarSiNo({
       storeId,
