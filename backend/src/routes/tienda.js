@@ -16,7 +16,7 @@
 // que no se le haya dado.
 
 const express = require('express');
-const { DateTime } = require('luxon');
+const { DateTime, IANAZone } = require('luxon');
 const catalog = require('../catalog');
 const { requireStoreId } = require('../auth');
 const { getStoreFeatureState, setStoreFeatureActive } = require('../admin');
@@ -260,6 +260,13 @@ router.post('/api/stores', async (req, res) => {
       return res.status(400).json({ error: 'El nombre del negocio es obligatorio' });
     }
     const duration = parseInt(appointment_duration_minutes, 10);
+
+    // Una zona horaria mal escrita no da error en ninguna parte: da CITAS A
+    // OTRA HORA, todas, para siempre, y sin que nadie lo note hasta que una
+    // clienta llega con una hora de diferencia. Se rechaza al entrar.
+    if (timezone && !IANAZone.isValidZone(String(timezone))) {
+      return res.status(400).json({ error: `La zona horaria «${timezone}» no existe. Ejemplos: Europe/Madrid, Atlantic/Canary.` });
+    }
 
     const store = await createStoreWithOwner({
       userId: req.userId,

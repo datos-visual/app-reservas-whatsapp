@@ -4,7 +4,7 @@
 // en fichero aparte y sus rutas comprueban isAdmin explícitamente.
 
 const { supabase } = require('./db');
-const { DateTime } = require('luxon');
+const { DateTime, IANAZone } = require('luxon');
 const config = require('./config');
 const { olvidarTienda } = require('./cacheTienda');
 
@@ -92,6 +92,7 @@ const TITULOS_SALUD = {
   token: 'Tokens de WhatsApp',
   calendario: 'Google Calendar',
   horarios: 'Horarios',
+  zona: 'Zona horaria',
   plantillas: 'Plantillas de Meta',
   ia: 'Inteligencia artificial',
   servicios: 'Servicios sin nadie'
@@ -306,6 +307,22 @@ async function getAdminOverview() {
     } else if (diasAbiertos === 0) {
       incidencias.push({ tipo: 'horarios', nivel: 'aviso', texto: 'Todos los días marcados como cerrados' });
     }
+    // ZONA HORARIA. No falla nunca: da todas las citas a otra hora.
+    // Una peluquería en Canarias con Europe/Madrid cita a las 10:00 a quien
+    // aparecerá a las 9:00. El sistema funciona de maravilla y todo el mundo
+    // llega tarde. Por eso es error, no aviso.
+    if (!s.timezone) {
+      incidencias.push({
+        tipo: 'zona', nivel: 'error',
+        texto: 'Sin zona horaria: se usa Europe/Madrid. Si el negocio está en Canarias, TODAS las citas van una hora corridas'
+      });
+    } else if (!IANAZone.isValidZone(s.timezone)) {
+      incidencias.push({
+        tipo: 'zona', nivel: 'error',
+        texto: `Zona horaria inválida («${s.timezone}»): se usa Europe/Madrid en su lugar`
+      });
+    }
+
     if (!wa) incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'WhatsApp sin conectar' });
     else if (wa.is_active === false) incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'Cuenta WhatsApp desactivada' });
     if (wa?.token_expires_at) {

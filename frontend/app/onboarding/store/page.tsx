@@ -5,7 +5,14 @@ import { useRouter } from 'next/navigation';
 import { apiFetch } from '../../../lib/api';
 import { supabase } from '../../../lib/supabaseClient';
 
-const TIMEZONES = ['Europe/Madrid', 'Atlantic/Canary'];
+// Con la etiqueta técnica delante («Atlantic/Canary») una peluquería de Las
+// Palmas deja el valor por defecto sin pensarlo — y se pasa la vida citando a
+// sus clientas una hora antes sin que nada dé error. Primero el sitio, luego
+// el nombre técnico.
+const TIMEZONES = [
+  { value: 'Europe/Madrid', label: 'Península y Baleares (Europe/Madrid)' },
+  { value: 'Atlantic/Canary', label: 'Canarias (Atlantic/Canary)' }
+];
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
 
 export default function OnboardingStorePage() {
@@ -86,7 +93,7 @@ export default function OnboardingStorePage() {
                 value={timezone} onChange={(e) => setTimezone(e.target.value)}
                 className="ca-input"
               >
-                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+                {TIMEZONES.map((tz) => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
               </select>
             </div>
             <div>

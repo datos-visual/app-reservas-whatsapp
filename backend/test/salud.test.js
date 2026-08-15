@@ -155,3 +155,43 @@ describe('/health dice qué commit está atendiendo', () => {
     assert.equal(body.commit, process.env.RENDER_GIT_COMMIT ? body.commit : 'desconocido');
   });
 });
+
+// ---------------------------------------------------------------------
+// ZONA HORARIA — el fallo que no falla
+// ---------------------------------------------------------------------
+//
+// No da error, no aparece en ningún log y el sistema funciona de maravilla:
+// simplemente cita a las 10:00 a quien va a aparecer a las 9:00. Una
+// peluquería en Canarias con Europe/Madrid tendría TODAS las citas corridas
+// una hora, para siempre, y lo descubriría por una clienta enfadada.
+//
+// Por eso es error y no aviso.
+describe('zona horaria de la tienda', () => {
+  const conZona = (timezone) => componerSalud({
+    ...sinNada,
+    tiendas: [{
+      name: 'Peluquería Canaria',
+      incidencias: !timezone
+        ? [{ tipo: 'zona', nivel: 'error', texto: 'Sin zona horaria: se usa Europe/Madrid' }]
+        : timezone === 'Europe/Madriz'
+          ? [{ tipo: 'zona', nivel: 'error', texto: 'Zona horaria inválida («Europe/Madriz»)' }]
+          : []
+    }]
+  });
+
+  test('sin zona horaria → rojo, no ámbar', () => {
+    assert.equal(check(conZona(null), 'zona').nivel, 'error');
+  });
+
+  test('con una errata en la zona → rojo', () => {
+    assert.match(check(conZona('Europe/Madriz'), 'zona').texto || check(conZona('Europe/Madriz'), 'zona').tiendas[0].texto, /inválida/);
+  });
+
+  test('con zona válida ni aparece la línea', () => {
+    assert.equal(check(conZona('Atlantic/Canary'), 'zona'), undefined);
+  });
+
+  test('la zona rompe el semáforo general', () => {
+    assert.equal(conZona(null).nivel, 'error');
+  });
+});

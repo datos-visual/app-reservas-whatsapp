@@ -476,6 +476,16 @@ async function getDayHours(storeId, dateIso) {
     console.warn('[DB] Día sin horario configurado — se considera cerrado', { storeId, dateIso, weekday });
     return { isClosed: true, motivo: null, openTime: null, closeTime: null };
   }
+  // Fila "abierta" pero SIN HORAS. Los seis sitios que piden huecos hacen
+  // `businessHours?.openTime || '08:00'`, así que una fila a medias no da
+  // error: reparte citas de 8 de la mañana a 5 de la tarde, horario de
+  // oficina en un negocio que abre a las diez. Mejor cerrado que inventado —
+  // es la misma regla que ya se aplica cuando no hay fila (28-jul-2026).
+  if (!horario.isClosed && (!horario.openTime || !horario.closeTime)) {
+    console.warn('[DB] Día marcado abierto pero sin horas — se considera cerrado', { storeId, dateIso, weekday });
+    return { isClosed: true, motivo: null, openTime: null, closeTime: null };
+  }
+
   return {
     isClosed: !!horario.isClosed,
     motivo: null,
