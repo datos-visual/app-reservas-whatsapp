@@ -455,3 +455,42 @@ describe('«con Borja» — a quién ha pedido (bug 15-ago-2026)', () => {
     assert.equal(profesionalEnTexto('quiero un tratamiento', [{ id: 9, name: 'Ata' }]), null);
   });
 });
+
+describe('«una cita CON Laura» no pide un servicio (bug 15-ago-2026)', () => {
+  const { servicioPedidoEnTexto, decidirServicio } = require('../src/conversacion');
+  const EQUIPO = [{ id: 1, name: 'Laura' }, { id: 2, name: 'Borja' }];
+  const CAT = [{ id: 1, name: 'Corte', duration_minutes: 30 }];
+
+  // EL RIDÍCULO, textual: «Quiero una cita con Laura el miércoles a las 12:30»
+  // → «No tenemos «con» en el catálogo». Se colaba la preposición.
+  test('«con» jamás es un servicio', () => {
+    assert.equal(servicioPedidoEnTexto('Quiero una cita con Laura el miércoles a las 12:30'), null);
+  });
+
+  test('ni ninguna otra palabra de función', () => {
+    assert.equal(servicioPedidoEnTexto('quiero una cita sin prisa'), null);
+    assert.equal(servicioPedidoEnTexto('¿hay un hueco?'), null);
+    assert.equal(servicioPedidoEnTexto('quiero una cita para el lunes'), null);
+  });
+
+  // Y el nombre de una peluquera tampoco: decirle «no tenemos Laura en el
+  // catálogo» sería peor que callarse.
+  test('el nombre del equipo no se confunde con un servicio', () => {
+    assert.equal(servicioPedidoEnTexto('reservame una Laura', EQUIPO), null);
+  });
+
+  test('la frase entera no acaba en «no tenemos»', () => {
+    const d = decidirServicio({
+      texto: 'Quiero una cita con Laura el miércoles a las 12:30',
+      servicios: CAT, personas: EQUIPO
+    });
+    assert.notEqual(d.accion, 'no_tenemos', 'no puede acusar de nada a la clienta');
+    assert.equal(d.accion, 'preguntar');
+  });
+
+  // Lo que NO se puede perder por el camino
+  test('un servicio de verdad se sigue detectando', () => {
+    assert.equal(servicioPedidoEnTexto('quiero una permanente con Laura', EQUIPO), 'permanente');
+    assert.equal(servicioPedidoEnTexto('Quiero una permamente'), 'permamente');
+  });
+});

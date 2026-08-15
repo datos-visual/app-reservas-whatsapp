@@ -415,13 +415,13 @@ export default function HorariosPage() {
             {bloqueos.length > 0 && (
               <ul className="mt-4 divide-y divide-[#e5e5e5] border-y border-[#e5e5e5]">
                 {bloqueos.map((b) => (
-                  <li key={b.id} className="flex items-center justify-between py-2.5">
-                    <span className="text-sm">
-                      <strong>{fmtBloqueo(b)}</strong>
+                  <li key={b.id} className="flex items-center justify-between gap-4 py-2.5">
+                    <span className="min-w-0 text-sm">
+                      <strong className="tabular-nums">{fmtBloqueo(b)}</strong>
                       <span className="text-[#666666]">
                         {' · '}
                         {b.resource_id
-                          ? (personas.find((p) => p.id === b.resource_id)?.name || 'una persona')
+                          ? `solo ${personas.find((p) => p.id === b.resource_id)?.name || 'una persona'}`
                           : 'toda la tienda'}
                         {b.reason ? ` · ${b.reason}` : ''}
                       </span>
@@ -437,46 +437,54 @@ export default function HorariosPage() {
               </ul>
             )}
 
-            <div className="mt-4 flex flex-wrap items-end gap-3">
+            {/* Rejilla en lugar de una fila que se estira: con cinco campos
+                en línea, «Motivo» se comía el ancho y el botón acababa
+                aplastado contra el borde. Aquí cada campo tiene su sitio y
+                en móvil se apilan de dos en dos. */}
+            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
               <div>
                 <label className="mb-1 block text-xs text-[#666666]">Día</label>
                 <input
-                  type="date" className={inputCls} value={nuevoBloqueo.fecha}
+                  type="date" className="ca-input w-full" value={nuevoBloqueo.fecha}
                   onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, fecha: e.target.value })}
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs text-[#666666]">Desde</label>
-                <input
-                  type="time" className={inputCls} value={nuevoBloqueo.desde}
-                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, desde: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-[#666666]">Hasta</label>
-                <input
-                  type="time" className={inputCls} value={nuevoBloqueo.hasta}
-                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, hasta: e.target.value })}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs text-[#666666]">Desde</label>
+                  <input
+                    type="time" className="ca-input w-full" value={nuevoBloqueo.desde}
+                    onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, desde: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-[#666666]">Hasta</label>
+                  <input
+                    type="time" className="ca-input w-full" value={nuevoBloqueo.hasta}
+                    onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, hasta: e.target.value })}
+                  />
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[#666666]">¿A quién afecta?</label>
                 <select
-                  className={inputCls} value={nuevoBloqueo.quien}
+                  className="ca-input w-full" value={nuevoBloqueo.quien}
                   onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, quien: e.target.value })}
                 >
                   <option value="">Toda la tienda</option>
                   {personas.map((p) => <option key={p.id} value={p.id}>Solo {p.name}</option>)}
                 </select>
               </div>
-              <div className="grow">
+              <div>
                 <label className="mb-1 block text-xs text-[#666666]">Motivo (opcional)</label>
                 <input
-                  className={`${inputCls} w-full`} placeholder="Formación, comercial, médico…"
+                  className="ca-input w-full" placeholder="Formación, médico…"
                   value={nuevoBloqueo.motivo}
                   onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, motivo: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="mt-4 flex justify-end">
               <button onClick={crearBloqueo} disabled={guardando} className="ca-btn-primary">
                 Bloquear
               </button>

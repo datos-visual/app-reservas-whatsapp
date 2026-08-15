@@ -217,7 +217,13 @@ const PALABRAS_DE_TIEMPO = new Set([
   'un', 'una', 'unos', 'unas', 'sobre', 'eso', 'esa', 'ese', 'este', 'esta',
   'pues', 'vale', 'mejor', 'quiero', 'quisiera', 'me', 'va', 'ir', 'bien',
   'cita', 'reserva', 'reservame', 'reservar', 'apuntame', 'ponme', 'dame',
-  'si', 'no', 'ok', 'gracias', 'porfa', 'favor', 'hola', 'h', 'am', 'pm'
+  'si', 'no', 'ok', 'gracias', 'porfa', 'favor', 'hola', 'h', 'am', 'pm',
+  // Preposiciones y muletillas. «con» faltaba y provocó el ridículo de
+  // «No tenemos «con» en el catálogo» al escribir «una cita CON Laura»
+  // (15-ago-2026). Una palabra de función jamás es un servicio.
+  'con', 'sin', 'hasta', 'desde', 'entre', 'tras', 'ante', 'bajo', 'segun',
+  'como', 'cuando', 'donde', 'porque', 'pero', 'tambien', 'seria', 'puede',
+  'posible', 'disponible', 'libre', 'hueco', 'huecos', 'algo', 'nada', 'todo'
 ]);
 
 function soloFechaYHora(texto) {
@@ -245,11 +251,21 @@ function soloFechaYHora(texto) {
  *
  * Se queda con dos palabras como mucho: «permanente» sí, media frase no.
  */
-function servicioPedidoEnTexto(texto) {
+function servicioPedidoEnTexto(texto, personas = []) {
   const t = normalizar(texto).replace(/\d+/g, ' ');
+  // Nombres del equipo: «una cita con Laura» no pide un servicio llamado
+  // Laura. Decirle a la clienta «no tenemos Laura en el catálogo» sería
+  // peor que callarse.
+  const delEquipo = new Set(
+    (Array.isArray(personas) ? personas : [])
+      .map((p) => normalizar(p?.name).split(' ')[0])
+      .filter(Boolean)
+  );
+
   const candidatos = [...t.matchAll(/\b(?:un|una|unos|unas)\s+([a-z]+(?:\s+[a-z]+)?)/g)];
   for (const c of candidatos) {
-    const palabras = c[1].split(' ').filter((p) => p.length > 2 && !PALABRAS_DE_TIEMPO.has(p));
+    const palabras = c[1].split(' ')
+      .filter((p) => p.length > 2 && !PALABRAS_DE_TIEMPO.has(p) && !delEquipo.has(p));
     if (palabras.length) return palabras.join(' ');
   }
   return null;
@@ -281,7 +297,7 @@ function servicioPedidoEnTexto(texto) {
  * nombrado nada». Sin IA no se puede afinar tanto, y entonces se prefiere
  * preguntar antes que reservar a ciegas.
  */
-function decidirServicio({ idForzado = null, texto = '', servicioIa = null, servicios = [], recordado = null }) {
+function decidirServicio({ idForzado = null, texto = '', servicioIa = null, servicios = [], recordado = null, personas = [] }) {
   const activos = Array.isArray(servicios) ? servicios : [];
   if (!activos.length) return { servicio: null, accion: 'usar' };   // tienda sin catálogo
 
@@ -307,7 +323,7 @@ function decidirServicio({ idForzado = null, texto = '', servicioIa = null, serv
 
   // 3. Lo que pidió con sus palabras. Si nombró algo («una permanente») y no
   //    está en el catálogo, se le dice — sin depender de la IA para saberlo.
-  const pedido = servicioPedidoEnTexto(texto);
+  const pedido = servicioPedidoEnTexto(texto, personas);
   if (pedido) return { servicio: null, accion: 'no_tenemos', pedido };
 
   // 4. Ni una cosa ni la otra. El recuerdo SOLO vale si el mensaje es una

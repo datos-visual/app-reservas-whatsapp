@@ -1825,7 +1825,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       texto: textoOriginal || body,
       servicioIa,
       servicios: activosDisp,
-      recordado: (await getConversationState(storeId, from))?.state?.servicioMencionado
+      recordado: (await getConversationState(storeId, from))?.state?.servicioMencionado,
+      personas: await equipo.listarPersonas(storeId).catch(() => [])
     });
 
     // Si nombró algo que no hacemos, no se le enseñan horas de nada: se le
@@ -1998,12 +1999,16 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const activos = (catalogo || []).filter((sv) => sv.is_active !== false);
     const idForzado = parseInt(servicioIdRaw, 10);
     const recordado = (await getConversationState(storeId, from))?.state?.servicioMencionado;
+    // El equipo va aquí para que «una cita CON LAURA» no acabe en un absurdo
+    // «No tenemos «Laura» en el catálogo» (15-ago-2026).
+    const equipoTienda = await equipo.listarPersonas(storeId).catch(() => []);
     const decision = decidirServicio({
       idForzado: Number.isInteger(idForzado) ? idForzado : null,
       texto: textoOriginal || body,
       servicioIa,
       servicios: activos,
-      recordado
+      recordado,
+      personas: equipoTienda
     });
     const svcPedido = decision.servicio;
 
@@ -2520,7 +2525,7 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // cuando lo había dicho clarísimo. Si nombró algo que no está en la carta,
   // se le dice aquí mismo.
   try {
-    const pedido = servicioPedidoEnTexto(body);
+    const pedido = servicioPedidoEnTexto(body, await equipo.listarPersonas(storeId).catch(() => []));
     if (pedido) {
       const carta = (await catalog.listServices(storeId).catch(() => []))
         .filter((sv) => sv.is_active !== false);
