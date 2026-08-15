@@ -13,6 +13,8 @@ import { IconAviso, IconCheck } from '../../components/icons';
 
 type Dia = { weekday: number; is_closed: boolean; open_time: string | null; close_time: string | null };
 type Cierre = { id: number; start_date: string; end_date: string; reason: string | null };
+type Bloqueo = { id: number; resource_id: number | null; start_at: string; end_at: string; reason: string | null };
+type Persona = { id: number; name: string };
 
 const NOMBRES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const ORDEN = [1, 2, 3, 4, 5, 6, 0]; // lunes → domingo
@@ -25,6 +27,10 @@ export default function HorariosPage() {
   const [configurado, setConfigurado] = useState(true);
   const [cierres, setCierres] = useState<Cierre[]>([]);
   const [nuevo, setNuevo] = useState({ start_date: '', end_date: '', reason: '' });
+  // Bloqueos de horas: «el jueves de 12 a 14 no cojas nada»
+  const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [nuevoBloqueo, setNuevoBloqueo] = useState({ fecha: '', desde: '12:00', hasta: '14:00', quien: '', motivo: '' });
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -48,9 +54,11 @@ export default function HorariosPage() {
   async function cargar() {
     setCargando(true);
     try {
-      const [rh, rc] = await Promise.all([
+      const [rh, rc, rb, rp] = await Promise.all([
         apiFetch('/api/business-hours'),
-        apiFetch('/api/closures')
+        apiFetch('/api/closures'),
+        apiFetch('/api/bloqueos'),
+        apiFetch('/api/equipo')
       ]);
       if (rh.status === 403) {
         router.replace('/onboarding/store');
@@ -68,6 +76,11 @@ export default function HorariosPage() {
         }
       } else setError('No se pudo cargar el horario.');
       if (rc.ok) setCierres((await rc.json()).closures || []);
+      if (rb.ok) setBloqueos((await rb.json()).bloqueos || []);
+      if (rp.ok) {
+        const eq = await rp.json();
+        setPersonas((eq.personas || []).map((p: Persona) => ({ id: p.id, name: p.name })));
+      }
     } catch {
       setError('No se pudo conectar con el servidor.');
     } finally {
@@ -102,6 +115,70 @@ export default function HorariosPage() {
       setGuardando(false);
     }
   }
+
+  /**
+   * Bloquear unas horas. La diferencia con un cierre es que el cierre es de
+   * días enteros; esto es «el jueves de 12 a 14».
+   *
+   * Si dentro ya hay citas, NO se borran. El backend las cuenta y aquí se
+   * dice: borrar clientas apuntadas sin avisar sería el peor fallo posible
+   * de esta pantalla.
+   */
+  async function crearBloqueo() {
+    if (!nuevoBloqueo.fecha) {
+      setError('Indica el día que quieres bloquear.');
+      return;
+    }
+    setGuardando(true);
+    setError('');
+    setAviso('');
+    try {
+      const r = await apiFetch('/api/bloqueos', {
+        method: 'POST',
+        body: JSON.stringify({
+          inicio: `${nuevoBloqueo.fecha}T${nuevoBloqueo.desde}`,
+          fin: `${nuevoBloqueo.fecha}T${nuevoBloqueo.hasta}`,
+          resource_id: nuevoBloqueo.quien ? Number(nuevoBloqueo.quien) : null,
+          motivo: nuevoBloqueo.motivo || null
+        })
+      });
+      const body = await r.json().catch(() => null);
+      if (!r.ok) {
+        setError(body?.error || 'No se pudo guardar el bloqueo.');
+        return;
+      }
+      setBloqueos((bs) => [...bs, body.bloqueo].sort((a, b) => (a.start_at < b.start_at ? -1 : 1)));
+      setNuevoBloqueo({ ...nuevoBloqueo, fecha: '', motivo: '' });
+      if (body.citasDentro > 0) {
+        // Aviso fijo, no de los que se van a los 2 segundos
+        setError(
+          `Bloqueo guardado, pero OJO: ya hay ${body.citasDentro} cita${body.citasDentro === 1 ? '' : 's'} ` +
+          'reservada dentro de ese rato. No se ha tocado ninguna — míralas en la agenda y avisa a esas clientas.'
+        );
+      } else {
+        setAviso('Bloqueo guardado ✓');
+        setTimeout(() => setAviso(''), 2500);
+      }
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function borrarBloqueo(id: number) {
+    const r = await apiFetch(`/api/bloqueos/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+      setError('No se pudo quitar el bloqueo.');
+      return;
+    }
+    setBloqueos((bs) => bs.filter((b) => b.id !== id));
+  }
+
+  const fmtBloqueo = (b: Bloqueo) => {
+    const d = new Date(b.start_at);
+    const f = new Date(b.end_at);
+    const hh = (x: Date) => x.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    return `${d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit' })} · ${hh(d)}–${hh(f)}`;
+  };
 
   async function crearCierre() {
     if (!nuevo.start_date) {
@@ -322,6 +399,86 @@ export default function HorariosPage() {
                 className="ca-btn-primary"
               >
                 Añadir
+              </button>
+            </div>
+          </section>
+
+          {/* Bloqueos de horas: lo que se usa a diario, a diferencia de los
+              cierres, que son de días enteros y se ponen una vez al año. */}
+          <section className="ca-card mt-6">
+            <h2 className="text-lg font-semibold">Bloquear horas sueltas</h2>
+            <p className="mt-1 text-sm text-[#666666]">
+              Para un rato concreto: el comercial, una formación, el médico. Deja de ofrecerse
+              al instante. Para días enteros usa los cierres de arriba.
+            </p>
+
+            {bloqueos.length > 0 && (
+              <ul className="mt-4 divide-y divide-[#e5e5e5] border-y border-[#e5e5e5]">
+                {bloqueos.map((b) => (
+                  <li key={b.id} className="flex items-center justify-between py-2.5">
+                    <span className="text-sm">
+                      <strong>{fmtBloqueo(b)}</strong>
+                      <span className="text-[#666666]">
+                        {' · '}
+                        {b.resource_id
+                          ? (personas.find((p) => p.id === b.resource_id)?.name || 'una persona')
+                          : 'toda la tienda'}
+                        {b.reason ? ` · ${b.reason}` : ''}
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => borrarBloqueo(b.id)}
+                      className="text-sm text-[#8a8a8a] underline underline-offset-4 hover:text-[#b00020]"
+                    >
+                      Quitar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-[#666666]">Día</label>
+                <input
+                  type="date" className={inputCls} value={nuevoBloqueo.fecha}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, fecha: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#666666]">Desde</label>
+                <input
+                  type="time" className={inputCls} value={nuevoBloqueo.desde}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, desde: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#666666]">Hasta</label>
+                <input
+                  type="time" className={inputCls} value={nuevoBloqueo.hasta}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, hasta: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[#666666]">¿A quién afecta?</label>
+                <select
+                  className={inputCls} value={nuevoBloqueo.quien}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, quien: e.target.value })}
+                >
+                  <option value="">Toda la tienda</option>
+                  {personas.map((p) => <option key={p.id} value={p.id}>Solo {p.name}</option>)}
+                </select>
+              </div>
+              <div className="grow">
+                <label className="mb-1 block text-xs text-[#666666]">Motivo (opcional)</label>
+                <input
+                  className={`${inputCls} w-full`} placeholder="Formación, comercial, médico…"
+                  value={nuevoBloqueo.motivo}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, motivo: e.target.value })}
+                />
+              </div>
+              <button onClick={crearBloqueo} disabled={guardando} className="ca-btn-primary">
+                Bloquear
               </button>
             </div>
           </section>

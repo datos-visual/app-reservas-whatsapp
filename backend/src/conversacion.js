@@ -321,6 +321,34 @@ function decidirServicio({ idForzado = null, texto = '', servicioIa = null, serv
 }
 
 /**
+ * «con Borja» — a quién ha pedido, si es que ha pedido a alguien.
+ *
+ * BUG 15-ago-2026: «quiero una cita de tinte con Borja para el lunes a las
+ * 12h» y el bot contestaba «¿Con quién quieres la cita?». Lo acababa de decir.
+ * Es el mismo fallo de la permanente en otra puerta: el dato estaba en la
+ * frase y nadie lo leía.
+ *
+ * Se compara contra la lista REAL del equipo —nunca se adivina un nombre— y
+ * solo por el nombre de pila: en «Ana María López» basta con «Ana».
+ *
+ * ANTE LA DUDA, NO ELEGIR. Si el mensaje encaja con dos personas (dos Anas),
+ * devuelve null y se pregunta: asignar a la Ana equivocada es peor que hacer
+ * una pregunta de más. Y los nombres de menos de tres letras se ignoran,
+ * porque «Jo» o «Li» aparecen dentro de cualquier frase.
+ */
+function profesionalEnTexto(texto, personas) {
+  const t = normalizar(texto);
+  if (!t || !Array.isArray(personas) || !personas.length) return null;
+  const palabras = new Set(t.split(' ').filter(Boolean));
+
+  const encajan = personas.filter((p) => {
+    const pila = normalizar(p?.name).split(' ')[0];
+    return pila && pila.length >= 3 && palabras.has(pila);
+  });
+  return encajan.length === 1 ? encajan[0] : null;
+}
+
+/**
  * «¿Hacéis permanente?» — preguntar QUÉ se hace, no cuándo.
  *
  * BUG 15-ago-2026: es la pregunta más natural del mundo justo después de que
@@ -366,6 +394,7 @@ module.exports = {
   soloFechaYHora,
   servicioPedidoEnTexto,
   preguntaPorServicios,
+  profesionalEnTexto,
   decidirServicio,
   fechaDeMensajeDelBot,
   esComandoCancelar,

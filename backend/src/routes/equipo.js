@@ -149,6 +149,54 @@ router.delete('/api/aparatos/:id', async (req, res) => {
   }
 });
 
+// --- BLOQUEOS DE HORAS (15-ago-2026) ---
+// «El jueves de 12 a 14 no cojas nada.» Sin persona = toda la tienda.
+router.get('/api/bloqueos', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    res.json({ bloqueos: await equipo.listarBloqueosProximos(storeId) });
+  } catch (err) {
+    console.error('[API] Error en GET /api/bloqueos', err);
+    res.status(500).json({ error: 'Error listando los bloqueos' });
+  }
+});
+
+router.post('/api/bloqueos', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const zone = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
+    const { inicio, fin, resource_id, motivo } = req.body || {};
+
+    const resultado = await equipo.crearBloqueo(storeId, {
+      inicioIso: inicio, finIso: fin, resourceId: resource_id || null, motivo, zone
+    });
+    // Las citas que caen dentro NO se tocan. Se cuentan para que el panel lo
+    // diga: borrarlas en silencio sería el peor fallo posible de esta pantalla.
+    res.status(201).json(resultado);
+  } catch (err) {
+    if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
+    console.error('[API] Error en POST /api/bloqueos', err);
+    res.status(500).json({ error: 'Error guardando el bloqueo' });
+  }
+});
+
+router.delete('/api/bloqueos/:id', async (req, res) => {
+  try {
+    const storeId = requireStoreId(req, res);
+    if (!storeId) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Id inválido' });
+    const borrado = await equipo.borrarBloqueo(storeId, id);
+    if (!borrado) return res.status(404).json({ error: 'Bloqueo no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[API] Error en DELETE /api/bloqueos/:id', err);
+    res.status(500).json({ error: 'Error borrando el bloqueo' });
+  }
+});
+
 router.put('/api/services/:id/recursos', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);

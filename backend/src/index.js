@@ -71,7 +71,7 @@ const { notificarListaEspera } = require('./avisos');
 const { textos } = require('./vocabulario');
 // Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
 // para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, profesionalEnTexto, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -2087,6 +2087,26 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       ? await equipo.listarElegibles(storeId, svcPedido?.id ?? null)
       : [];
 
+    // «...con Borja...». Si ya ha dicho con quién, preguntárselo otra vez es
+    // exactamente el fallo de la permanente en otra puerta: el dato estaba en
+    // la frase y nadie lo leía (15-ago-2026).
+    const pedidaEnTexto = elegiblesTxt.length
+      ? profesionalEnTexto(textoOriginal || body, elegiblesTxt)
+      : null;
+
+    // Nombró a alguien del equipo que NO hace este servicio: no se le puede
+    // asignar, pero tampoco se calla. Se le dice y se le enseña quién sí.
+    if (!pedidaEnTexto && premiumTxt?.elegir_profesional === true && svcPedido) {
+      const todos = await equipo.listarElegibles(storeId, null);
+      const otra = profesionalEnTexto(textoOriginal || body, todos);
+      if (otra && !elegiblesTxt.some((p) => p.id === otra.id)) {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: `${otra.name} no hace «${svcPedido.name}». Te digo quién puede y lo miramos.`
+        });
+      }
+    }
+
     await setConversationState(storeId, from, {
       pendingAppointment: {
         datePart,
@@ -2096,12 +2116,23 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         serviceId: svcPedido?.id ?? null,
         serviceName: svcPedido?.name ?? null,
         durationMinutes: svcPedido?.duration_minutes ?? null,
+        resourceId: pedidaEnTexto?.id ?? null,
+        resourceName: pedidaEnTexto?.name ?? null,
         // Se guardan para validar después contra ellas: el identificador que
         // vuelve del botón lo manda el cliente y nunca se cree a ciegas.
         elegibles: elegiblesTxt.map((p) => ({ id: p.id, name: p.name })),
         expiresAt
       }
     }, expiresAt);
+
+    if (pedidaEnTexto) {
+      await preguntarSiNo({
+        storeId, phoneNumberId, accessToken, to: from,
+        pregunta: `¿Te reservo «${svcPedido.name}» con ${pedidaEnTexto.name} el ${fmtHuman(start.toISO())}?`,
+        siTitulo: 'Sí, resérvala', noTitulo: 'No, déjalo'
+      });
+      return;
+    }
 
     if (svcPedido && elegiblesTxt.length >= 2) {
       try {

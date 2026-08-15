@@ -114,7 +114,8 @@ async function migracionesPendientes() {
     ['nlu_usage', 'migration_tope_ia.sql', 'tope de IA'],
     ['system_errors', 'migration_errores_sistema.sql', 'avisos de error en el backoffice'],
     ['resource_skills', 'migration_servicios_por_profesional.sql', 'servicios por profesional'],
-    ['resource_absences', 'migration_equipo.sql', 'equipo y vacaciones']
+    ['resource_absences', 'migration_equipo.sql', 'equipo y vacaciones'],
+    ['store_blocks', 'migration_bloqueos.sql', 'bloqueos de horas']
   ];
   const faltan = [];
   for (const [tabla, fichero, para] of sondas) {

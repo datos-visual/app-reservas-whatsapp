@@ -403,3 +403,55 @@ describe('decir QUÉ no tenemos, sin preguntarle a la IA (15-ago-2026)', () => {
     assert.equal(d.servicio.id, 1);
   });
 });
+
+describe('«con Borja» — a quién ha pedido (bug 15-ago-2026)', () => {
+  const { profesionalEnTexto } = require('../src/conversacion');
+  const EQUIPO = [
+    { id: 1, name: 'Borja' },
+    { id: 2, name: 'Marta Ruiz' },
+    { id: 3, name: 'Ana María López' }
+  ];
+
+  // EL FALLO, textual: «quiero una cita de tinte con Borja para el lunes a
+  // las 12h» → «¿Con quién quieres la cita?». Lo acababa de decir.
+  test('la frase entera de José Manuel', () => {
+    const p = profesionalEnTexto('quiero una cita de tinte con Borja para el lunes a las 12h', EQUIPO);
+    assert.equal(p?.id, 1);
+  });
+
+  test('basta el nombre de pila', () => {
+    assert.equal(profesionalEnTexto('apúntame con Marta el jueves', EQUIPO)?.id, 2);
+    assert.equal(profesionalEnTexto('con ana a las 10', EQUIPO)?.id, 3);
+  });
+
+  test('sin tildes ni mayúsculas', () => {
+    assert.equal(profesionalEnTexto('CON ANA MARIA', EQUIPO)?.id, 3);
+  });
+
+  // ANTE LA DUDA, NO ELEGIR: asignar a la Ana equivocada es peor que preguntar
+  test('dos personas con el mismo nombre de pila → se pregunta', () => {
+    const dosAnas = [{ id: 3, name: 'Ana López' }, { id: 4, name: 'Ana Serrano' }];
+    assert.equal(profesionalEnTexto('quiero cita con Ana', dosAnas), null);
+  });
+
+  test('si no nombra a nadie del equipo, null', () => {
+    assert.equal(profesionalEnTexto('quiero cita para el lunes a las 12', EQUIPO), null);
+    assert.equal(profesionalEnTexto('quiero cita con quien sea', EQUIPO), null);
+  });
+
+  // Un nombre de dos letras aparece dentro de cualquier frase
+  test('los nombres muy cortos se ignoran', () => {
+    assert.equal(profesionalEnTexto('quiero un corte', [{ id: 9, name: 'Jo' }]), null);
+  });
+
+  test('sin equipo no revienta', () => {
+    assert.equal(profesionalEnTexto('con Borja', []), null);
+    assert.equal(profesionalEnTexto('con Borja', null), null);
+    assert.equal(profesionalEnTexto(null, EQUIPO), null);
+  });
+
+  // El nombre tiene que ser una PALABRA suelta, no un trozo de otra
+  test('no se cuela dentro de otra palabra', () => {
+    assert.equal(profesionalEnTexto('quiero un tratamiento', [{ id: 9, name: 'Ata' }]), null);
+  });
+});

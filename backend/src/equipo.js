@@ -149,7 +149,8 @@ async function puedeAtender(storeId, { resourceId, inicioIso, finIso, zone, serv
     citas,
     fases: await fasesPorServicio(storeId),
     margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId)
+    habilidades: await habilidadesPorPersona(storeId),
+    bloqueos: await listarBloqueos(storeId, dateIso, zone)
   };
   const { libres } = await disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache, serviceId);
   return libres.some((p) => p.id === Number(resourceId));
@@ -216,6 +217,142 @@ async function listarAusencias(storeId, dateIso) {
     .gte('end_date', dateIso);
   if (error) return [];
   return data || [];
+}
+
+// ---------------------------------------------------------------------
+// BLOQUEOS DE HORAS (15-ago-2026)
+// ---------------------------------------------------------------------
+//
+// «El jueves de 12 a 14 no cojas nada, que viene el comercial.»
+//
+// Hasta ahora solo se podían bloquear días enteros (cierres y vacaciones).
+// Para un rato había que crear el evento en Google Calendar, y con equipo eso
+// NO funciona: un evento ocupa UNA plaza, así que con tres peluqueras el hueco
+// se seguía ofreciendo dos veces más.
+//
+// `resource_id` NULL = toda la tienda. Con valor = solo esa persona.
+
+/** Bloqueos que pisan un día concreto. [] si falta la migración. */
+async function listarBloqueos(storeId, dateIso, zone) {
+  try {
+    const dia = DateTime.fromISO(dateIso, { zone });
+    const { data, error } = await supabase
+      .from('store_blocks')
+      .select('id, resource_id, start_at, end_at, reason')
+      .eq('store_id', storeId)
+      .lt('start_at', dia.plus({ days: 1 }).startOf('day').toUTC().toISO())
+      .gt('end_at', dia.startOf('day').toUTC().toISO());
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ¿Pisa este rango algún bloqueo?
+ *
+ * `personaId` null = se pregunta por la tienda entera, así que solo cuentan
+ * los bloqueos generales. Con persona, cuentan los suyos Y los generales:
+ * si la tienda está cerrada por formación, no está nadie.
+ *
+ * Función pura: recibe los bloqueos ya leídos. Así se puede probar sin base
+ * de datos, que es lo que salvó las reglas de turnos en su día.
+ */
+function bloqueado(bloqueos, inicioIso, finIso, personaId = null) {
+  if (!Array.isArray(bloqueos) || !bloqueos.length) return false;
+  const ini = DateTime.fromISO(inicioIso);
+  const fin = DateTime.fromISO(finIso);
+  return bloqueos.some((b) => {
+    const esGeneral = b.resource_id === null || b.resource_id === undefined;
+    if (!esGeneral && Number(b.resource_id) !== Number(personaId)) return false;
+    return solapa(ini, fin, DateTime.fromISO(b.start_at), DateTime.fromISO(b.end_at));
+  });
+}
+
+/**
+ * Guarda un bloqueo. Devuelve además las citas que quedan DENTRO.
+ *
+ * No se borra ninguna: bloquear unas horas donde ya hay clientas apuntadas es
+ * casi siempre un despiste, y borrarlas en silencio sería imperdonable. Se
+ * guarda el bloqueo (deja de ofrecerse ese rato a partir de ya) y se devuelven
+ * las citas afectadas para que el panel las enseñe y la peluquería decida
+ * llamar, mover o dejarlas.
+ */
+async function crearBloqueo(storeId, { inicioIso, finIso, resourceId = null, motivo = null, zone = 'Europe/Madrid' }) {
+  const ini = DateTime.fromISO(inicioIso, { zone });
+  const fin = DateTime.fromISO(finIso, { zone });
+  const err = (m) => { const e = new Error(m); e.code = 'VALIDACION'; return e; };
+
+  if (!ini.isValid || !fin.isValid) throw err('La fecha o la hora no son válidas.');
+  if (fin <= ini) throw err('La hora de fin tiene que ser posterior a la de inicio.');
+  if (fin.diff(ini, 'days').days > 31) throw err('Un bloqueo no puede durar más de 31 días. Para eso están los cierres.');
+
+  const persona = resourceId ? Number(resourceId) : null;
+  if (persona !== null) {
+    const personas = await listarPersonas(storeId, { soloActivas: false });
+    if (!personas.some((p) => Number(p.id) === persona)) throw err('Esa persona no es de esta tienda.');
+  }
+
+  const { data, error } = await supabase
+    .from('store_blocks')
+    .insert({
+      store_id: storeId,
+      resource_id: persona,
+      start_at: ini.toUTC().toISO(),
+      end_at: fin.toUTC().toISO(),
+      reason: motivo ? String(motivo).trim().slice(0, 120) : null
+    })
+    .select('*')
+    .single();
+  if (error) throw faltaMigracion(error) ? errorBloqueosSinMigrar() : error;
+
+  // Citas ya reservadas que caen dentro (no se tocan: se avisan)
+  const afectadas = (await citasDelDia(storeId, ini.toISODate(), zone)).filter((c) => {
+    if (persona !== null && Number(c.resource_id) !== persona) return false;
+    return solapa(ini, fin, DateTime.fromISO(c.start_at, { zone }), DateTime.fromISO(c.end_at, { zone }));
+  });
+
+  console.log('[Equipo] Bloqueo creado', { storeId, id: data.id, persona, afectadas: afectadas.length });
+  return { bloqueo: data, citasDentro: afectadas.length };
+}
+
+function errorBloqueosSinMigrar() {
+  const e = new Error(
+    'Falta aplicar database/migration_bloqueos.sql en la base de datos. ' +
+    'Hasta entonces no se pueden bloquear horas.'
+  );
+  e.code = 'VALIDACION';
+  return e;
+}
+
+/** Bloqueos futuros de la tienda, para la lista del panel. */
+async function listarBloqueosProximos(storeId, { limite = 50 } = {}) {
+  try {
+    const { data, error } = await supabase
+      .from('store_blocks')
+      .select('id, resource_id, start_at, end_at, reason')
+      .eq('store_id', storeId)
+      .gte('end_at', new Date().toISOString())
+      .order('start_at', { ascending: true })
+      .limit(limite);
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+async function borrarBloqueo(storeId, id) {
+  const { data, error } = await supabase
+    .from('store_blocks')
+    .delete()
+    .eq('store_id', storeId)
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
 }
 
 /** Citas confirmadas de un día con la persona asignada (para saber quién está pillada). */
@@ -574,7 +711,8 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
     citas: await citasDelDia(storeId, dateIso, zone),
     fases: await fasesPorServicio(storeId),
     margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId)
+    habilidades: await habilidadesPorPersona(storeId),
+    bloqueos: await listarBloqueos(storeId, dateIso, zone)
   };
   if (!datos.personas.length) return { total: 0, libres: [], hayEquipo: false };
 
@@ -596,6 +734,9 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
 
     // 1) ¿Está ausente ese día?
     if (datos.ausencias.some((a) => a.resource_id === p.id)) return false;
+
+    // 1.bis) ¿Hay un bloqueo de horas encima? Suyo o de toda la tienda.
+    if (bloqueado(datos.bloqueos, inicioIso, finIso, p.id)) return false;
 
     // 2) ¿Su turno cubre los tramos en los que TRABAJA?
     //
@@ -663,8 +804,21 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
   const requisitos = (usarAparatos && serviceId) ? await requisitosPorServicio(storeId) : new Map();
   const necesitaAparatos = serviceId && (requisitos.get(Number(serviceId)) || []).length > 0;
 
-  // Ni equipo ni aparatos configurados → comportamiento histórico intacto
-  if (!personas.length && !necesitaAparatos) return slots;
+  // Los bloqueos de horas se leen SIEMPRE, antes que nada.
+  //
+  // No dependen del equipo ni de los aparatos: una peluquería de una sola
+  // persona, sin nada configurado, tiene el mismo derecho a decir «el jueves
+  // de 12 a 14 no». Si esto estuviera dentro del bloque de abajo, el bloqueo
+  // se aplicaría solo a las tiendas con equipo y no daría ningún error —
+  // exactamente la clase de fallo silencioso que arrastra este proyecto.
+  const bloqueos = await listarBloqueos(storeId, dateIso, zone);
+  const sinBloqueo = (h) => !bloqueado(bloqueos, h.startIso, h.endIso, null);
+
+  // Ni equipo ni aparatos configurados → comportamiento histórico intacto,
+  // salvo los bloqueos generales, que sí se respetan.
+  if (!personas.length && !necesitaAparatos) {
+    return bloqueos.length ? slots.filter(sinBloqueo) : slots;
+  }
 
   const citas = await citasDelDia(storeId, dateIso, zone);
   const cache = {
@@ -675,7 +829,8 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
     // B5.4: fases del servicio (una peluquera queda libre mientras el tinte reposa)
     fases: await fasesPorServicio(storeId),
     margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId)
+    habilidades: await habilidadesPorPersona(storeId),
+    bloqueos: bloqueos
   };
   const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
@@ -690,6 +845,9 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
   const resultado = [];
   for (const original of slots) {
     let hueco = original;   // OJO: nunca reasignar la variable del for...of
+
+    // 0) Bloqueo general de la tienda: fuera, sin mirar nada más
+    if (!sinBloqueo(hueco)) continue;
 
     // 1) ¿Hay alguien libre? (si no hay equipo dado de alta, no se filtra)
     if (personas.length) {
@@ -1113,6 +1271,11 @@ module.exports = {
   guardarHabilidades,
   serviciosSinNadie,
   quienSeQuedaSinNada,
+  listarBloqueos,
+  crearBloqueo,
+  listarBloqueosProximos,
+  borrarBloqueo,
+  bloqueado,
   tramosActivos,
   tramosChocan,
   margenRelleno,
