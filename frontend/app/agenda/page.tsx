@@ -29,9 +29,14 @@ type Cita = {
   hueco_libre?: { desde: string; hasta: string; minutos: number } | null;
 };
 type Bloqueo = { event_id: string; titulo: string; desde: string; hasta: string };
+// OJO con los dos nombres: `bloqueos` son eventos ajenos del Google Calendar
+// de la tienda; `bloqueos_horas` son los que la peluquería pone desde
+// Horarios. Se calculan distinto y se pintan distinto.
+type BloqueoHoras = { id: number; resource_id: number | null; desde: string; hasta: string; motivo: string | null };
 type Agenda = {
   fecha: string;
   bloqueos?: Bloqueo[];
+  bloqueos_horas?: BloqueoHoras[];
   cerrado: boolean;
   motivo_cierre: string | null;
   horario: { abre: string | null; cierra: string | null } | null;
@@ -356,6 +361,7 @@ export default function AgendaPage() {
                 cierra={agenda.horario?.cierra ?? null}
                 citas={agenda.citas}
                 bloqueos={agenda.bloqueos || []}
+                bloqueosHoras={agenda.bloqueos_horas || []}
                 personas={personas}
                 onSeleccionar={(c) => setSeleccionada(c as Cita)}
               />

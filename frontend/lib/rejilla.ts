@@ -6,6 +6,8 @@
 export type Turno = { weekday: number; open_time: string; close_time: string };
 export type Ausencia = { start_date: string; end_date: string; reason?: string | null };
 export type Franja = { desde: number; hasta: number; motivo: string };
+/** Bloqueo de horas puesto desde el panel. resource_id null = toda la tienda. */
+export type Bloqueo = { desde: string; hasta: string; resource_id?: number | null; motivo?: string | null };
 
 /** "09:30" → 570 minutos desde medianoche. null si no es una hora válida. */
 export function aMinutos(hhmm?: string | null): number | null {
@@ -64,6 +66,8 @@ export function ventanaDelDia({
 export function franjasFueraDeTurno({
   turnos = [],
   ausencias = [],
+  bloqueos = [],
+  resourceId = null,
   fecha,
   diaSemana,
   inicio,
@@ -71,15 +75,34 @@ export function franjasFueraDeTurno({
 }: {
   turnos?: Turno[];
   ausencias?: Ausencia[];
+  bloqueos?: Bloqueo[];
+  resourceId?: number | null;
   fecha: string;
   diaSemana: number;
   inicio: number;
   fin: number;
 }): Franja[] {
+  // Bloqueos de horas del panel. Se calculan SIEMPRE, incluso cuando la
+  // persona libra o no tiene turnos: son independientes del horario.
+  //
+  // Un bloqueo sin `resource_id` es de toda la tienda y afecta a cualquier
+  // columna; con `resource_id` solo a la suya. Es exactamente la regla del
+  // backend (equipo.bloqueado). Si aquí pintáramos otra cosa, la agenda
+  // enseñaría horas libres que el asistente no ofrece — que es como se
+  // fabricó el fallo de los turnos de Marta.
+  const suyosBloqueos: Franja[] = bloqueos
+    .filter((b) => b.resource_id == null || Number(b.resource_id) === Number(resourceId))
+    .map((b) => ({
+      desde: Math.max(aMinutos(b.desde) ?? inicio, inicio),
+      hasta: Math.min(aMinutos(b.hasta) ?? fin, fin),
+      motivo: b.motivo ? `bloqueado · ${b.motivo}` : 'bloqueado'
+    }))
+    .filter((f) => f.hasta > f.desde);
+
   const libra = ausencias.some((a) => a.start_date <= fecha && a.end_date >= fecha);
   if (libra) return [{ desde: inicio, hasta: fin, motivo: 'libra' }];
 
-  if (!turnos.length) return [];                 // sin horario propio: atiende siempre
+  if (!turnos.length) return suyosBloqueos;      // sin horario propio: atiende siempre
   const suyos = turnos.filter((t) => t.weekday === diaSemana);
   if (!suyos.length) return [{ desde: inicio, hasta: fin, motivo: 'libra' }];
 
@@ -94,5 +117,5 @@ export function franjasFueraDeTurno({
     cursor = Math.max(cursor, b.h);
   }
   if (cursor < fin) fuera.push({ desde: cursor, hasta: fin, motivo: 'fuera de turno' });
-  return fuera;
+  return [...fuera, ...suyosBloqueos].sort((a, b) => a.desde - b.desde);
 }

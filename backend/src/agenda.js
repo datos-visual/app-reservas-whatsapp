@@ -82,7 +82,7 @@ async function agendaDelDia(storeId, dateIso) {
   //
   // La de Google va con su propio try: si falla o tarda, se pinta la agenda
   // con lo que hay en la base de datos en vez de dejar la pantalla en blanco.
-  const [eventosCalendar, citasDb, horario, fases, margen] = await Promise.all([
+  const [eventosCalendar, citasDb, horario, fases, margen, bloqueosHoras] = await Promise.all([
     (async () => {
       try {
         const vistos = await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
@@ -106,7 +106,12 @@ async function agendaDelDia(storeId, dateIso) {
     // 45 minutos libres mientras reposa el tinte de las 11:00 es lo que le
     // permite colar un corte por teléfono sin liarse.
     equipo.fasesPorServicio(storeId),
-    equipo.margenRelleno(storeId)
+    equipo.margenRelleno(storeId),
+    // Bloqueos de horas del panel. Van a la rejilla porque si no, la agenda
+    // pinta esas horas como libres mientras el asistente —correctamente— no
+    // las ofrece. La misma regla en dos sitios y actualizada en uno es como
+    // se fabricó el fallo de los turnos de Marta (6-ago-2026).
+    equipo.listarBloqueos(storeId, dia.toISODate(), zone)
   ]);
 
   const { data, error } = citasDb;
@@ -126,9 +131,27 @@ async function agendaDelDia(storeId, dateIso) {
     }))
     .sort((a, b) => (a.desde < b.desde ? -1 : 1));
 
+  // Recortados al día que se está viendo: un bloqueo puede empezar la víspera
+  const finDia = dia.plus({ days: 1 }).startOf('day');
+  const bloqueosDeHoras = (bloqueosHoras || []).map((b) => {
+    const ini = DateTime.fromISO(b.start_at, { zone });
+    const fin = DateTime.fromISO(b.end_at, { zone });
+    return {
+      id: b.id,
+      resource_id: b.resource_id ?? null,     // null = toda la tienda
+      desde: (ini < dia.startOf('day') ? dia.startOf('day') : ini).toFormat('HH:mm'),
+      hasta: (fin > finDia ? finDia.minus({ minutes: 1 }) : fin).toFormat('HH:mm'),
+      motivo: b.reason || null
+    };
+  });
+
   return {
     fecha: dia.toISODate(),
     bloqueos,
+    // OJO con los dos nombres: `bloqueos` son eventos ajenos del Google
+    // Calendar de la tienda; `bloqueos_horas` son los que la peluquería pone
+    // desde el panel. Se pintan distinto y se calculan distinto.
+    bloqueos_horas: bloqueosDeHoras,
     cerrado: !!horario.isClosed,
     motivo_cierre: horario.motivo || null,
     horario: horario.isClosed ? null : { abre: horario.openTime, cierra: horario.closeTime },

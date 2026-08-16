@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { aMinutos, aHhmm, ventanaDelDia, franjasFueraDeTurno } from '../lib/rejilla';
+import type { Bloqueo } from '../lib/rejilla';
 
 type Tramo = { desde: string; hasta: string };
 export type CitaRejilla = {
@@ -74,6 +75,7 @@ export default function RejillaAgenda({
   cierra,
   citas,
   bloqueos,
+  bloqueosHoras = [],
   personas,
   onSeleccionar
 }: {
@@ -83,6 +85,7 @@ export default function RejillaAgenda({
   citas: CitaRejilla[];
   bloqueos: BloqueoRejilla[];
   personas: PersonaRejilla[];
+  bloqueosHoras?: Bloqueo[];
   onSeleccionar?: (c: CitaRejilla) => void;
 }) {
   const confirmadas = useMemo(() => citas.filter((c) => c.status === 'confirmed'), [citas]);
@@ -163,6 +166,9 @@ export default function RejillaAgenda({
     return franjasFueraDeTurno({
       turnos: p.turnos,
       ausencias: p.ausencias,
+      // Sin esto la agenda pintaba libres las horas bloqueadas desde el panel
+      bloqueos: bloqueosHoras,
+      resourceId: p.id,
       fecha,
       diaSemana,
       inicio,
