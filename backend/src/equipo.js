@@ -128,6 +128,36 @@ async function listarElegibles(storeId, serviceId = null) {
 }
 
 /**
+ * TODO lo que hace falta para decidir quién está libre un día, en un sitio.
+ *
+ * EL FALLO QUE OBLIGÓ A ESCRIBIR ESTO (15-ago-2026). Este objeto se construía
+ * a mano en CUATRO funciones distintas. Al añadir los bloqueos de horas los
+ * puse en tres y me dejé `elegirPersonaLibre`, que es justo la que reparte la
+ * cita cuando nadie está pedido. Resultado: se comprobaba que Laura estaba
+ * bloqueada, se descartaba... y acto seguido el reparto automático se la
+ * asignaba igual. La comprobación funcionaba y el camino de al lado la anulaba.
+ *
+ * Es la tercera vez esta semana que hago media implementación. Con un solo
+ * constructor, añadir un dato nuevo es imposible que llegue a unos sitios sí
+ * y a otros no.
+ *
+ * `personas` se puede forzar (puedeAtender solo mira a una) y `citas` también
+ * (al mover una cita, ella misma no puede contar como conflicto consigo misma).
+ */
+async function cacheDelDia(storeId, dateIso, zone, { personas = null, citas = null } = {}) {
+  return {
+    personas: personas ?? await listarPersonas(storeId),
+    turnos: await listarTurnos(storeId),
+    ausencias: await listarAusencias(storeId, dateIso),
+    citas: citas ?? await citasDelDia(storeId, dateIso, zone),
+    fases: await fasesPorServicio(storeId),
+    margen: await margenRelleno(storeId),
+    habilidades: await habilidadesPorPersona(storeId),
+    bloqueos: await listarBloqueos(storeId, dateIso, zone)
+  };
+}
+
+/**
  * ¿Puede ESTA persona atender un rango concreto? Se usa para detectar citas
  * que se han quedado huérfanas (baja, vacaciones o cambio de turno) sin
  * repetir la lógica de disponibilidad, que es la parte delicada del sistema.
@@ -142,16 +172,7 @@ async function puedeAtender(storeId, { resourceId, inicioIso, finIso, zone, serv
   const citas = (await citasDelDia(storeId, dateIso, zone))
     .filter((c) => c.id !== excluirCitaId);
 
-  const cache = {
-    personas: [persona],
-    turnos: await listarTurnos(storeId),
-    ausencias: await listarAusencias(storeId, dateIso),
-    citas,
-    fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId),
-    bloqueos: await listarBloqueos(storeId, dateIso, zone)
-  };
+  const cache = await cacheDelDia(storeId, dateIso, zone, { personas: [persona], citas });
   const { libres } = await disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache, serviceId);
   return libres.some((p) => p.id === Number(resourceId));
 }
@@ -704,16 +725,7 @@ async function disponibilidadEnRango(storeId, inicioIso, finIso, zone, cache = n
   const dt = DateTime.fromISO(inicioIso, { zone });
   const dateIso = dt.toISODate();
 
-  const datos = cache || {
-    personas: await listarPersonas(storeId),
-    turnos: await listarTurnos(storeId),
-    ausencias: await listarAusencias(storeId, dateIso),
-    citas: await citasDelDia(storeId, dateIso, zone),
-    fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId),
-    bloqueos: await listarBloqueos(storeId, dateIso, zone)
-  };
+  const datos = cache || await cacheDelDia(storeId, dateIso, zone);
   if (!datos.personas.length) return { total: 0, libres: [], hayEquipo: false };
 
   const finDt = DateTime.fromISO(finIso, { zone });
@@ -821,17 +833,7 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
   }
 
   const citas = await citasDelDia(storeId, dateIso, zone);
-  const cache = {
-    personas,
-    turnos: await listarTurnos(storeId),
-    ausencias: await listarAusencias(storeId, dateIso),
-    citas,
-    // B5.4: fases del servicio (una peluquera queda libre mientras el tinte reposa)
-    fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId),
-    bloqueos: bloqueos
-  };
+  const cache = await cacheDelDia(storeId, dateIso, zone, { personas, citas });
   const aparatosPorId = new Map((await listarAparatos(storeId, { soloActivos: false })).map((a) => [a.id, a]));
 
   // Rangos ocupados por eventos ajenos (ver comentario de la firma)
@@ -899,15 +901,7 @@ async function elegirPersonaLibre(storeId, inicioIso, finIso, zone, serviceId = 
   const { usarEquipo } = await ajustesTienda(storeId);
   if (!usarEquipo) return null;              // sin gestión por profesional
   const dateIso = DateTime.fromISO(inicioIso, { zone }).toISODate();
-  const cache = {
-    personas: await listarPersonas(storeId),
-    turnos: await listarTurnos(storeId),
-    ausencias: await listarAusencias(storeId, dateIso),
-    citas: await citasDelDia(storeId, dateIso, zone),
-    fases: await fasesPorServicio(storeId),
-    margen: await margenRelleno(storeId),
-    habilidades: await habilidadesPorPersona(storeId)
-  };
+  const cache = await cacheDelDia(storeId, dateIso, zone);
   const { libres, hayEquipo } = await disponibilidadEnRango(
     storeId, inicioIso, finIso, zone, cache, serviceId
   );
@@ -1271,6 +1265,7 @@ module.exports = {
   guardarHabilidades,
   serviciosSinNadie,
   quienSeQuedaSinNada,
+  cacheDelDia,
   listarBloqueos,
   crearBloqueo,
   listarBloqueosProximos,

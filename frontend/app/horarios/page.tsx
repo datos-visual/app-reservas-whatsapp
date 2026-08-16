@@ -437,35 +437,33 @@ export default function HorariosPage() {
               </ul>
             )}
 
-            {/* Rejilla en lugar de una fila que se estira: con cinco campos
-                en línea, «Motivo» se comía el ancho y el botón acababa
-                aplastado contra el borde. Aquí cada campo tiene su sitio y
-                en móvil se apilan de dos en dos. */}
-            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-              <div>
+            {/* Anchos FIJOS por campo. Con anchos elásticos, en una pantalla
+                de 1300 px la fecha y el motivo se estiraban hasta ocupar media
+                pantalla y el conjunto parecía descuadrado. Una fecha ocupa lo
+                que ocupa una fecha. */}
+            <div className="mt-5 flex flex-wrap items-end gap-x-3 gap-y-4">
+              <div className="w-40">
                 <label className="mb-1 block text-xs text-[#666666]">Día</label>
                 <input
                   type="date" className="ca-input w-full" value={nuevoBloqueo.fecha}
                   onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, fecha: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block text-xs text-[#666666]">Desde</label>
-                  <input
-                    type="time" className="ca-input w-full" value={nuevoBloqueo.desde}
-                    onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, desde: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-[#666666]">Hasta</label>
-                  <input
-                    type="time" className="ca-input w-full" value={nuevoBloqueo.hasta}
-                    onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, hasta: e.target.value })}
-                  />
-                </div>
+              <div className="w-28">
+                <label className="mb-1 block text-xs text-[#666666]">Desde</label>
+                <input
+                  type="time" className="ca-input w-full" value={nuevoBloqueo.desde}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, desde: e.target.value })}
+                />
               </div>
-              <div>
+              <div className="w-28">
+                <label className="mb-1 block text-xs text-[#666666]">Hasta</label>
+                <input
+                  type="time" className="ca-input w-full" value={nuevoBloqueo.hasta}
+                  onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, hasta: e.target.value })}
+                />
+              </div>
+              <div className="w-44">
                 <label className="mb-1 block text-xs text-[#666666]">¿A quién afecta?</label>
                 <select
                   className="ca-input w-full" value={nuevoBloqueo.quien}
@@ -475,7 +473,7 @@ export default function HorariosPage() {
                   {personas.map((p) => <option key={p.id} value={p.id}>Solo {p.name}</option>)}
                 </select>
               </div>
-              <div>
+              <div className="w-56">
                 <label className="mb-1 block text-xs text-[#666666]">Motivo (opcional)</label>
                 <input
                   className="ca-input w-full" placeholder="Formación, médico…"
@@ -483,8 +481,6 @@ export default function HorariosPage() {
                   onChange={(e) => setNuevoBloqueo({ ...nuevoBloqueo, motivo: e.target.value })}
                 />
               </div>
-            </div>
-            <div className="mt-4 flex justify-end">
               <button onClick={crearBloqueo} disabled={guardando} className="ca-btn-primary">
                 Bloquear
               </button>

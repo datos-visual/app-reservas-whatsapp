@@ -75,3 +75,41 @@ describe('tolerancia', () => {
     assert.equal(bloqueado(undefined, '2026-08-20T10:30:00.000Z', '2026-08-20T11:00:00.000Z'), false);
   });
 });
+
+// ---------------------------------------------------------------------
+// UN SOLO CONSTRUCTOR DE CACHÉ
+// ---------------------------------------------------------------------
+//
+// EL FALLO (15-ago-2026): el objeto con «todo lo que hace falta para saber
+// quién está libre» se construía a mano en CUATRO funciones. Al añadir los
+// bloqueos los puse en tres y me dejé `elegirPersonaLibre` — justo la que
+// reparte la cita cuando la clienta no pide a nadie.
+//
+// Resultado: se comprobaba que Laura estaba bloqueada, se descartaba, y el
+// reparto automático se la asignaba igual. La comprobación funcionaba y el
+// camino de al lado la anulaba. Ningún error, ningún log.
+//
+// Esta prueba lee el CÓDIGO FUENTE. Es fea, y a propósito: no hay forma de
+// pillar «se te ha olvidado un sitio» ejecutando una función. Si mañana
+// alguien vuelve a escribir el objeto a mano, esto se pone rojo.
+describe('nadie construye la caché por su cuenta', () => {
+  const fs = require('node:fs');
+  const fuente = fs.readFileSync(require.resolve('../src/equipo.js'), 'utf8');
+
+  test('solo hay un sitio que lea las habilidades para la caché', () => {
+    const veces = (fuente.match(/habilidades: await habilidadesPorPersona\(storeId\)/g) || []).length;
+    assert.equal(veces, 1, 'hay una caché construida a mano: úsala desde cacheDelDia()');
+  });
+
+  test('cacheDelDia trae los bloqueos', () => {
+    const cuerpo = fuente.slice(fuente.indexOf('async function cacheDelDia'), fuente.indexOf('async function puedeAtender'));
+    for (const campo of ['personas', 'turnos', 'ausencias', 'citas', 'fases', 'margen', 'habilidades', 'bloqueos']) {
+      assert.match(cuerpo, new RegExp(`\\b${campo}:`), `falta ${campo} en cacheDelDia`);
+    }
+  });
+
+  test('quien reparte la cita usa la misma caché que quien comprueba', () => {
+    const reparto = fuente.slice(fuente.indexOf('async function elegirPersonaLibre'));
+    assert.match(reparto.slice(0, 900), /cacheDelDia\(/, 'elegirPersonaLibre volvería a saltarse los bloqueos');
+  });
+});
