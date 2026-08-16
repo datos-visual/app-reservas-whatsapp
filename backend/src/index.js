@@ -619,6 +619,8 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
       return handleIncomingText({
         storeId, phoneNumberId, accessToken, from,
         body: `CITA ${previo.data.fechaPedida} ${previo.data.horaPedida} ${svc.id}`,
+        // Sin esto se perdía el «con Laura» que ya había dicho
+        textoOriginal: previo.data.textoPedido || null,
         nluAttempted: true
       }).then(() => true);
     }
@@ -2052,8 +2054,15 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         flow: {
           name: 'reserva',
           step: 'SELECT_SERVICE',
-          // La fecha y la hora NO se pierden: se retoman al elegir servicio
-          data: { fechaPedida: datePart, horaPedida: normalizedTime },
+          // La fecha y la hora NO se pierden: se retoman al elegir servicio.
+          // Y la FRASE ENTERA tampoco: si dijo «con Laura», al volver de la
+          // lista de servicios el sistema tiene que seguir sabiéndolo en vez
+          // de preguntarle otra vez con quién quiere la cita (16-ago-2026).
+          data: {
+            fechaPedida: datePart,
+            horaPedida: normalizedTime,
+            textoPedido: textoOriginal || body
+          },
           expiresAt: Date.now() + 10 * 60 * 1000
         }
       }, Date.now() + 10 * 60 * 1000);
