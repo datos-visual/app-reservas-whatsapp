@@ -547,6 +547,27 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
  * primero, así que quien pedía cita escribiendo —que es la mayoría— nunca
  * llegaba a elegir con quién (15-ago-2026).
  */
+/**
+ * «Fulanita no tiene libre ese día a esa hora.» UNA sola vez, en un sitio.
+ *
+ * Hay TRES puertas que llegan aquí: la reserva escrita nombrando a alguien
+ * («cita con Borja el miércoles»), el botón de elegir profesional, y la
+ * comprobación final al confirmar. Cada una tenía —o le faltaba— su propio
+ * mensaje, y el de la última decía «acaba de quedarse sin ese hueco», que
+ * suena a que se lo han quitado hace un segundo. A Borja no se lo quitó
+ * nadie: estaba bloqueado desde el principio (16-ago-2026).
+ *
+ * No sabemos —ni importa— si la razón es un bloqueo, un turno o una cita que
+ * ya tenía. Lo honesto es decir que no puede y ofrecer salida.
+ */
+async function avisarNoPuede({ storeId, phoneNumberId, accessToken, to, nombre, cuando }) {
+  const quien = nombre || (await textos(storeId)).esaProfesional;
+  await sendAndLog({
+    storeId, phoneNumberId, accessToken, to,
+    text: `${quien} no tiene libre el ${cuando}. Dime otra hora y miro cuándo puede, o te lo reservo con quien esté libre.`
+  });
+}
+
 async function sendProfessionalList({ storeId, phoneNumberId, accessToken, to, service, prefijo = 'ca:res:prof:' }) {
   // «Elegir profesional» en un taller suena a otra cosa: ver vocabulario.js
   const v = await textos(storeId);
@@ -738,10 +759,7 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
         serviceId: pa.serviceId ?? null
       }).catch(() => true);   // ante un fallo de lectura, seguir como antes
       if (!puede) {
-        await sendAndLog({
-          storeId, phoneNumberId, accessToken, to: from,
-          text: `${valida.name} no tiene libre el ${cuando}. Dime otra hora y miro cuándo puede, o te lo reservo con quien esté libre.`
-        });
+        await avisarNoPuede({ storeId, phoneNumberId, accessToken, to: from, nombre: valida.name, cuando });
         return true;
       }
     }
@@ -1632,15 +1650,17 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
 
     if (!match) {
       await deleteConversationState(storeId, from);
-      await sendAndLog({
-        storeId,
-        phoneNumberId,
-        accessToken,
-        to: from,
-        text: current.resourceId && !pedida
-          ? `Vaya, ${current.resourceName || (await textos(storeId)).esaProfesional} acaba de quedarse sin ese hueco. Dime otra hora y miro cuándo puede.`
-          : 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
-      });
+      if (current.resourceId && !pedida) {
+        await avisarNoPuede({
+          storeId, phoneNumberId, accessToken, to: from,
+          nombre: current.resourceName, cuando: fmtHuman(startIso)
+        });
+      } else {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: 'Vaya, ese hueco acaba de ocuparlo otra persona. Dime otra hora y miro si está libre.'
+        });
+      }
       return;
     }
 
@@ -2038,6 +2058,9 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // El equipo va aquí para que «una cita CON LAURA» no acabe en un absurdo
     // «No tenemos «Laura» en el catálogo» (15-ago-2026).
     const equipoTienda = await equipo.listarPersonas(storeId).catch(() => []);
+    // ¿Ha nombrado a alguien? Se resuelve ANTES de nada: puede ahorrarle a la
+    // clienta toda la conversación del servicio (ver más abajo).
+    const nombradaEnTexto = profesionalEnTexto(textoOriginal || body, equipoTienda);
     const decision = decidirServicio({
       idForzado: Number.isInteger(idForzado) ? idForzado : null,
       texto: textoOriginal || body,
@@ -2049,6 +2072,35 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const svcPedido = decision.servicio;
 
     if (decision.accion !== 'usar') {
+      // NO PREGUNTAR EL SERVICIO SI YA SABEMOS QUE ESA PERSONA NO PUEDE.
+      //
+      // «Cita con Borja el miércoles a las 13:00» → el bot pedía el servicio,
+      // la clienta elegía Tinte, y SOLO ENTONCES le decía que Borja no estaba
+      // libre. Tres mensajes para llegar a un no que se sabía desde el primero
+      // (16-ago-2026).
+      //
+      // Se comprueba con el servicio MÁS CORTO del catálogo: si ni siquiera
+      // para ese hay hueco, no lo hay para ninguno y la respuesta no depende
+      // de lo que conteste. Si para el corto sí cabe y para el largo no, ahí
+      // el servicio SÍ importa y se pregunta como siempre.
+      if (nombradaEnTexto && activos.length) {
+        const masCorto = Math.min(...activos.map((sv) => sv.duration_minutes || 30));
+        const puedeElMasCorto = await equipo.puedeAtender(storeId, {
+          resourceId: nombradaEnTexto.id,
+          inicioIso: dateTime.toISO(),
+          finIso: dateTime.plus({ minutes: masCorto }).toISO(),
+          zone,
+          serviceId: null
+        }).catch(() => true);
+        if (!puedeElMasCorto) {
+          await avisarNoPuede({
+            storeId, phoneNumberId, accessToken, to: from,
+            nombre: nombradaEnTexto.name, cuando: fmtHuman(dateTime.toISO())
+          });
+          return;
+        }
+      }
+
       const pidioAlgo = decision.accion === 'no_tenemos';
       await setConversationState(storeId, from, {
         flow: {
@@ -2138,8 +2190,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // «...con Borja...». Si ya ha dicho con quién, preguntárselo otra vez es
     // exactamente el fallo de la permanente en otra puerta: el dato estaba en
     // la frase y nadie lo leía (15-ago-2026).
-    const pedidaEnTexto = elegiblesTxt.length
-      ? profesionalEnTexto(textoOriginal || body, elegiblesTxt)
+    const pedidaEnTexto = elegiblesTxt.length && nombradaEnTexto
+      ? elegiblesTxt.find((p) => p.id === nombradaEnTexto.id) || null
       : null;
 
     // Nombró a alguien del equipo que NO hace este servicio: no se le puede
@@ -2174,6 +2226,24 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }, expiresAt);
 
     if (pedidaEnTexto) {
+      // COMPROBAR ANTES DE PREGUNTAR — esto faltaba y era la tercera puerta.
+      // Lo puse en el botón de elegir profesional y me dejé esta, así que
+      // «cita con Borja el miércoles» preguntaba «¿te la reservo con Borja?»
+      // y solo al decir que sí contestaba que no podía (16-ago-2026).
+      const puedeEnTexto = await equipo.puedeAtender(storeId, {
+        resourceId: pedidaEnTexto.id,
+        inicioIso: start.toISO(),
+        finIso: end.toISO(),
+        zone,
+        serviceId: svcPedido.id
+      }).catch(() => true);
+      if (!puedeEnTexto) {
+        await avisarNoPuede({
+          storeId, phoneNumberId, accessToken, to: from,
+          nombre: pedidaEnTexto.name, cuando: fmtHuman(start.toISO())
+        });
+        return;
+      }
       await preguntarSiNo({
         storeId, phoneNumberId, accessToken, to: from,
         pregunta: `¿Te reservo «${svcPedido.name}» con ${pedidaEnTexto.name} el ${fmtHuman(start.toISO())}?`,
