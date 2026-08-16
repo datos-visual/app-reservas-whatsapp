@@ -56,7 +56,23 @@ export default [
       }
     },
     rules: {
-      'no-undef': 'error'
+      'no-undef': 'error',
+      // USAR UNA VARIABLE ANTES DE DECLARARLA — la segunda bomba.
+      //
+      // 16-ago-2026: `pedida` se usaba en el mensaje de «ese hueco ya no está
+      // libre» quince líneas ANTES de su `const`. En JavaScript eso no es
+      // `undefined`: es un ReferenceError que mata la petición.
+      //
+      // `no-undef` no lo ve —la variable existe, solo que todavía no— y
+      // `node --check` tampoco, porque la sintaxis es impecable. Y la rama
+      // afectada solo se ejecutaba cuando el hueco estaba OCUPADO O BLOQUEADO,
+      // es decir, justo cuando la comprobación de seguridad hacía su trabajo:
+      // con el hueco libre no fallaba nunca. La clienta pulsaba «Sí,
+      // resérvala» y no recibía absolutamente nada.
+      //
+      // `functions: false` porque las declaraciones `function` sí se elevan y
+      // llamarlas antes es normal y correcto en este código.
+      'no-use-before-define': ['error', { functions: false, classes: true, variables: true }]
     }
   }
 ];

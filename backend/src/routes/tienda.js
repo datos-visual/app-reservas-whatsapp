@@ -20,6 +20,16 @@ const { DateTime, IANAZone } = require('luxon');
 const catalog = require('../catalog');
 const { requireStoreId } = require('../auth');
 const { getStoreFeatureState, setStoreFeatureActive } = require('../admin');
+const {
+  createStoreWithOwner,
+  getStoreOverview,
+  upsertCalendarConnection,
+  upsertWhatsappAccount,
+  testCalendarConnection,
+  testWhatsappConnection,
+  listExpiringTokens,
+  tokenExpiryWarning
+} = require('../onboarding');
 const equipo = require('../equipo');
 const sincronizacion = require('../sincronizacion');
 const {
@@ -227,16 +237,6 @@ router.get('/api/messages', async (req, res) => {
 // ============================================================
 // Paso 5 — Onboarding autoservicio
 // ============================================================
-const {
-  createStoreWithOwner,
-  getStoreOverview,
-  upsertCalendarConnection,
-  upsertWhatsappAccount,
-  testCalendarConnection,
-  testWhatsappConnection,
-  listExpiringTokens,
-  tokenExpiryWarning
-} = require('../onboarding');
 const { getStoreUserByUserId } = require('../auth');
 const {
   getMissedCallOverview,

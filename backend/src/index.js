@@ -71,6 +71,9 @@ const { notificarListaEspera } = require('./avisos');
 const { textos } = require('./vocabulario');
 // Decisiones puras del flujo (interpretar botones, detectar «anúlala»…), fuera
 // para poder probarlas: las tres han causado un fallo real. Ver conversacion.js.
+// El catálogo se usa desde el flujo de WhatsApp, MUY arriba: su require vive
+// aquí y no a mitad del fichero (16-ago-2026, «no-use-before-define»).
+const catalog = require('./catalog');
 const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, profesionalEnTexto, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
@@ -720,6 +723,27 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
 
     const zonaTienda = (await getStoreConfig(storeId))?.timezone || 'Europe/Madrid';
     const cuando = fechaHumana(pa.startIso, zonaTienda);
+
+    // COMPROBAR ANTES DE PREGUNTAR. Si esa persona no puede a esa hora —está
+    // ocupada, libra o hay un bloqueo— preguntar «¿te la reservo con Laura?»
+    // para negarlo un segundo después es tomarle el pelo a la clienta.
+    if (valida) {
+      const puede = await equipo.puedeAtender(storeId, {
+        resourceId: valida.id,
+        inicioIso: pa.startIso,
+        finIso: pa.endIso,
+        zone: zonaTienda,
+        serviceId: pa.serviceId ?? null
+      }).catch(() => true);   // ante un fallo de lectura, seguir como antes
+      if (!puede) {
+        await sendAndLog({
+          storeId, phoneNumberId, accessToken, to: from,
+          text: `${valida.name} no tiene libre el ${cuando}. Dime otra hora y miro cuándo puede, o te lo reservo con quien esté libre.`
+        });
+        return true;
+      }
+    }
+
     await preguntarSiNo({
       storeId, phoneNumberId, accessToken, to: from,
       pregunta: valida
@@ -1584,6 +1608,26 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     const startDt = DateTime.fromISO(startIso, { zone });
     const match = slots.find((s) => s.label === startDt.toFormat('HH:mm'));
 
+    // ¿Sigue pudiendo la persona que pidió? Entre que vio el hueco y confirmó
+    // pueden haber pasado minutos —o haber aparecido un bloqueo de horas—.
+    //
+    // ESTO ESTABA 15 LÍNEAS MÁS ABAJO y el mensaje de «ya no hay hueco» lo
+    // usaba: `Cannot access 'pedida' before initialization`, el proceso moría
+    // y la clienta se quedaba sin ninguna respuesta tras pulsar «Sí,
+    // resérvala» (16-ago-2026). Lo peor: esa rama SOLO se ejecuta cuando el
+    // hueco está ocupado o bloqueado, así que el fallo aparecía justo cuando
+    // la comprobación de seguridad hacía su trabajo. Con el hueco libre no
+    // pasaba nunca.
+    const pedida = current.resourceId
+      ? await equipo.puedeAtender(storeId, {
+          resourceId: current.resourceId,
+          inicioIso: startIso,
+          finIso: endIso,
+          zone,
+          serviceId: current.serviceId ?? null
+        })
+      : false;
+
     if (!match) {
       await deleteConversationState(storeId, from);
       await sendAndLog({
@@ -1602,18 +1646,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     // sin equipo, la de siempre: "no hay ninguna cita a esa hora".
     // (Antes se preguntaba siempre lo segundo, y con dos peluqueras eso
     //  rechazaba la segunda cita de la misma hora — bug real 3-ago-2026.)
-    // B5.3: si la clienta pidió a alguien, esa manda; si no, reparto normal.
-    // Se vuelve a comprobar que sigue libre — entre que vio el hueco y
-    // confirmó pueden haber pasado minutos.
-    const pedida = current.resourceId
-      ? await equipo.puedeAtender(storeId, {
-          resourceId: current.resourceId,
-          inicioIso: startIso,
-          finIso: endIso,
-          zone,
-          serviceId: current.serviceId ?? null
-        })
-      : false;
+    // B5.3: si la clienta pidió a alguien, esa manda (`pedida`, calculado
+    // arriba); si no, reparto normal.
     const personaAsignada = pedida
       ? Number(current.resourceId)
       : await equipo.elegirPersonaLibre(storeId, startIso, endIso, zone, current.serviceId ?? null);
@@ -3074,7 +3108,6 @@ app.use('/api', authMiddleware);
 
 // --- A1: backoffice de administración (doc 10) — SOLO ADMIN_TOKEN ---
 const { getAdminOverview, updateStoreFeatures, updateStoreIa, updateModuleSettings, getStoreActivity, getStoreFeatureState, setStoreFeatureActive } = require('./admin');
-const catalog = require('./catalog');
 
 // Equipo, aparatos y requisitos de servicio: routes/equipo.js.
 // OJO: por detrás de app.use('/api', authMiddleware), nunca por delante.
