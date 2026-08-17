@@ -65,6 +65,46 @@ async function markReminderSent(appointmentId, kind) {
   if (error) console.error('[Reminders] Error marcando recordatorio', { appointmentId, kind, error });
 }
 
+/**
+ * RESERVAR el recordatorio antes de enviarlo. Devuelve true si es NUESTRO.
+ *
+ * Hay DOS planificadores llamando al despachador: cron-job.org cada 10 min y
+ * GitHub Actions cada hora (la red de seguridad, que existe porque el primero
+ * ya se murió dos veces en silencio). Que se solapen es cuestión de tiempo.
+ *
+ * Antes se marcaba DESPUÉS de enviar, así que dos pasadas simultáneas leían
+ * la misma cita pendiente, las dos veían el hueco vacío y las dos mandaban el
+ * mensaje. La clienta recibe el recordatorio por duplicado y el negocio paga
+ * dos plantillas.
+ *
+ * Con `.is(campo, null)` la marca es una carrera que gana UNO SOLO: Postgres
+ * resuelve el conflicto y al segundo no le devuelve ninguna fila. Se marca
+ * primero y se envía después. Si el envío falla se limpia la marca para
+ * poder reintentar en la siguiente pasada.
+ */
+async function reservarRecordatorio(appointmentId, kind) {
+  const campo = kind === '2h' ? 'reminder_2h_sent_at' : 'reminder_24h_sent_at';
+  const { data, error } = await supabase
+    .from('appointments')
+    .update({ [campo]: new Date().toISOString() })
+    .eq('id', appointmentId)
+    .is(campo, null)
+    .select('id')
+    .maybeSingle();
+  if (error) {
+    console.error('[Reminders] Error reservando el recordatorio', { appointmentId, kind, error });
+    return false;
+  }
+  return !!data;
+}
+
+/** Deshace la reserva cuando el envío ha fallado, para reintentarlo luego. */
+async function liberarRecordatorio(appointmentId, kind) {
+  const campo = kind === '2h' ? 'reminder_2h_sent_at' : 'reminder_24h_sent_at';
+  const { error } = await supabase.from('appointments').update({ [campo]: null }).eq('id', appointmentId);
+  if (error) console.error('[Reminders] Error liberando el recordatorio', { appointmentId, kind, error });
+}
+
 /** Confirmación desde el botón [Confirmo]. Devuelve la cita o null. */
 async function confirmAppointmentByClient(storeId, appointmentId, phone) {
   // El teléfono es OBLIGATORIO. El identificador de la cita llega en el
@@ -78,12 +118,23 @@ async function confirmAppointmentByClient(storeId, appointmentId, phone) {
     console.error('[Reminders] confirmAppointmentByClient sin teléfono: se rechaza', { storeId, appointmentId });
     return null;
   }
+  // UNA CITA QUE YA HA PASADO NO SE CONFIRMA (16-ago-2026).
+  //
+  // José Manuel pulsó «Confirmo» a las 13:19 en el recordatorio de una cita
+  // de las 12:00 y el bot le contestó tan tranquilo «¡Gracias por confirmar!
+  // Te esperamos el sábado a las 12:00». Eran las 13:19 del sábado.
+  //
+  // No es solo que quede ridículo: marca como confirmada por la clienta una
+  // cita a la que no fue, y eso ensucia justo el dato que sirve para detectar
+  // plantones. Los botones de WhatsApp se quedan en el móvil para siempre y
+  // la gente los pulsa tarde; hay que contar con ello.
   const { data, error } = await supabase
     .from('appointments')
     .update({ confirmed_by_client_at: new Date().toISOString() })
     .eq('id', appointmentId)
     .eq('store_id', storeId)
     .eq('status', 'confirmed')
+    .gte('start_at', new Date().toISOString())
     .select('*, customers ( phone )')
     .maybeSingle();
   if (error) {
@@ -192,20 +243,35 @@ async function dispatchReminders({ limit = 50, requestId } = {}) {
       const fecha = startDt.setLocale('es').toFormat('cccc dd/MM');
       const hora = startDt.toFormat('HH:mm');
 
-      await sendTemplateMessage({
-        phoneNumberId: account.phone_number_id,
-        accessToken: account.access_token,
-        to: phone,
-        templateName: settings.template_name || 'canalagenda_reminder_v1',
-        languageCode: settings.template_language || 'es',
-        bodyParams: [storeConfig?.name || 'tu cita', fecha, hora],
-        buttonPayloads: [
-          `${REMINDER_PAYLOADS.CONFIRM_PREFIX}${cita.id}`,
-          `${REMINDER_PAYLOADS.CANCEL_PREFIX}${cita.id}`
-        ]
-      });
+      // PRIMERO se reserva, DESPUÉS se envía. Al revés, dos planificadores
+      // solapados mandan el mismo recordatorio dos veces (ver reservarRecordatorio).
+      if (!await reservarRecordatorio(cita.id, kind)) {
+        console.log('[Reminders] Otro planificador ya lo mandaba', { requestId, citaId: cita.id, kind });
+        resumen.saltados += 1;
+        continue;
+      }
 
-      await markReminderSent(cita.id, kind);
+      try {
+        await sendTemplateMessage({
+          phoneNumberId: account.phone_number_id,
+          accessToken: account.access_token,
+          to: phone,
+          templateName: settings.template_name || 'canalagenda_reminder_v1',
+          languageCode: settings.template_language || 'es',
+          bodyParams: [storeConfig?.name || 'tu cita', fecha, hora],
+          buttonPayloads: [
+            `${REMINDER_PAYLOADS.CONFIRM_PREFIX}${cita.id}`,
+            `${REMINDER_PAYLOADS.CANCEL_PREFIX}${cita.id}`
+          ]
+        });
+      } catch (errEnvio) {
+        // El envío falló: se suelta la reserva y ya lo cogerá otra pasada.
+        // Antes se marcaba igualmente «para no spamear», y una plantilla mal
+        // configurada dejaba a la clienta sin ningún recordatorio y sin rastro.
+        await liberarRecordatorio(cita.id, kind);
+        throw errEnvio;
+      }
+
       if (kind === '2h') resumen.enviados_2h += 1;
       else resumen.enviados_24h += 1;
       console.log('[Reminders] Recordatorio enviado', { requestId, storeId, citaId: cita.id, kind });
@@ -214,11 +280,6 @@ async function dispatchReminders({ limit = 50, requestId } = {}) {
       // spamear reintentos cada 15 min; el log deja el rastro.
       console.error('[Reminders] Fallo enviando recordatorio', { requestId, citaId: cita.id, err: err?.message });
       resumen.saltados += 1;
-      try {
-        const zone = configCache.get(cita.store_id)?.timezone || 'Europe/Madrid';
-        const kind = reminderKindFor(DateTime.now().setZone(zone), DateTime.fromISO(cita.start_at, { zone }));
-        if (kind) await markReminderSent(cita.id, kind);
-      } catch { /* mejor esfuerzo */ }
     }
   }
 
@@ -232,5 +293,6 @@ module.exports = {
   dispatchReminders,
   confirmAppointmentByClient,
   getCancelableAppointment,
+  reservarRecordatorio,
   getReminderSettings
 };
