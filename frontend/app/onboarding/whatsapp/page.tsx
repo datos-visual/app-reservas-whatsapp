@@ -139,7 +139,7 @@ export default function OnboardingWhatsappPage() {
 
           <button
             type="button"
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/panel')}
             disabled={!saved}
             className="w-full rounded-md border border-[#2f5d3f] px-4 py-2 text-sm font-medium text-[#c7dbcd] transition hover:bg-[#2f5d3f]/30 disabled:opacity-50"
           >

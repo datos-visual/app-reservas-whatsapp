@@ -12,7 +12,7 @@ import { apiFetch } from '../lib/api';
 import { IconAgenda, IconReloj, IconTijeras, IconEstrella, IconCasa, IconSalir, IconPersonas } from './icons';
 
 const NAV = [
-  { href: '/', label: 'Inicio', Icon: IconCasa },
+  { href: '/panel', label: 'Inicio', Icon: IconCasa },
   { href: '/agenda', label: 'Agenda', Icon: IconAgenda },
   { href: '/equipo', label: 'Equipo', Icon: IconPersonas },
   { href: '/catalogo', label: 'Catálogo', Icon: IconTijeras },

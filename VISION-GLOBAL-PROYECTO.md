@@ -714,6 +714,69 @@ con dobles (8 reglas, incluidos falsos positivos y Google caído).
 la app (calendario, teléfono, WhatsApp Web) necesita un camino de vuelta. La
 peluquera no va a cambiar su herramienta de siempre.
 
+### 10.70 LA SEMANA DE LOS FALLOS SILENCIOSOS (14→16-ago-2026)
+
+Cinco días de pruebas reales del fundador por WhatsApp. Casi todos los fallos
+compartían la misma forma: **el sistema no daba error, hacía otra cosa**. Se
+recogen aquí porque el patrón importa más que los arreglos.
+
+**1. Cuatro días desplegando al vacío.** El backend NO se desplegaba desde el
+11-ago: un `backend/package-lock.json` con una entrada rota (`fsevents` sin
+versión, generado en Linux) hacía fallar `npm install` con «Invalid Version».
+Render lo intentó cinco veces, las cinco fallaron, y el servicio seguía
+marcado **Live** — con la versión de cuatro días antes. Se arreglaron bugs que
+ya estaban arreglados.
+· `/health` ahora devuelve `commit` y `arrancado`.
+· Las pruebas de GitHub usan `npm ci` (reproduce el build de Render), no
+  `npm install`, que es indulgente y repara el lockfile por su cuenta.
+· **HAY DOS SERVICIOS EN RENDER** (`app-whatsapp-backend` y `-frontend`) y se
+  despliegan por separado. Ver runbook §0.pre.
+
+**2. La IA decidía, no interpretaba.** «Una permanente para el martes» →
+propuso reservar un **Corte**, porque el modelo lo había leído dos mensajes
+antes y devolvió `servicio:"Corte"`. Como Corte existe en el catálogo, se
+aceptó. Ahora su respuesta debe tener **eco** en lo que escribió la clienta
+(raíz de 4 letras): «cortarme el pelo»→Corte sí, «permanente»→Corte no. Y para
+decir «no tenemos permanente» ya no se depende de la IA: se saca del texto
+buscando lo que va tras un artículo (`un/una`), que en castellano nombra cosas
+y deja fuera días y nombres propios.
+
+**3. Media implementación, cuatro veces.** El patrón del año:
+· El recuerdo del servicio se puso como último recurso para *cualquier* caso
+  y se comió la comprobación «eso no lo hacemos».
+· Los bloqueos de horas se metieron en 3 de los 4 constructores de caché; el
+  que faltaba (`elegirPersonaLibre`) es justo el que reparte la cita, así que
+  se comprobaba que Laura estaba bloqueada y el reparto se la asignaba igual.
+  → Ahora hay UN constructor, `equipo.cacheDelDia()`, y una prueba que lee el
+  fuente y falla si alguien vuelve a escribirlo a mano.
+· «Comprobar antes de preguntar» se puso en el botón y no en el texto.
+· El mensaje «no puede» estaba escrito en cuatro sitios, uno de ellos mintiendo
+  («acaba de quedarse sin ese hueco» cuando llevaba horas bloqueado).
+  → Una sola función, `avisarNoPuede()`.
+
+**4. `no-use-before-define`.** `pedida` se usaba 15 líneas antes de su `const`
+en la rama de «ese hueco ya no está libre». ReferenceError: la clienta pulsaba
+«Sí, resérvala» y no recibía NADA. Y solo fallaba cuando el hueco estaba
+ocupado o bloqueado — es decir, **justo cuando la comprobación de seguridad
+funcionaba**. `no-undef` no lo ve. Regla añadida a eslint.
+
+**5. Dos citas a la misma hora del mismo teléfono.** Explicaban unos
+recordatorios «fantasma» que parecían un fallo del motor. Ahora `citaSolapada()`
+lo impide, respetando los bordes (pegar un tinte justo después de un corte es
+legítimo). Además: no se confirman citas ya pasadas, y el recordatorio se
+**reserva antes de enviarse** para que dos planificadores solapados no lo
+manden dos veces.
+
+**Construido esta semana:** bloqueos de horas con «¿a quién afecta?»
+(`store_blocks`, panel + motor + rejilla), borrado de servicios sin destrozar
+el histórico, «elegir profesional» también al reservar escribiendo, detección
+de «con Laura» en texto libre, aviso de zona horaria en Salud (Canarias),
+y el día marcado abierto sin horas pasa a cerrado.
+
+**Lección transversal:** cuando una comprobación de seguridad y una comodidad
+compiten, gana la comodidad si no se mira. Cada vez que se añade un dato al
+motor hay que preguntarse **cuántos caminos lo leen**, no cuántos lo escriben.
+
 ### 10.69 EDITORIAL MONOCROMO — Y EL NEOMORFISMO QUE DURÓ UN DÍA (11-ago-2026)
 
 Repaso visual completo del panel y del backoffice. Paleta neutra pura: fuera

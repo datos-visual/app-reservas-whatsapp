@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabaseClient';
-import AppShell from '../components/AppShell';
-import { IconAviso, IconAgenda, IconRefrescar } from '../components/icons';
+import { supabase } from '../../lib/supabaseClient';
+import AppShell from '../../components/AppShell';
+import { IconAviso, IconAgenda, IconRefrescar } from '../../components/icons';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 

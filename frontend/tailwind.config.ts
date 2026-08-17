@@ -8,6 +8,9 @@ const config: Config = {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./lib/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    // La web comercial vive en src/ y se importa con el atajo "@/..."
+    // Sin esta línea, Tailwind no genera SUS clases y la landing sale desnuda.
+    "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {

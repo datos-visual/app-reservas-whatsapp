@@ -14,7 +14,7 @@ export default function LoginPage() {
   // Si ya hay sesión, directo al dashboard
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace('/');
+      if (data.session) router.replace('/panel');
     });
   }, [router]);
 
@@ -31,7 +31,7 @@ export default function LoginPage() {
         setError('Email o contraseña incorrectos.');
         return;
       }
-      router.replace('/');
+      router.replace('/panel');
     } catch {
       setError('Error inesperado al iniciar sesión. Inténtalo de nuevo.');
     } finally {

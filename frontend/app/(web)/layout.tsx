@@ -38,20 +38,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+/**
+ * Layout de la WEB COMERCIAL, no de toda la aplicación.
+ *
+ * `app/(web)/` es un GRUPO DE RUTAS: los paréntesis no salen en la URL, así
+ * que `app/(web)/precios/page.tsx` se sirve en `/precios`. Sirve para darle a
+ * la web pública su propia cabecera y pie sin que los herede el panel.
+ *
+ * Antes esto era el layout raíz de un proyecto aparte y traía `<html>` y
+ * `<body>`. Aquí NO puede: esas etiquetas las pone `app/layout.tsx`, y
+ * duplicarlas rompe la página entera. Las clases del `<body>` viejo se
+ * conservan en este `<div>`.
+ */
+export default function WebLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={inter.variable}>
-      <body
-        className={`${inter.className} bg-white text-slate-900 font-sans antialiased min-h-screen flex flex-col`}
-      >
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
-      </body>
-    </html>
+    <div className={`${inter.variable} ${inter.className} flex min-h-screen flex-col bg-white font-sans text-slate-900 antialiased`}>
+      <Navbar />
+      <main className="flex-1">{children}</main>
+      <Footer />
+    </div>
   );
 }

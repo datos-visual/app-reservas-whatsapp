@@ -53,6 +53,14 @@ export function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            {/* «Entrar» va SIEMPRE en la barra: quien ya es cliente entra por
+                aquí todos los días y no puede tener que buscarlo. */}
+            <Link
+              href="/login"
+              className="px-4 py-2.5 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-100 transition min-h-[40px] inline-flex items-center"
+            >
+              Entrar
+            </Link>
             <Link
               href={cta.primary.href}
               className="px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold text-sm shadow-sm hover:bg-emerald-700 hover:shadow-md transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-h-[40px] inline-flex items-center"

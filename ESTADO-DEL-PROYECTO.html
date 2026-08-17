@@ -81,13 +81,13 @@
         <div class="sub">Reservas por WhatsApp para negocios con cita previa</div>
       </div>
     </div>
-    <div class="fecha">Actualizado<br><strong>5 de agosto de 2026</strong></div>
+    <div class="fecha">Actualizado<br><strong>16 de agosto de 2026</strong></div>
   </header>
 
   <div class="card p">
     <strong>Camino al primer piloto real</strong>
     <div class="barra"><i style="width:85%"></i></div>
-    <div class="sub">85% · El motor y el panel ya son de categoría profesional. Lo que falta no es código: es legal, comercial y <strong>probarlo con una peluquería de verdad</strong></div>
+    <div class="sub">88% · El motor y el panel ya son de categoría profesional. Lo que falta no es código: es legal, comercial y <strong>probarlo con una peluquería de verdad</strong></div>
     <div class="kpis" style="margin-top:18px">
       <div class="kpi"><div class="n">100%</div><div class="l">Bot de WhatsApp</div><div class="foot">probado con clientas reales</div></div>
       <div class="kpi"><div class="n">96%</div><div class="l">Panel del negocio</div><div class="foot">faltan métricas</div></div>
@@ -100,10 +100,28 @@
   <div class="card p" style="border-left:4px solid var(--ambar);margin-top:16px">
     <strong>Lo más urgente ahora mismo</strong>
     <p style="margin:6px 0 0;color:var(--gris);font-size:13.5px">
-      Todo lo de los últimos días está probado ejecutando la lógica con datos de prueba,
-      pero <strong>nada de ello ha pasado todavía por una peluquería real</strong>: ni los aparatos,
-      ni los tiempos de espera, ni dos profesionales atendiendo a la vez, ni la nueva agenda en rejilla.
-      Antes de añadir una función más, toca sentarse con dos móviles y probarlo entero.
+      Sigue sin haber pasado <strong>ninguna peluquería real</strong> por el sistema, ni una segunda
+      línea de WhatsApp que demuestre que el multitienda funciona de verdad. Eso es lo que falta
+      para poder enseñarlo, no más funciones.
+    </p>
+  </div>
+
+  <div class="card p" style="border-left:4px solid var(--verde);margin-top:16px">
+    <strong>La semana del 11 al 16 de agosto: cinco días de pruebas reales</strong>
+    <p style="margin:6px 0 0;color:var(--gris);font-size:13.5px">
+      Probando el bot con el móvil aparecieron una docena de fallos, y casi todos tenían la misma forma:
+      <strong>el sistema no daba error, hacía otra cosa</strong>. El peor de todos no estaba en el código —
+      el backend llevaba <strong>cuatro días sin desplegarse</strong> por un fichero de dependencias corrupto,
+      mientras Render seguía marcándolo en verde con la versión de hacía cuatro días. Se arreglaron durante
+      dos jornadas fallos que ya estaban arreglados.
+    </p>
+    <p style="margin:10px 0 0;color:var(--gris);font-size:13.5px">
+      Lo que se ha construido a raíz de esto: una forma de <strong>saber qué versión está viva</strong>
+      (<code>/health</code> dice el commit), <strong>bloqueos de horas sueltas</strong> con casilla de a quién
+      afectan, <strong>borrar servicios</strong> sin destrozar el histórico, elegir profesional también al
+      reservar escribiendo, y un aviso en rojo si una tienda no tiene <strong>zona horaria</strong>
+      (una peluquería de Canarias citaría a todo el mundo una hora antes sin que nada fallara).
+      Las pruebas automáticas han pasado de 174 a <strong>254</strong>.
     </p>
   </div>
 
@@ -220,9 +238,10 @@
   <h2>Siguientes pasos, en orden</h2>
   <div class="card p">
     <ol class="limpio">
-      <li><strong>Probar lo del equipo</strong> con dos peluqueras y dos móviles.</li>
-      <li><strong>Aparatos con unidades limitadas</strong> (sillón de color, lavacabezas): un servicio puede necesitar máquina además de persona.</li>
-      <li><strong>Textos legales</strong> y consentimiento de clientas.</li>
+      <li><strong>Google Calendar sin red.</strong> Si la consulta al calendario falla, el sistema puede llegar a creer que el día está libre y doblar citas. No hay ni una prueba de ese caso. Es el único fallo pendiente que cuesta dinero y credibilidad el día que Google tenga un mal rato.</li>
+      <li><strong>Segunda línea de WhatsApp.</strong> El multitienda está construido pero <em>nunca se ha probado con dos números</em>. Antes de la primera peluquería real, no después.</li>
+      <li><strong>Precio y duración por WhatsApp.</strong> «¿cuánto cuesta?» y «¿cuánto dura?» siguen sin respuesta y los datos ya están guardados. Es lo que más va a preguntar la gente.</li>
+      <li><strong>Textos legales</strong> y consentimiento de clientas — rellenar los campos entre corchetes y revisión de abogado.</li>
       <li><strong>Un alta real completa</strong>, cronometrada, con cuentas de verdad.</li>
       <li><strong>Métricas para la tienda</strong>: citas del mes, no-shows evitados, huecos recuperados. Es lo que convierte un piloto en cliente de pago.</li>
       <li><strong>Cobro</strong> (Stripe) — o transferencia manual para los diez primeros.</li>
