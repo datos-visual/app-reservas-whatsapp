@@ -74,7 +74,7 @@ const { textos } = require('./vocabulario');
 // El catálogo se usa desde el flujo de WhatsApp, MUY arriba: su require vive
 // aquí y no a mitad del fichero (16-ago-2026, «no-use-before-define»).
 const catalog = require('./catalog');
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, profesionalEnTexto, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, profesionalEnTexto, citaSolapada, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -1647,6 +1647,28 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
           serviceId: current.serviceId ?? null
         })
       : false;
+
+    // ¿YA TIENE UNA CITA A ESA HORA? (15-ago-2026)
+    //
+    // En el calendario del sábado había DOS «Cita WhatsApp José Manuel» a las
+    // 12:00, del mismo teléfono. De ahí salieron dos recordatorios y dos
+    // «gracias por confirmar»: parecía un fallo del motor de recordatorios y
+    // era que se habían creado dos citas.
+    //
+    // Que dos clientas coincidan a las 12:00 es normal —para eso hay cuatro
+    // peluqueras—. Que la MISMA se apunte dos veces al mismo rato no lo es
+    // nunca. Un doble toque en «Sí, resérvala» bastaba.
+    const suyasAhora = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 }).catch(() => []);
+    const yaTiene = citaSolapada(suyasAhora, startIso, endIso, current.rescheduleOfId ?? null);
+    if (yaTiene) {
+      await deleteConversationState(storeId, from);
+      await sendAndLog({
+        storeId, phoneNumberId, accessToken, to: from,
+        text: `Ya tienes una cita el ${fmtHuman(yaTiene.start_at)}, así que no te he apuntado otra. ` +
+              'Si quieres cambiarla o anularla, dime "mis citas".'
+      });
+      return;
+    }
 
     if (!match) {
       await deleteConversationState(storeId, from);

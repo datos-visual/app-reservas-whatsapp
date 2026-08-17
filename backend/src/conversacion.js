@@ -385,6 +385,36 @@ function preguntaPorServicios(texto) {
 }
 
 /**
+ * ¿Esta persona YA tiene una cita que pisa esas horas?
+ *
+ * 15-ago-2026: en el Google Calendar del sábado había DOS «Cita WhatsApp José
+ * Manuel» a las 12:00, del mismo teléfono. De ahí salieron dos recordatorios,
+ * dos «¿podrás venir?» y dos «gracias por confirmar»: parecía un fallo del
+ * motor de recordatorios y era simplemente que se habían creado dos citas.
+ *
+ * Que dos CLIENTAS distintas coincidan a las 12:00 es normal —para eso hay
+ * cuatro peluqueras—. Que la MISMA se apunte dos veces al mismo rato no lo es
+ * nunca: es un doble toque, un mensaje repetido o una prueba. Y sale caro: se
+ * ocupa un hueco vendible y se pagan dos plantillas de recordatorio.
+ *
+ * `excluirId` es para cuando se está MOVIENDO una cita: ella misma no puede
+ * contar como conflicto consigo misma.
+ */
+function citaSolapada(citas, inicioIso, finIso, excluirId = null) {
+  if (!Array.isArray(citas) || !citas.length) return null;
+  const ini = Date.parse(inicioIso);
+  const fin = Date.parse(finIso);
+  if (!Number.isFinite(ini) || !Number.isFinite(fin)) return null;
+  return citas.find((c) => {
+    if (excluirId != null && Number(c.id) === Number(excluirId)) return false;
+    const cIni = Date.parse(c.start_at);
+    const cFin = Date.parse(c.end_at);
+    if (!Number.isFinite(cIni) || !Number.isFinite(cFin)) return false;
+    return ini < cFin && cIni < fin;
+  }) || null;
+}
+
+/**
  * La fecha que el propio bot mencionó en un mensaje anterior.
  *
  * Sirve para entender «a las 17:30» a secas: el día estaba en la lista de
@@ -411,6 +441,7 @@ module.exports = {
   servicioPedidoEnTexto,
   preguntaPorServicios,
   profesionalEnTexto,
+  citaSolapada,
   decidirServicio,
   fechaDeMensajeDelBot,
   esComandoCancelar,

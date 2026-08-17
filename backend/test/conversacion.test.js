@@ -494,3 +494,50 @@ describe('«una cita CON Laura» no pide un servicio (bug 15-ago-2026)', () => {
     assert.equal(servicioPedidoEnTexto('Quiero una permamente'), 'permamente');
   });
 });
+
+describe('la misma clienta no se apunta dos veces al mismo rato (15-ago-2026)', () => {
+  const { citaSolapada } = require('../src/conversacion');
+  // En el Google Calendar del sábado había DOS «Cita WhatsApp José Manuel» a
+  // las 12:00, del mismo teléfono. De ahí salieron dos recordatorios y dos
+  // «gracias por confirmar»: parecía un fallo del motor de recordatorios.
+  const suyas = [
+    { id: 1, start_at: '2026-08-15T12:00:00.000Z', end_at: '2026-08-15T14:00:00.000Z' }
+  ];
+
+  test('la misma hora exacta se detecta', () => {
+    assert.equal(citaSolapada(suyas, '2026-08-15T12:00:00.000Z', '2026-08-15T14:00:00.000Z')?.id, 1);
+  });
+
+  test('y también si solo se pisan a medias', () => {
+    assert.equal(citaSolapada(suyas, '2026-08-15T13:00:00.000Z', '2026-08-15T15:00:00.000Z')?.id, 1);
+    assert.equal(citaSolapada(suyas, '2026-08-15T11:00:00.000Z', '2026-08-15T12:30:00.000Z')?.id, 1);
+  });
+
+  // LOS BORDES: pegar una cita justo después de otra es LEGÍTIMO —corte a las
+  // 12 y tinte a las 14—. Si esto fallara, el bot rechazaría reservas buenas.
+  test('pegada justo después, se permite', () => {
+    assert.equal(citaSolapada(suyas, '2026-08-15T14:00:00.000Z', '2026-08-15T15:00:00.000Z'), null);
+  });
+
+  test('pegada justo antes, se permite', () => {
+    assert.equal(citaSolapada(suyas, '2026-08-15T11:00:00.000Z', '2026-08-15T12:00:00.000Z'), null);
+  });
+
+  test('otro día, se permite', () => {
+    assert.equal(citaSolapada(suyas, '2026-08-16T12:00:00.000Z', '2026-08-16T14:00:00.000Z'), null);
+  });
+
+  // Al MOVER una cita, ella misma no puede contar como conflicto consigo misma
+  test('la cita que se está cambiando no se estorba a sí misma', () => {
+    assert.equal(citaSolapada(suyas, '2026-08-15T12:00:00.000Z', '2026-08-15T14:00:00.000Z', 1), null);
+  });
+
+  test('sin citas previas no revienta', () => {
+    assert.equal(citaSolapada([], '2026-08-15T12:00:00.000Z', '2026-08-15T14:00:00.000Z'), null);
+    assert.equal(citaSolapada(null, '2026-08-15T12:00:00.000Z', '2026-08-15T14:00:00.000Z'), null);
+  });
+
+  test('una fecha corrupta no bloquea la reserva', () => {
+    assert.equal(citaSolapada([{ id: 9, start_at: 'xx', end_at: 'yy' }], '2026-08-15T12:00:00.000Z', '2026-08-15T14:00:00.000Z'), null);
+  });
+});
