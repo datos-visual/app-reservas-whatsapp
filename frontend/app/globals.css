@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Venía del globals.css de la web comercial, que desapareció al fusionarla:
+   los anclas de la landing («ver precios», «cómo funciona») se recorren
+   suavemente en vez de dar un salto seco. */
+html { scroll-behavior: smooth; }
+
 /*
  * SISTEMA VISUAL DE CANALAGENDA — «editorial monocromo» (rev. 11-ago-2026).
  *

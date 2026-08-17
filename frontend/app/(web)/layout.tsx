@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import "./globals.css";
+// Sin `import "./globals.css"`: los estilos globales (incluidas las
+// directivas de Tailwind) los carga UNA sola vez `app/layout.tsx`. Cuando
+// esto era un proyecto aparte traía su propio globals.css; al fusionarlo,
+// ese fichero desapareció y el import huérfano tumbó el build entero
+// —«Can't resolve './globals.css'»— sin que lo vieran ni TypeScript ni las
+// pruebas (17-ago-2026).
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { site } from "@/lib/site";
