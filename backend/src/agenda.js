@@ -109,7 +109,10 @@ async function agendaDelDia(storeId, dateIso) {
           aTiempo = setTimeout(() => resolve('TARDE'), ESPERA_GOOGLE_MS);
         });
         const vistos = await Promise.race([
-          sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone),
+          // SIN reconciliar: eso es mantenimiento y hace una consulta a Google
+          // por cita sospechosa, en fila. Lo hace el planificador cada 10 min
+          // y el botón «Google Calendar» del panel. Aquí solo se pinta.
+          sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone, { reconciliar: false }),
           conPlazo
         ]);
         if (vistos === 'TARDE') {

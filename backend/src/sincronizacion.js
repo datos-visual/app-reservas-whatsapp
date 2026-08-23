@@ -219,6 +219,19 @@ async function reconciliarTienda(storeId, { dias = DIAS_POR_DEFECTO, requestId }
  * con el índice anti doble-reserva y la clienta vería "ese hueco acaba de
  * reservarse" sin que nadie lo hubiera reservado.
  */
+// OJO CON LLAMAR A ESTO DESDE UNA PANTALLA (18-ago-2026).
+//
+// Esta función hace UNA CONSULTA A GOOGLE POR CADA CITA SOSPECHOSA, y en fila
+// india. «Sospechosa» es cualquier cita cuyo evento no aparezca en la lista
+// del día y que se creara hace más de dos minutos — así que si el calendario
+// viene vacío por lo que sea, TODAS lo son. Con diez citas en el día eso son
+// diez viajes a Google seguidos antes de pintar nada.
+//
+// Es trabajo de mantenimiento, no de dibujo: su sitio es el planificador
+// (`reconciliarTodas`, que corre cada diez minutos). La agenda del panel la
+// llama con `reconciliar:false` y por eso abre rápido; lo que se borre en
+// Google se recupera igual, solo que en la siguiente pasada del cron o al
+// pulsar «Google Calendar» en el panel, que sigue reconciliando a propósito.
 async function reconciliarDia(storeId, dateIso, eventos, zone) {
   try {
     const tz = zone || 'Europe/Madrid';
@@ -323,10 +336,11 @@ async function filtrarEventosPropios(storeId, eventos, dateIso, zone) {
  * reconcilia los borrados hechos en Google y devuelve los eventos que de
  * verdad deben tapar huecos.
  */
-async function eventosDelDia(storeId, dateIso, zone) {
+async function eventosDelDia(storeId, dateIso, zone, { reconciliar = true } = {}) {
   const { listEventsForDay } = require('./calendar');
   const eventos = await listEventsForDay(storeId, dateIso, zone);
-  await reconciliarDia(storeId, dateIso, eventos, zone);
+  // `reconciliar:false` para PINTAR una pantalla (ver abajo por qué).
+  if (reconciliar) await reconciliarDia(storeId, dateIso, eventos, zone);
   return filtrarEventosPropios(storeId, eventos, dateIso, zone);
 }
 

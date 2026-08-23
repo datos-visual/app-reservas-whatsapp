@@ -18,14 +18,31 @@ const { getCalendarConnectionByStoreId } = require('./db');
 // reexporta desde aquí para no tocar a quien ya la importaba.
 const { generateSlots, generate30MinSlots, seleccionarHuecos } = require('./huecos');
 
+// EL CLIENTE DE GOOGLE SE GUARDA (18-ago-2026).
+//
+// Antes se creaba uno NUEVO en cada llamada. Y un cliente recién hecho no
+// tiene credencial: el `jwtClient.authorize()` que viene después es un viaje
+// de ida y vuelta a los servidores de Google **solo para pedir permiso**,
+// antes siquiera de preguntar por los eventos. Dos viajes donde bastaba uno,
+// en cada carga de la agenda, veinte veces al día.
+//
+// Guardándolo, `googleapis` conserva el token dentro y lo renueva él solo
+// cuando caduca. La agenda del panel abría a cinco segundos y era en buena
+// parte esto.
+//
+// El log de configuración también estaba aquí, así que se imprimía en CADA
+// petición: cientos de líneas idénticas en Render que enterraban lo demás.
+// Ahora sale una vez, cuando de verdad dice algo nuevo.
+let _cliente = null;
 function getCalendarClient() {
-  console.log('[Calendar] Cliente Google', {
-    hasClientEmail: !!config.googleClientEmail,
-    hasPrivateKey: !!config.googlePrivateKey,
-    privateKeyLength: config.googlePrivateKey ? config.googlePrivateKey.length : 0
-  });
+  if (_cliente) return _cliente;
+
   if (!config.googleClientEmail || !config.googlePrivateKey) {
     console.warn('[Calendar] Variables de entorno de Google no configuradas.');
+  } else {
+    console.log('[Calendar] Cliente Google preparado', {
+      privateKeyLength: config.googlePrivateKey.length
+    });
   }
 
   const g = google();
@@ -37,7 +54,8 @@ function getCalendarClient() {
   );
 
   const calendar = g.calendar({ version: 'v3', auth: jwtClient });
-  return { calendar, jwtClient };
+  _cliente = { calendar, jwtClient };
+  return _cliente;
 }
 
 async function resolveCalendarIdForStore(storeId) {
