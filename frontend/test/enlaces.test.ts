@@ -83,7 +83,7 @@ describe('enlaces internos', () => {
 
   // Las direcciones que la peluquera usa a diario. Si una desaparece por un
   // renombrado, esto lo dice con su nombre en vez de con un 404.
-  for (const imprescindible of ['/', '/panel', '/login', '/agenda', '/equipo', '/catalogo', '/horarios', '/servicios', '/admin']) {
+  for (const imprescindible of ['/', '/panel', '/login', '/agenda', '/equipo', '/catalogo', '/horarios', '/servicios', '/admin', '/peluquerias']) {
     test(`«${imprescindible}» sigue existiendo`, () => {
       assert.ok(reales.has(imprescindible), `falta la página ${imprescindible}`);
     });

@@ -16,6 +16,11 @@ coverage
 
 # Next.js
 .next/
+
+# Caché de TypeScript: se regenera en cada `tsc` y ensucia todos los commits
+# (17-ago-2026). No es código, es un fichero de trabajo.
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 out/
 
 # Production

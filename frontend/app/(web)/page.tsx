@@ -19,6 +19,7 @@ import { ReservationFlowDiagram } from "@/components/product/ReservationFlowDiag
 import { ConfirmedReservationPreview } from "@/components/product/ConfirmedReservationPreview";
 import { TrustSignalsStrip } from "@/components/product/TrustSignalsStrip";
 import { cta } from "@/lib/cta";
+import { VERTICALES, PROXIMOS } from "@/lib/verticales";
 
 export default function Home() {
   const features = [
@@ -153,13 +154,41 @@ export default function Home() {
 
   return (
     <>
+      {/* LA PORTADA EMPIEZA POR PELUQUERÍAS, no por «cualquier negocio».
+          Decir «para peluquerías, clínicas, estética y restaurantes» no le
+          habla a ninguno de los cuatro, y hoy la única prueba real que hay es
+          de peluquería. Los demás sectores se nombran abajo, sin fingir
+          clientes que todavía no existen (ver lib/verticales.ts). */}
       <HeroSection
-        eyebrow="Software multi‑sede · WhatsApp Cloud API · Google Calendar"
-        title="Automatiza reservas por WhatsApp sin perder el control de la agenda"
-        subtitle="Para peluquerías, clínicas, estética, restaurantes y cualquier negocio que vive de la cita: tu cliente escribe en WhatsApp, el sistema consulta disponibilidad, confirma la cita y la sincroniza con Google Calendar —con una configuración seria por sede."
-        primaryCTA={{ text: cta.primary.label, href: cta.primary.href }}
-        secondaryCTA={{ text: cta.secondary.label, href: cta.secondary.href }}
+        eyebrow="API oficial de WhatsApp Business · Google Calendar"
+        title="Tus clientas piden cita por WhatsApp. Que se la dé el sistema."
+        subtitle="Hecho para peluquerías: turnos de cada profesional, quién sabe hacer qué, el tinte que reposa y los aparatos que se acaban. El asistente contesta a cualquier hora, ofrece solo los huecos que existen de verdad y lo apunta en tu Google Calendar."
+        primaryCTA={{ text: cta.primary.label, href: `${cta.primary.href}?sector=peluqueria` }}
+        secondaryCTA={{ text: "Ver la página de peluquerías", href: "/peluquerias" }}
       />
+
+      {/* Banda de sectores: da a Google el mapa de páginas por gremio y a la
+          visitante la señal de «esto es para lo mío». Los que no tienen página
+          se enseñan apagados: el motor los soporta, los clientes aún no. */}
+      <div className="border-b border-slate-100 bg-white px-4 py-6 sm:px-6">
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm">
+          <span className="text-slate-500">Para tu sector:</span>
+          {VERTICALES.map((v) => (
+            <Link
+              key={v.slug}
+              href={`/${v.slug}`}
+              className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-medium text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
+            >
+              {v.menu}
+            </Link>
+          ))}
+          {PROXIMOS.map((nombre) => (
+            <span key={nombre} className="rounded-full border border-slate-200 px-3 py-1 text-slate-400">
+              {nombre} · pronto
+            </span>
+          ))}
+        </div>
+      </div>
 
       <ProductPreviewSection
         title="Vista del panel"

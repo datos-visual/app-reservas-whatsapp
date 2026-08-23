@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Mail, MessageCircle } from "lucide-react";
 import { site } from "@/lib/site";
+import { VERTICALES, PROXIMOS } from "@/lib/verticales";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -9,7 +10,8 @@ export function Footer() {
   return (
     <footer className="bg-slate-950 text-slate-300 mt-16 md:mt-20 border-t border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-14">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8 mb-10">
+        {/* 5 columnas: se ha añadido «Sectores» delante de «Producto» */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-8 mb-10">
           <div className="sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center">
@@ -21,6 +23,29 @@ export function Footer() {
               {site.descriptor}. Configuración por negocio, compatible con flujos multi‑sede e
               integración con Google Calendar.
             </p>
+          </div>
+
+          <div>
+            <h3 className="font-semibold text-white mb-4 text-sm uppercase tracking-wide">
+              Sectores
+            </h3>
+            <ul className="space-y-2.5 text-sm">
+              {VERTICALES.map((v) => (
+                <li key={v.slug}>
+                  <Link href={`/${v.slug}`} className="text-slate-400 hover:text-white transition">
+                    {v.menu}
+                  </Link>
+                </li>
+              ))}
+              {/* Sin enlace a propósito: el motor los soporta, pero todavía no
+                  hay ningún negocio de ese sector. Una página vacía prometiendo
+                  clientes que no existen quema la confianza. */}
+              {PROXIMOS.map((nombre) => (
+                <li key={nombre} className="text-slate-600">
+                  {nombre} <span className="text-xs">· pronto</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div>

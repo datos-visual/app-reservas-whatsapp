@@ -12,6 +12,10 @@ export function Navbar() {
 
   const links = [
     { href: "/", label: "Inicio" },
+    // El sector va DELANTE de «cómo funciona»: quien llega buscando software
+    // para su gremio tiene que ver su gremio antes que una explicación
+    // genérica (ver el porqué en lib/verticales.ts).
+    { href: "/peluquerias", label: "Peluquerías" },
     { href: "/como-funciona", label: "Cómo funciona" },
     { href: "/precios", label: "Precios" },
     { href: "/contacto", label: "Contacto" },
