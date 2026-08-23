@@ -3,7 +3,7 @@
 // Bloque 1.3/1.4 (doc 12) — La agenda del día: ver las citas, apuntar las
 // que entran por teléfono y cancelar avisando a la clienta.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '../../lib/api';
 import { supabase } from '../../lib/supabaseClient';
@@ -97,7 +97,24 @@ export default function AgendaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  async function cargar(f: string) {
+  // UNA CARGA A LA VEZ, Y LA ÚLTIMA MANDA (18-ago-2026).
+  //
+  // En la pestaña de red se veían TRES peticiones a /api/agenda a la vez, dos
+  // de ellas del mismo día. Dos motivos, los dos de aquí:
+  //   · el oyente de «focus» recarga cada vez que la ventana recupera el foco
+  //     —abrir las herramientas del navegador ya lo dispara—, sin mirar si ya
+  //     había una carga en marcha;
+  //   · al cambiar de día se lanza la nueva sin descartar la anterior, así que
+  //     si la vieja llega la última PISA a la nueva y pinta el día equivocado.
+  //
+  // Con el backend rápido no se nota. Con el backend lento se nota tres veces.
+  const cargaEnCurso = useRef<string | null>(null);
+  const ultimaCarga = useRef(0);
+
+  async function cargar(f: string, { forzar = true } = {}) {
+    if (!forzar && cargaEnCurso.current) return;   // ya hay una en marcha
+    cargaEnCurso.current = f;
+    const miTurno = ++ultimaCarga.current;
     setCargando(true);
     try {
       const r = await apiFetch(`/api/agenda?date=${f}`);
@@ -109,19 +126,25 @@ export default function AgendaPage() {
         setError('No se pudo cargar la agenda.');
         return;
       }
-      setAgenda(await r.json());
+      const datos = await r.json();
+      // Si mientras tanto se ha pedido otro día, esta respuesta ya no vale.
+      if (miTurno !== ultimaCarga.current) return;
+      setAgenda(datos);
       setError('');
     } catch {
-      setError('No se pudo conectar con el servidor.');
+      if (miTurno === ultimaCarga.current) setError('No se pudo conectar con el servidor.');
     } finally {
-      setCargando(false);
+      if (miTurno === ultimaCarga.current) {
+        cargaEnCurso.current = null;
+        setCargando(false);
+      }
     }
   }
 
   // Al volver a la pestaña se recarga el día que se esté viendo: si acaban
   // de tocar el Google Calendar, la agenda ya está al día al mirarla.
   useEffect(() => {
-    const alVolver = () => { if (document.visibilityState === 'visible') cargar(fecha); };
+    const alVolver = () => { if (document.visibilityState === 'visible') cargar(fecha, { forzar: false }); };
     document.addEventListener('visibilitychange', alVolver);
     window.addEventListener('focus', alVolver);
     return () => {

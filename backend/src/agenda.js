@@ -82,16 +82,50 @@ async function agendaDelDia(storeId, dateIso) {
   //
   // La de Google va con su propio try: si falla o tarda, se pinta la agenda
   // con lo que hay en la base de datos en vez de dejar la pantalla en blanco.
+  //
+  // «SI FALLA O TARDA» — LO SEGUNDO NO ERA VERDAD (18-ago-2026).
+  //
+  // El `try/catch` de abajo atrapa los ERRORES, pero una respuesta lenta no es
+  // un error: es una promesa que no vuelve. Y aquí hay hasta tres viajes a
+  // Google por carga (autorizar el cliente, pedir los eventos del día, y uno
+  // más por cada cita sospechosa que revisa la reconciliación). Si Google va
+  // lento, la pantalla se queda en «Cargando…» indefinidamente.
+  //
+  // Lo demostró la pantalla del navegador: el preflight OPTIONS —al MISMO
+  // servidor— contestaba en 55 ms mientras el GET seguía pendiente pasados
+  // cinco segundos. Ni servidor dormido ni red: el tiempo se iba dentro.
+  //
+  // El calendario es un CONTRASTE, no la fuente: las citas están en la base de
+  // datos. Pasado el plazo se pinta sin él. Es preferible una agenda que
+  // aparece en un segundo y avisa de que no ha podido contrastar, a una
+  // pantalla en blanco.
+  const ESPERA_GOOGLE_MS = 4000;
+  const t0 = Date.now();
   const [eventosCalendar, citasDb, horario, fases, margen, bloqueosHoras] = await Promise.all([
     (async () => {
+      let aTiempo;
       try {
-        const vistos = await sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone);
+        const conPlazo = new Promise((resolve) => {
+          aTiempo = setTimeout(() => resolve('TARDE'), ESPERA_GOOGLE_MS);
+        });
+        const vistos = await Promise.race([
+          sincronizacion.eventosDelDia(storeId, dia.toISODate(), zone),
+          conPlazo
+        ]);
+        if (vistos === 'TARDE') {
+          console.warn('[Agenda] Google Calendar tarda demasiado; se pinta sin contrastar', {
+            storeId, fecha: dia.toISODate(), esperados_ms: ESPERA_GOOGLE_MS
+          });
+          return [];
+        }
         return vistos?.todos || vistos || [];
       } catch (err) {
         console.warn('[Agenda] No se pudo contrastar con Google Calendar', {
           storeId, fecha: dia.toISODate(), message: err?.message
         });
         return [];
+      } finally {
+        clearTimeout(aTiempo);   // sin esto el proceso se queda esperando al reloj
       }
     })(),
     supabase
@@ -113,6 +147,17 @@ async function agendaDelDia(storeId, dateIso) {
     // se fabricó el fallo de los turnos de Marta (6-ago-2026).
     equipo.listarBloqueos(storeId, dia.toISODate(), zone)
   ]);
+
+  // MEDIR, NO ADIVINAR. Sin esto solo se sabe «tarda»; con esto se sabe si el
+  // tiempo se va en Google, en la base de datos o en otra parte. Es una línea
+  // por carga de agenda y ha costado dos diagnósticos a ciegas.
+  const tardo = Date.now() - t0;
+  if (tardo > 1500) {
+    console.warn('[Agenda] Carga lenta', {
+      storeId, fecha: dia.toISODate(), ms: tardo,
+      eventos_google: (eventosCalendar || []).length
+    });
+  }
 
   const { data, error } = citasDb;
   if (error) throw error;
