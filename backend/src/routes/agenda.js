@@ -142,9 +142,9 @@ router.post('/api/appointments', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const { telefono, nombre, service_id: serviceId, fecha, hora, avisar } = req.body || {};
+    const { telefono, nombre, service_id: serviceId, resource_id: resourceId, fecha, hora, avisar } = req.body || {};
     const { cita, aviso } = await agenda.crearCitaManual(storeId, {
-      telefono, nombre, serviceId, fecha, hora, avisar: avisar !== false
+      telefono, nombre, serviceId, resourceId, fecha, hora, avisar: avisar !== false
     });
     res.status(201).json({ id: cita.id, start_at: cita.start_at, aviso });
   } catch (err) {

@@ -304,7 +304,7 @@ async function liberarFranja(storeId, eventId) {
  * Crea una cita desde el panel (teléfono, mostrador...).
  * avisar=true → intenta confirmar por WhatsApp a la clienta.
  */
-async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, hora, avisar = true }) {
+async function crearCitaManual(storeId, { telefono, nombre, serviceId, resourceId = null, fecha, hora, avisar = true }) {
   const storeConfig = await getStoreConfig(storeId);
   const zone = storeConfig?.timezone || 'Europe/Madrid';
 
@@ -348,9 +348,35 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, fecha, ho
   if (!huecos.some((h) => h.label === inicio.toFormat('HH:mm'))) {
     throw errorValidacion(`A las ${inicio.toFormat('HH:mm')} no cabe ${servicio ? `«${servicio.name}» (${duracion} min)` : `una cita de ${duracion} min`}: está ocupado o fuera de horario.`);
   }
+  // ELEGIR PROFESIONAL AL APUNTAR A MANO (18-ago-2026).
+  //
+  // La clienta que llama por teléfono pide a alguien igual que la que escribe:
+  // «con Marta, que me conoce el pelo». Faltaba aquí, así que el panel repartía
+  // a quien tocara y había que corregirlo después desde la lista.
+  //
+  // Se comprueba con `puedeAtender`, EXACTAMENTE la misma función que usa el
+  // bot: turno, vacaciones, bloqueos de horas, habilidades y citas que ya
+  // tenga. Si se comprobara aquí de otra forma, el panel y WhatsApp acabarían
+  // discrepando sobre quién está libre, que es como se fabrica una cita doble.
+  const pedida = Number.isInteger(parseInt(resourceId, 10)) ? parseInt(resourceId, 10) : null;
+  if (pedida !== null) {
+    const personas = await equipo.listarPersonas(storeId);
+    const quien = personas.find((x) => Number(x.id) === pedida);
+    if (!quien) throw errorValidacion('Esa persona no está en tu equipo.');
+    const puede = await equipo.puedeAtender(storeId, {
+      resourceId: pedida, inicioIso: inicio.toISO(), finIso: fin.toISO(), zone, serviceId: servicio?.id ?? null
+    });
+    if (!puede) {
+      throw errorValidacion(
+        `${quien.name} no tiene libre las ${inicio.toFormat('HH:mm')} ` +
+        '(turno, vacaciones, un bloqueo o ya tiene cita). Elige otra hora o déjalo sin asignar.'
+      );
+    }
+  }
+
   // Con equipo, "ocupado" = no queda nadie libre; sin equipo, la regla de
   // siempre (una cita por hora). Mismo criterio que el bot.
-  const personaAsignada = await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone, servicio?.id ?? null);
+  const personaAsignada = pedida ?? await equipo.elegirPersonaLibre(storeId, inicio.toISO(), fin.toISO(), zone, servicio?.id ?? null);
   const conEquipo = await equipo.hayEquipoActivo(storeId);
   if (conEquipo ? !personaAsignada : !!(await getConfirmedAppointmentByStart(storeId, inicio.toISO()))) {
     throw errorValidacion(conEquipo

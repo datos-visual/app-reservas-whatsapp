@@ -76,6 +76,7 @@ export default function RejillaAgenda({
   citas,
   bloqueos,
   bloqueosHoras = [],
+  seleccionadaId = null,
   personas,
   onSeleccionar
 }: {
@@ -86,6 +87,8 @@ export default function RejillaAgenda({
   bloqueos: BloqueoRejilla[];
   personas: PersonaRejilla[];
   bloqueosHoras?: Bloqueo[];
+  /** La cita abierta en el detalle: se resalta para no perderla de vista */
+  seleccionadaId?: number | null;
   onSeleccionar?: (c: CitaRejilla) => void;
 }) {
   const confirmadas = useMemo(() => citas.filter((c) => c.status === 'confirmed'), [citas]);
@@ -317,9 +320,11 @@ export default function RejillaAgenda({
                       className={`absolute left-0.5 right-0.5 overflow-hidden rounded-[6px] border-l-[3px] px-2 py-1 text-left transition focus:outline-none focus:ring-2 focus:ring-[#111111]/15 ${
                         sinConfirmar ? 'border border-dashed' : 'border border-solid'
                       } ${
-                        pasada
-                          ? 'border-[#e8e8e8] border-l-[#b8b8b8] bg-[#fafafa] hover:bg-[#f5f5f5]'
-                          : 'border-[#d9d9d9] border-l-[#111111] bg-white hover:bg-[#f5f5f5]'
+                        c.id === seleccionadaId
+                          ? 'border-[#111111] border-l-[#111111] bg-[#f0f0f0] ring-2 ring-[#111111]/20'
+                          : pasada
+                            ? 'border-[#e8e8e8] border-l-[#b8b8b8] bg-[#fafafa] hover:bg-[#f5f5f5]'
+                            : 'border-[#d9d9d9] border-l-[#111111] bg-white hover:bg-[#f5f5f5]'
                       }`}
                       style={{ top: y(d), height: alturaBloque }}
                     >

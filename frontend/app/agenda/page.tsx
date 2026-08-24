@@ -59,7 +59,7 @@ export default function AgendaPage() {
   const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
-  const [nueva, setNueva] = useState({ telefono: '', nombre: '', service_id: '', hora: '', avisar: true });
+  const [nueva, setNueva] = useState({ telefono: '', nombre: '', service_id: '', resource_id: '', hora: '', avisar: true });
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -166,14 +166,14 @@ export default function AgendaPage() {
     try {
       const r = await apiFetch('/api/appointments', {
         method: 'POST',
-        body: JSON.stringify({ ...nueva, fecha, service_id: nueva.service_id || null })
+        body: JSON.stringify({ ...nueva, fecha, service_id: nueva.service_id || null, resource_id: nueva.resource_id || null })
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
         setError(body.error || 'No se pudo crear la cita.');
         return;
       }
-      setNueva({ telefono: '', nombre: '', service_id: '', hora: '', avisar: true });
+      setNueva({ telefono: '', nombre: '', service_id: '', resource_id: '', hora: '', avisar: true });
       setAviso(body.aviso?.avisado ? 'Cita creada y clienta avisada por WhatsApp ✓' : `Cita creada. ⚠️ No se pudo avisar: ${body.aviso?.motivo || 'motivo desconocido'}`);
       cargar(fecha);
     } finally {
@@ -378,17 +378,11 @@ export default function AgendaPage() {
 
           {vista === 'rejilla' && (
             <>
-              <RejillaAgenda
-                fecha={agenda.fecha}
-                abre={agenda.horario?.abre ?? null}
-                cierra={agenda.horario?.cierra ?? null}
-                citas={agenda.citas}
-                bloqueos={agenda.bloqueos || []}
-                bloqueosHoras={agenda.bloqueos_horas || []}
-                personas={personas}
-                onSeleccionar={(c) => setSeleccionada(c as Cita)}
-              />
-
+              {/* EL DETALLE, ARRIBA DE LA REJILLA (18-ago-2026).
+                  Estaba DEBAJO, y la rejilla ocupa toda la pantalla: se podía
+                  tocar una cita y no ver nunca que aparecían «Cambiar a…» y
+                  «Cancelar». Existía la función y no existía para la usuaria,
+                  que es lo mismo que no tenerla. */}
               {/* Detalle de la cita tocada: sin ventanas flotantes, que en
                   móvil y con las manos mojadas son una tortura. */}
               {seleccionada && (
@@ -428,6 +422,25 @@ export default function AgendaPage() {
                   </div>
                 </div>
               )}
+
+              {!seleccionada && agenda.citas.some((c) => c.status === 'confirmed') && (
+                <p className="mb-2 text-xs text-[#8a8a8a]">
+                  Toca una cita de la rejilla para cambiarla de profesional o cancelarla.
+                </p>
+              )}
+
+              <RejillaAgenda
+                fecha={agenda.fecha}
+                abre={agenda.horario?.abre ?? null}
+                cierra={agenda.horario?.cierra ?? null}
+                citas={agenda.citas}
+                bloqueos={agenda.bloqueos || []}
+                bloqueosHoras={agenda.bloqueos_horas || []}
+                personas={personas}
+                seleccionadaId={seleccionada?.id ?? null}
+                onSeleccionar={(c) => setSeleccionada(c as Cita)}
+              />
+
             </>
           )}
 
@@ -565,14 +578,26 @@ export default function AgendaPage() {
                 value={nueva.telefono} onChange={(e) => setNueva({ ...nueva, telefono: e.target.value })} />
               <input className={`${inputCls} sm:col-span-3`} placeholder="Nombre"
                 value={nueva.nombre} onChange={(e) => setNueva({ ...nueva, nombre: e.target.value })} />
-              <select className={`${inputCls} sm:col-span-4 h-[38px]`}
+              <select className={`${inputCls} sm:col-span-3 h-[38px]`}
                 value={nueva.service_id} onChange={(e) => setNueva({ ...nueva, service_id: e.target.value })}>
                 <option value="">Servicio (opcional)</option>
                 {servicios.map((s) => (
                   <option key={s.id} value={s.id}>{s.name} · {s.duration_minutes} min</option>
                 ))}
               </select>
-              <input className={`${inputCls} sm:col-span-2`} type="time" step={300}
+              {/* Quien llama por teléfono pide a alguien igual que quien
+                  escribe: «con Marta, que me conoce el pelo». Solo aparece si
+                  hay equipo dado de alta. */}
+              {personas.length > 0 && (
+                <select className={`${inputCls} sm:col-span-3 h-[38px]`}
+                  value={nueva.resource_id} onChange={(e) => setNueva({ ...nueva, resource_id: e.target.value })}>
+                  <option value="">Quien esté libre</option>
+                  {personas.map((p) => (
+                    <option key={p.id} value={p.id}>Con {p.name}</option>
+                  ))}
+                </select>
+              )}
+              <input className={`${inputCls} ${personas.length > 0 ? 'sm:col-span-2' : 'sm:col-span-2'}`} type="time" step={300}
                 value={nueva.hora} onChange={(e) => setNueva({ ...nueva, hora: e.target.value })} />
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
