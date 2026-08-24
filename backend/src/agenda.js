@@ -25,6 +25,10 @@ const {
 const { generate30MinSlots, createCalendarEvent, deleteCalendarEvent } = require('./calendar');
 const { sendTextMessage } = require('./whatsappCloud');
 const equipo = require('./equipo');
+// La regla de «no dos citas a la vez para la misma persona» vive en UN sitio y
+// la usan las dos puertas: WhatsApp y este panel. Escribirla otra vez aquí es
+// como se consigue que una se corrija y la otra no (18-ago-2026).
+const { citaSolapada } = require('./conversacion');
 const sincronizacion = require('./sincronizacion');
 
 function errorValidacion(mensaje) {
@@ -304,7 +308,7 @@ async function liberarFranja(storeId, eventId) {
  * Crea una cita desde el panel (teléfono, mostrador...).
  * avisar=true → intenta confirmar por WhatsApp a la clienta.
  */
-async function crearCitaManual(storeId, { telefono, nombre, serviceId, resourceId = null, fecha, hora, avisar = true }) {
+async function crearCitaManual(storeId, { telefono, nombre, serviceId, resourceId = null, fecha, hora, avisar = true, permitirSolape = false }) {
   const storeConfig = await getStoreConfig(storeId);
   const zone = storeConfig?.timezone || 'Europe/Madrid';
 
@@ -382,6 +386,30 @@ async function crearCitaManual(storeId, { telefono, nombre, serviceId, resourceI
     throw errorValidacion(conEquipo
       ? 'A esa hora ya no queda nadie libre en tu equipo.'
       : 'Ya hay una cita confirmada a esa hora.');
+  }
+
+  // 3.bis) ¿ESA CLIENTA YA TIENE CITA A ESA HORA? (18-ago-2026)
+  //
+  // Se podía apuntar a la misma persona con Marta y con Laura a las 10:00.
+  // Nadie está en dos sillones a la vez: casi siempre es un doble clic o que
+  // se apunta dos veces sin mirar.
+  //
+  // Casi siempre, no siempre: en un salón grande alguien puede estar con el
+  // tinte y hacerse las uñas al mismo tiempo. Por eso NO se prohíbe a secas —
+  // se avisa y la tienda decide. El bot sí lo bloquea, porque allí no hay
+  // nadie delante que pueda juzgarlo.
+  const { getUpcomingConfirmedAppointments } = require('./db');
+  if (!permitirSolape) {
+    const suyas = await getUpcomingConfirmedAppointments(storeId, phone, { limit: 20 }).catch(() => []);
+    const choca = citaSolapada(suyas, inicio.toISO(), fin.toISO());
+    if (choca) {
+      const cuando = DateTime.fromISO(choca.start_at, { zone }).toFormat('HH:mm');
+      const e = errorValidacion(
+        `Esa clienta ya tiene una cita a las ${cuando}. ¿Seguro que quieres apuntarle otra a la misma hora?`
+      );
+      e.code = 'SOLAPE';
+      throw e;
+    }
   }
 
   // 4) Cliente (creando o reutilizando su ficha) y nombre si lo dio la tienda

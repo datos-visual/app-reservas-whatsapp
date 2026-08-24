@@ -164,11 +164,28 @@ export default function AgendaPage() {
     setError('');
     setAviso('');
     try {
-      const r = await apiFetch('/api/appointments', {
+      const enviar = (permitirSolape: boolean) => apiFetch('/api/appointments', {
         method: 'POST',
-        body: JSON.stringify({ ...nueva, fecha, service_id: nueva.service_id || null, resource_id: nueva.resource_id || null })
+        body: JSON.stringify({
+          ...nueva, fecha,
+          service_id: nueva.service_id || null,
+          resource_id: nueva.resource_id || null,
+          permitir_solape: permitirSolape
+        })
       });
-      const body = await r.json().catch(() => ({}));
+
+      let r = await enviar(false);
+      let body = await r.json().catch(() => ({}));
+
+      // 409 = esa clienta ya tiene cita a esa hora. Casi siempre es un doble
+      // clic; pero en un salón grande alguien puede estar con el tinte y
+      // hacerse las uñas a la vez, así que se pregunta en vez de prohibir.
+      if (r.status === 409 && body?.solape) {
+        if (!confirm(`${body.error}`)) return;
+        r = await enviar(true);
+        body = await r.json().catch(() => ({}));
+      }
+
       if (!r.ok) {
         setError(body.error || 'No se pudo crear la cita.');
         return;

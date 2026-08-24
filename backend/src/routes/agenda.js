@@ -142,12 +142,15 @@ router.post('/api/appointments', async (req, res) => {
   try {
     const storeId = requireStoreId(req, res);
     if (!storeId) return;
-    const { telefono, nombre, service_id: serviceId, resource_id: resourceId, fecha, hora, avisar } = req.body || {};
+    const { telefono, nombre, service_id: serviceId, resource_id: resourceId, fecha, hora, avisar, permitir_solape: permitirSolape } = req.body || {};
     const { cita, aviso } = await agenda.crearCitaManual(storeId, {
-      telefono, nombre, serviceId, resourceId, fecha, hora, avisar: avisar !== false
+      telefono, nombre, serviceId, resourceId, fecha, hora, avisar: avisar !== false, permitirSolape: permitirSolape === true
     });
     res.status(201).json({ id: cita.id, start_at: cita.start_at, aviso });
   } catch (err) {
+    // 409 = «esto choca, pero puedes insistir». El panel lo distingue de un
+    // 400 para poder preguntar en vez de rendirse.
+    if (err?.code === 'SOLAPE') return res.status(409).json({ error: err.message, solape: true });
     if (err?.code === 'VALIDACION') return res.status(400).json({ error: err.message });
     if (err?.code === 'CALENDAR_NOT_CONFIGURED') {
       return res.status(400).json({ error: 'Conecta primero Google Calendar para poder crear citas.' });
