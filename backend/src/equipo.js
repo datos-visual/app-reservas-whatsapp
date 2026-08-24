@@ -844,19 +844,26 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
       fin: DateTime.fromISO(e.end.dateTime, { setZone: true }).setZone(zone)
     }));
 
+  // POR QUÉ SE CAE CADA HUECO (18-ago-2026).
+  //
+  // «Las 10:00 no salen» costó una tarde de suposiciones: turnos, vacaciones,
+  // capacidad, calendario… y al final era una vacación duplicada. Contar el
+  // motivo es una línea y convierte esa tarde en una lectura del log.
+  const porQue = { bloqueo: 0, nadie_libre: 0, calendario_ajeno: 0, otra_persona: 0, sin_aparato: 0 };
+
   const resultado = [];
   for (const original of slots) {
     let hueco = original;   // OJO: nunca reasignar la variable del for...of
 
     // 0) Bloqueo general de la tienda: fuera, sin mirar nada más
-    if (!sinBloqueo(hueco)) continue;
+    if (!sinBloqueo(hueco)) { porQue.bloqueo += 1; continue; }
 
     // 1) ¿Hay alguien libre? (si no hay equipo dado de alta, no se filtra)
     if (personas.length) {
       const { libres } = await disponibilidadEnRango(
         storeId, hueco.startIso, hueco.endIso, zone, cache, serviceId
       );
-      if (!libres.length) continue;
+      if (!libres.length) { porQue.nadie_libre += 1; continue; }
 
       // Cada evento ajeno que solape se lleva una plaza. No sabemos de quién,
       // así que se descuenta del total: es lo único honesto que se puede
@@ -864,10 +871,10 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
       const ini = DateTime.fromISO(hueco.startIso, { zone });
       const fin = DateTime.fromISO(hueco.endIso, { zone });
       const plazasTomadas = ajenos.filter((a) => solapa(ini, fin, a.inicio, a.fin)).length;
-      if (libres.length <= plazasTomadas) continue;
+      if (libres.length <= plazasTomadas) { porQue.calendario_ajeno += 1; continue; }
 
       // B5.3: si la clienta pidió a alguien, solo valen SUS huecos
-      if (resourceId && !libres.some((p) => p.id === Number(resourceId))) continue;
+      if (resourceId && !libres.some((p) => p.id === Number(resourceId))) { porQue.otra_persona += 1; continue; }
       hueco = { ...hueco, personasLibres: libres.length };
     }
 
@@ -879,7 +886,7 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
         fin: DateTime.fromISO(hueco.endIso, { zone }),
         citas, requisitos, aparatosPorId, zone
       });
-      if (!libre) continue;
+      if (!libre) { porQue.sin_aparato += 1; continue; }
     }
 
     resultado.push(hueco);
@@ -887,7 +894,8 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
 
   console.log('[Equipo] Huecos filtrados', {
     storeId, dateIso, antes: slots.length, despues: resultado.length,
-    personas: personas.length, conAparatos: !!necesitaAparatos
+    personas: personas.length, conAparatos: !!necesitaAparatos,
+    descartados: porQue
   });
   return resultado;
 }

@@ -137,16 +137,51 @@ function normalizar(texto) {
  * «Corte» y «Corte + lavado», «quiero corte + lavado» tiene que dar el
  * segundo, no el primero.
  */
+/**
+ * «Corte y lavado» y «Corte + lavado» son lo mismo (18-ago-2026).
+ *
+ * BUG REAL: el catálogo dice «Corte + lavado» y la clienta escribe «corte Y
+ * lavado». Como no coincidía letra por letra, solo encajaba «Corte» — y se
+ * reservaba un corte de 30 minutos en vez de un servicio de 45, sin el
+ * lavacabezas que necesita. Otra vez la reserva silenciosa del servicio
+ * equivocado, la tercera de esta familia.
+ *
+ * Lo mismo con «Peinado evento» en el catálogo y «peinado DE evento» al
+ * escribir.
+ *
+ * Se quitan las palabras de unión de LOS DOS lados antes de comparar. No es
+ * adivinar parecidos —eso sigue prohibido, ver más abajo—: es que «y», «+» y
+ * «de» no distinguen un servicio de otro en ningún idioma de peluquería.
+ */
+const UNIONES = new Set(['y', 'e', 'o', 'u', 'con', 'de', 'del', 'la', 'el', 'los', 'las', 'mas', 'and']);
+function clave(texto) {
+  return normalizar(texto).split(' ').filter((p) => p && !UNIONES.has(p)).join(' ');
+}
+
+/**
+ * Busca en el texto alguno de los servicios de la tienda.
+ *
+ * Deliberadamente CONSERVADOR: solo reconoce el nombre completo del servicio
+ * dentro de la frase. Nada de parecidos ni de distancias de edición — acertar
+ * de más aquí significa reservar un tinte de dos horas a quien pidió un corte,
+ * y eso es peor que preguntar.
+ *
+ * Cuando hay varios encajes se queda con el MÁS LARGO: si el catálogo tiene
+ * «Corte» y «Corte + lavado», «quiero corte + lavado» tiene que dar el
+ * segundo, no el primero.
+ */
 function servicioEnTexto(texto, servicios) {
-  const t = normalizar(texto);
+  const t = clave(texto);
   if (!t || !Array.isArray(servicios)) return null;
 
   let mejor = null;
+  let mejorLargo = 0;
   for (const s of servicios) {
-    const nombre = normalizar(s?.name);
+    const nombre = clave(s?.name);
     if (!nombre) continue;
-    if (t.includes(nombre) && (!mejor || nombre.length > normalizar(mejor.name).length)) {
+    if (t.includes(nombre) && nombre.length > mejorLargo) {
       mejor = s;
+      mejorLargo = nombre.length;
     }
   }
   return mejor;

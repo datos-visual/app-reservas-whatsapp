@@ -541,3 +541,38 @@ describe('la misma clienta no se apunta dos veces al mismo rato (15-ago-2026)', 
     assert.equal(citaSolapada([{ id: 9, start_at: 'xx', end_at: 'yy' }], '2026-08-15T12:00:00.000Z', '2026-08-15T14:00:00.000Z'), null);
   });
 });
+
+describe('«corte Y lavado» es «Corte + lavado» (bug 18-ago-2026)', () => {
+  const { servicioEnTexto } = require('../src/conversacion');
+  const CAT = [
+    { id: 1, name: 'Corte', duration_minutes: 30 },
+    { id: 2, name: 'Corte + lavado', duration_minutes: 45 },
+    { id: 5, name: 'Peinado evento', duration_minutes: 45 },
+    { id: 3, name: 'Tinte', duration_minutes: 120 }
+  ];
+
+  // EL FALLO: el catálogo pone «+» y la clienta escribe «y». Solo encajaba
+  // «Corte», así que se reservaban 30 min en vez de 45 y sin el lavacabezas.
+  test('la frase de la prueba real', () => {
+    assert.equal(servicioEnTexto('Corte y lavado el miércoles 2 a las 10:00', CAT)?.id, 2);
+  });
+
+  test('y al revés, escribiendo el símbolo', () => {
+    assert.equal(servicioEnTexto('quiero corte + lavado', CAT)?.id, 2);
+  });
+
+  test('«peinado DE evento» encuentra «Peinado evento»', () => {
+    assert.equal(servicioEnTexto('un peinado de evento el jueves', CAT)?.id, 5);
+  });
+
+  // LO QUE NO SE PUEDE PERDER: el más largo sigue ganando al más corto.
+  test('«corte» a secas sigue siendo Corte', () => {
+    assert.equal(servicioEnTexto('quiero un corte el jueves', CAT)?.id, 1);
+  });
+
+  // Y las uniones no pueden inventar encajes: «tinte» no es «corte».
+  test('no se confunden servicios distintos', () => {
+    assert.equal(servicioEnTexto('quiero un tinte', CAT)?.id, 3);
+    assert.equal(servicioEnTexto('quiero una permanente', CAT), null);
+  });
+});
