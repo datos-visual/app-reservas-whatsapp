@@ -576,3 +576,49 @@ describe('«corte Y lavado» es «Corte + lavado» (bug 18-ago-2026)', () => {
     assert.equal(servicioEnTexto('quiero una permanente', CAT), null);
   });
 });
+
+describe('cumplir lo que el propio bot ofrece (bug 18-ago-2026)', () => {
+  const { pideCualquiera, sunenaACita } = require('../src/conversacion');
+
+  // EL FALLO: el mensaje decía «...o te lo reservo con quien esté libre», el
+  // cliente contestaba eso mismo, y el bot repetía el mismo mensaje. Ofrecer
+  // algo y no saber hacerlo es peor que no ofrecerlo.
+  for (const frase of [
+    'Reserva con quién esté libre',
+    'me da igual quién',
+    'con cualquiera',
+    'la que sea',
+    'quien pueda',
+    'me es indiferente'
+  ]) {
+    test(`«${frase}» → reservar sin persona`, () => assert.equal(pideCualquiera(frase), true));
+  }
+
+  // Lo peligroso sería colarse cuando SÍ está pidiendo a alguien concreto.
+  for (const frase of ['Quiero un tinte con Marta', 'Reserva con Laura', 'con Borja el jueves', '']) {
+    test(`«${frase}» → NO es «cualquiera»`, () => assert.equal(pideCualquiera(frase), false));
+  }
+});
+
+describe('«asdfgh qwerty» no puede contestar «tienes 8 citas» (18-ago-2026)', () => {
+  const { sunenaACita } = require('../src/conversacion');
+
+  // Enseñar las citas ante cualquier cosa ilegible parece que se ha entendido
+  // algo cuando no se ha entendido nada.
+  for (const frase of ['asdfgh qwerty', 'pfff', 'hola', '👍', '']) {
+    test(`«${frase}» → menú, no citas`, () => assert.equal(sunenaACita(frase), false));
+  }
+
+  // Y lo que NO se puede perder: quien habla de su cita sin nombrar comandos
+  // sigue viendo sus citas.
+  for (const frase of [
+    '¿qué citas tengo?',
+    'cámbiala al jueves',
+    'la de mañana',
+    'quiero moverla',
+    'a las 17:30',
+    '¿cuándo era?'
+  ]) {
+    test(`«${frase}» → sí habla de una cita`, () => assert.equal(sunenaACita(frase), true));
+  }
+});

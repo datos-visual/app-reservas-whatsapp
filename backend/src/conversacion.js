@@ -126,18 +126,6 @@ function normalizar(texto) {
 }
 
 /**
- * Busca en el texto alguno de los servicios de la tienda.
- *
- * Deliberadamente CONSERVADOR: solo reconoce el nombre completo del servicio
- * dentro de la frase. Nada de parecidos ni de distancias de edición — acertar
- * de más aquí significa reservar un tinte de dos horas a quien pidió un corte,
- * y eso es peor que preguntar.
- *
- * Cuando hay varios encajes se queda con el MÁS LARGO: si el catálogo tiene
- * «Corte» y «Corte + lavado», «quiero corte + lavado» tiene que dar el
- * segundo, no el primero.
- */
-/**
  * «Corte y lavado» y «Corte + lavado» son lo mismo (18-ago-2026).
  *
  * BUG REAL: el catálogo dice «Corte + lavado» y la clienta escribe «corte Y
@@ -400,6 +388,61 @@ function profesionalEnTexto(texto, personas) {
 }
 
 /**
+ * «Reserva con quien esté libre» — aceptar la salida que ofrece el propio bot.
+ *
+ * BUG 18-ago-2026, y de los feos. El mensaje decía «...o te lo reservo con
+ * quien esté libre», el cliente contestaba exactamente eso, y el bot repetía
+ * el mismo mensaje. **Ofrecer algo y no saber hacerlo** es peor que no
+ * ofrecerlo: la persona cree que no la entiendes.
+ *
+ * Ojo con no pasarse: «cualquiera» tiene que significar «me da igual quién»,
+ * no colarse en frases donde la clienta está diciendo otra cosa. Por eso son
+ * expresiones completas y no palabras sueltas.
+ */
+const PIDE_CUALQUIERA = new RegExp(
+  '(?:' +
+    'me\\s+da\\s+igual|' +
+    'quien\\s+(?:sea|est[eé]|pueda|puedas|tenga)|' +
+    'con\\s+cualquiera|cualquier\\s+persona|' +
+    'la\\s+que\\s+(?:sea|est[eé]|pueda)|el\\s+que\\s+(?:sea|est[eé]|pueda)|' +
+    'no\\s+me\\s+importa\\s+qui[eé]n|indiferente' +
+  ')',
+  'i'
+);
+function pideCualquiera(texto) {
+  return PIDE_CUALQUIERA.test(normalizar(texto));
+}
+
+/**
+ * ¿Este mensaje habla de una cita, aunque no se entienda del todo?
+ *
+ * BUG 18-ago-2026: escribir «asdfgh qwerty» contestaba «Tienes 8 citas
+ * próximas». El último recurso enseñaba las citas a CUALQUIER cosa que no se
+ * entendiera, con la teoría de que quien tiene citas suele preguntar por
+ * ellas. Pero con un teclazo o un audio mal transcrito queda absurdo, y —peor—
+ * parece que el bot ha entendido algo cuando no ha entendido nada.
+ *
+ * Ahora las citas solo salen si el mensaje SUENA a cita. Si no, el menú, que
+ * al menos dice honestamente «no te he entendido».
+ */
+const SUENA_A_CITA = new RegExp(
+  '\\b(?:cita|citas|hora|horas|reserva\\w*|apunt\\w*|d[ií]a|ma[nñ]ana|hoy|' +
+  'lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|' +
+  'cambi\\w*|anul\\w*|cancel\\w*|mov\\w*|pas\\w*|cu[aá]ndo|tengo|ten[ií]a)\\b',
+  'i'
+);
+function sunenaACita(texto) {
+  const crudo = String(texto || '');
+  // La hora se busca en el texto SIN normalizar: normalizar() quita los dos
+  // puntos, así que «a las 17:30» se convertía en «a las 17 30» y el patrón
+  // de hora dejaba de encajar (18-ago-2026).
+  if (/\d{1,2}\s*[:.h]\s*\d{0,2}/.test(crudo)) return true;
+  const t = normalizar(crudo);
+  if (/\b(?:a|sobre|para)\s+las?\s+\d/.test(t)) return true;
+  return SUENA_A_CITA.test(t);
+}
+
+/**
  * «¿Hacéis permanente?» — preguntar QUÉ se hace, no cuándo.
  *
  * BUG 15-ago-2026: es la pregunta más natural del mundo justo después de que
@@ -475,6 +518,8 @@ module.exports = {
   soloFechaYHora,
   servicioPedidoEnTexto,
   preguntaPorServicios,
+  pideCualquiera,
+  sunenaACita,
   profesionalEnTexto,
   citaSolapada,
   decidirServicio,

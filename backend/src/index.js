@@ -74,7 +74,7 @@ const { textos } = require('./vocabulario');
 // El catálogo se usa desde el flujo de WhatsApp, MUY arriba: su require vive
 // aquí y no a mitad del fichero (16-ago-2026, «no-use-before-define»).
 const catalog = require('./catalog');
-const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, profesionalEnTexto, citaSolapada, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
+const { quiereAnular, argumentoDeCancelar, partesDeProfesional, resolverServicio, decidirServicio, preguntaPorServicios, profesionalEnTexto, citaSolapada, pideCualquiera, sunenaACita, servicioPedidoEnTexto, servicioEnTexto, fechaDeMensajeDelBot } = require('./conversacion');
 // El cron vigila los tokens de WhatsApp por caducar (las rutas de onboarding
 // que también usaban esto viven ahora en routes/tienda.js).
 const { listExpiringTokens } = require('./onboarding');
@@ -560,8 +560,17 @@ async function sendSlotList({ storeId, phoneNumberId, accessToken, to, service, 
  * No sabemos —ni importa— si la razón es un bloqueo, un turno o una cita que
  * ya tenía. Lo honesto es decir que no puede y ofrecer salida.
  */
-async function avisarNoPuede({ storeId, phoneNumberId, accessToken, to, nombre, cuando }) {
+async function avisarNoPuede({ storeId, phoneNumberId, accessToken, to, nombre, cuando, retomar = null }) {
   const quien = nombre || (await textos(storeId)).esaProfesional;
+  // Se guarda de qué iba la propuesta para poder cumplir la salida que
+  // ofrecemos en la misma frase. Sin esto, «reserva con quien esté libre»
+  // devolvía el mismo mensaje una y otra vez (18-ago-2026).
+  if (retomar?.datePart && retomar?.timePart) {
+    const expira = Date.now() + 10 * 60 * 1000;
+    await setConversationState(storeId, to, {
+      sinProfesional: { ...retomar, expiresAt: expira }
+    }, expira);
+  }
   await sendAndLog({
     storeId, phoneNumberId, accessToken, to,
     text: `${quien} no tiene libre el ${cuando}. Dime otra hora y miro cuándo puede, o te lo reservo con quien esté libre.`
@@ -759,7 +768,10 @@ async function handleFlowPayload({ storeId, phoneNumberId, accessToken, from, pa
         serviceId: pa.serviceId ?? null
       }).catch(() => true);   // ante un fallo de lectura, seguir como antes
       if (!puede) {
-        await avisarNoPuede({ storeId, phoneNumberId, accessToken, to: from, nombre: valida.name, cuando });
+        await avisarNoPuede({
+          storeId, phoneNumberId, accessToken, to: from, nombre: valida.name, cuando,
+          retomar: { datePart: pa.datePart, timePart: pa.timePart, serviceId: pa.serviceId }
+        });
         return true;
       }
     }
@@ -2117,7 +2129,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
         if (!puedeElMasCorto) {
           await avisarNoPuede({
             storeId, phoneNumberId, accessToken, to: from,
-            nombre: nombradaEnTexto.name, cuando: fmtHuman(dateTime.toISO())
+            nombre: nombradaEnTexto.name, cuando: fmtHuman(dateTime.toISO()),
+            retomar: { datePart, timePart: normalizedTime, serviceId: null }
           });
           return;
         }
@@ -2262,7 +2275,8 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
       if (!puedeEnTexto) {
         await avisarNoPuede({
           storeId, phoneNumberId, accessToken, to: from,
-          nombre: pedidaEnTexto.name, cuando: fmtHuman(start.toISO())
+          nombre: pedidaEnTexto.name, cuando: fmtHuman(start.toISO()),
+          retomar: { datePart, timePart: normalizedTime, serviceId: svcPedido?.id ?? null }
         });
         return;
       }
@@ -2643,6 +2657,23 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
     }
   }
 
+  // «RESERVA CON QUIEN ESTÉ LIBRE» (18-ago-2026).
+  //
+  // Lo ofrecemos nosotros en el mensaje de «X no tiene libre…», así que hay
+  // que saber cumplirlo. Se retoma la misma fecha, hora y servicio, esta vez
+  // sin pedir persona: el reparto normal elegirá a quien pueda.
+  if (pideCualquiera(body)) {
+    const guardado = (await getConversationState(storeId, from))?.state?.sinProfesional;
+    if (guardado?.datePart && guardado?.timePart) {
+      await deleteConversationState(storeId, from);
+      return handleIncomingText({
+        storeId, phoneNumberId, accessToken, from,
+        body: `CITA ${guardado.datePart} ${guardado.timePart}${guardado.serviceId ? ` ${guardado.serviceId}` : ''}`,
+        nluAttempted: true, profileName
+      });
+    }
+  }
+
   // «¿Hacéis permanente?» — la pregunta más natural justo después de que le
   // digamos que algo no está en el catálogo. Contestaba «no te he entendido»
   // (y a veces «tienes 3 citas próximas», que no venía a cuento). Va ANTES
@@ -2680,7 +2711,12 @@ async function handleIncomingText({ storeId, phoneNumberId, accessToken, from, b
   // que estuviera hablando de una de ellas: enseñarle sus citas es mucho más
   // útil que devolverla al menú de bienvenida como si acabara de llegar.
   try {
-    const suyas = await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 });
+    // «asdfgh qwerty» ya no contesta «tienes 8 citas próximas»: enseñar las
+    // citas a cualquier cosa ilegible parece que se ha entendido algo cuando
+    // no se ha entendido nada (18-ago-2026).
+    const suyas = sunenaACita(body)
+      ? await getUpcomingConfirmedAppointments(storeId, from, { limit: 10 })
+      : [];
     if (suyas.length) {
       return handleIncomingText({
         storeId, phoneNumberId, accessToken, from,
