@@ -105,6 +105,9 @@ async function agendaDelDia(storeId, dateIso) {
   // pantalla en blanco.
   const ESPERA_GOOGLE_MS = 4000;
   const t0 = Date.now();
+  // ¿Contestó Google de verdad? Si no, no se reconcilia después: reconciliar
+  // contra una lista vacía haría sospechosas TODAS las citas del día.
+  let googleContesto = false;
   const [eventosCalendar, citasDb, horario, fases, margen, bloqueosHoras] = await Promise.all([
     (async () => {
       let aTiempo;
@@ -125,6 +128,7 @@ async function agendaDelDia(storeId, dateIso) {
           });
           return [];
         }
+        googleContesto = true;
         return vistos?.todos || vistos || [];
       } catch (err) {
         console.warn('[Agenda] No se pudo contrastar con Google Calendar', {
@@ -154,6 +158,30 @@ async function agendaDelDia(storeId, dateIso) {
     // se fabricó el fallo de los turnos de Marta (6-ago-2026).
     equipo.listarBloqueos(storeId, dia.toISODate(), zone)
   ]);
+
+  // RECONCILIAR DESPUÉS DE PINTAR, NO ANTES (18-ago-2026, segunda vuelta).
+  //
+  // Esta mañana saqué la reconciliación de aquí porque hacía una consulta a
+  // Google por cita sospechosa —en fila— antes de dibujar nada, y la agenda
+  // abría a cinco segundos. Acerté en el diagnóstico y me pasé en la cura: al
+  // dejarla solo en el planificador, borrar una cita en Google Calendar tardaba
+  // hasta diez minutos en liberar el hueco en el panel. José Manuel se lo
+  // encontró a los cinco minutos de desplegar.
+  //
+  // La respuesta correcta no era quitarla: era **no hacer esperar a nadie por
+  // ella**. Se lanza sin `await`, así que la pantalla sale igual de rápido y el
+  // trabajo se hace por detrás. La corrección se ve al refrescar, en segundos
+  // en vez de en diez minutos.
+  //
+  // `.catch()` obligatorio: una promesa suelta que reviente se lleva por
+  // delante el proceso entero de Node.
+  if (googleContesto) {
+    sincronizacion
+      .reconciliarDia(storeId, dia.toISODate(), eventosCalendar, zone)
+      .catch((err) => console.warn('[Agenda] Reconciliación en segundo plano falló', {
+        storeId, fecha: dia.toISODate(), message: err?.message
+      }));
+  }
 
   // MEDIR, NO ADIVINAR. Sin esto solo se sabe «tarda»; con esto se sabe si el
   // tiempo se va en Google, en la base de datos o en otra parte. Es una línea

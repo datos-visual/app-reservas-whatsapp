@@ -892,11 +892,24 @@ async function filtrarHuecosPorEquipo(storeId, dateIso, slots, zone, serviceId =
     resultado.push(hueco);
   }
 
-  console.log('[Equipo] Huecos filtrados', {
-    storeId, dateIso, antes: slots.length, despues: resultado.length,
-    personas: personas.length, conAparatos: !!necesitaAparatos,
-    descartados: porQue
-  });
+  // SOLO SE ESCRIBE CUANDO HAY ALGO QUE CONTAR (18-ago-2026).
+  //
+  // Esta línea salía en CADA cálculo de huecos: once en once minutos con una
+  // sola tienda probando. Con veinte peluquerías es un muro que entierra lo
+  // que de verdad hay que leer —«Carga lenta», los errores del webhook—, y un
+  // log que nadie puede leer no vigila nada.
+  //
+  // Si no se descartó ni un hueco, no hay nada que diagnosticar. Si se
+  // quedaron TODOS fuera, eso sí interesa aunque el motivo sea legítimo:
+  // es justo la pantalla del «no hay huecos» que la clienta no entiende.
+  const seCayoAlguno = resultado.length !== slots.length;
+  if (seCayoAlguno || resultado.length === 0) {
+    console.log('[Equipo] Huecos filtrados', {
+      storeId, dateIso, antes: slots.length, despues: resultado.length,
+      personas: personas.length, conAparatos: !!necesitaAparatos,
+      descartados: porQue
+    });
+  }
   return resultado;
 }
 

@@ -91,6 +91,7 @@ const TITULOS_SALUD = {
   whatsapp: 'WhatsApp',
   token: 'Tokens de WhatsApp',
   calendario: 'Google Calendar',
+  alta: 'Altas sin terminar',
   horarios: 'Horarios',
   zona: 'Zona horaria',
   plantillas: 'Plantillas de Meta',
@@ -324,14 +325,33 @@ async function getAdminOverview() {
       });
     }
 
-    if (!wa) incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'WhatsApp sin conectar' });
-    else if (wa.is_active === false) incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'Cuenta WhatsApp desactivada' });
+    // «ALTA SIN TERMINAR» NO ES «ALGO ROTO» (18-ago-2026).
+    //
+    // Una tienda recién creada no tiene WhatsApp ni Calendar todavía: es lo
+    // normal a mitad del alta. Pintarla en rojo hace que el semáforo esté
+    // permanentemente en «hay algo roto» y, cuando eso pasa, se deja de mirar
+    // — que es exactamente lo contrario de para lo que se construyó.
+    //
+    // La distinción es limpia y sale de los datos que ya hay: si NUNCA hubo
+    // ficha de WhatsApp, es un alta a medias (ámbar). Si la hubo y está
+    // desactivada o el token caducó, algo SÍ se ha roto (rojo).
+    const enAlta = !wa && !cal;
+    if (!wa) {
+      incidencias.push(enAlta
+        ? { tipo: 'alta', nivel: 'aviso', texto: 'Alta sin terminar: falta conectar WhatsApp y Google Calendar' }
+        : { tipo: 'whatsapp', nivel: 'aviso', texto: 'Alta sin terminar: falta conectar WhatsApp' });
+    } else if (wa.is_active === false) {
+      incidencias.push({ tipo: 'whatsapp', nivel: 'error', texto: 'Cuenta WhatsApp desactivada' });
+    }
     if (wa?.token_expires_at) {
       const dias = Math.floor(DateTime.fromISO(wa.token_expires_at).diff(ahora, 'days').days);
       if (dias < 0) incidencias.push({ tipo: 'token', nivel: 'error', texto: 'Token de WhatsApp CADUCADO' });
       else if (dias <= 7) incidencias.push({ tipo: 'token', nivel: 'aviso', texto: `Token de WhatsApp caduca en ${dias} día(s)` });
     }
-    if (!cal) incidencias.push({ tipo: 'calendario', nivel: 'error', texto: 'Google Calendar sin conectar' });
+    // Si ya se contó como «alta sin terminar», no se repite por el calendario.
+    if (!cal && !enAlta) {
+      incidencias.push({ tipo: 'calendario', nivel: 'aviso', texto: 'Alta sin terminar: falta conectar Google Calendar' });
+    }
     if (mc?.enabled && mc.template_status !== 'approved')
       incidencias.push({ tipo: 'plantillas', nivel: 'aviso', texto: `Missed-call activo con plantilla ${mc.template_status || 'sin estado'}` });
     if (rem?.enabled && rem.template_status !== 'approved')
